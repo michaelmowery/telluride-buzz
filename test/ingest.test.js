@@ -57,7 +57,7 @@ test('Roads tile summarises each route and carries the CDOT disclaimer', () => {
   assert.equal(byRoute['CO-62'].level, 'closed');
   assert.equal(byRoute['CO-145'].level, 'caution');
   assert.equal(byRoute['US-550'].level, 'ok');
-  assert.match(tile.disclaimer, /Source Data/);
+  assert.match(tile.disclaimer, /State of Colorado, Department of Transportation \(CDOT\)/);
 });
 
 test('CDOT without a key fails gracefully: error recorded, tile says unavailable', async () => {

@@ -13,8 +13,9 @@ const LABEL = 'CDOT COtrip';
 const BASE = process.env.CDOT_BASE || 'https://data.cotrip.org/api/v1';
 const MAP_LINK = 'https://maps.cotrip.org/';
 
+// CDOT's required Source Data disclaimer, verbatim from the COtrip API terms of service.
 export const DEFAULT_DISCLAIMER =
-  'Source Data: Colorado Department of Transportation (CDOT). Conditions change quickly; check COtrip before you travel.';
+  "The data made available here has been modified for use from its original source, which is the State of Colorado, Department of Transportation (CDOT). THE STATE OF COLORADO AND CDOT MAKES NO REPRESENTATIONS OR WARRANTY AS TO THE COMPLETENESS, ACCURACY, TIMELINESS, OR CONTENT OF ANY DATA MADE AVAILABLE THROUGH THIS SITE. THE STATE OF COLORADO AND CDOT EXPRESSLY DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS OR IMPLIED, INCLUDING ANY IMPLIED WARRANTIES OF MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE. The data is subject to change as modifications and updates are complete. It is understood that the information contained in the Web feed is being used at one's own risk.";
 
 // ---------- generic helpers ----------
 

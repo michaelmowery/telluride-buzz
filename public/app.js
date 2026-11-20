@@ -78,7 +78,6 @@ function renderRoads(r) {
   const rows = (r.routes || []).map((x) => `
     <div class="route"><span class="dot ${esc(x.level)}"></span><div><b>${esc(x.label)}</b> <span class="st">${esc(x.status)}</span></div></div>`).join('');
   setTile('roads', `${rows}${r.error ? `<div class="tile-error">${esc(r.error)}</div>` : ''}`);
-  if (r.disclaimer) $('#disclaimer').textContent = r.disclaimer;
 }
 
 function renderLifts(l) {
