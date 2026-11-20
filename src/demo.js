@@ -49,9 +49,9 @@ export function seedDemo(db, town) {
 
   db.syncItems(town.id, 'feed-town-news', [
     { extId: 'demo-t1', sourceLabel: 'Town of Telluride', category: 'town', title: 'Gondola winter hours begin Thanksgiving week',
-      summary: 'The free gondola runs 6:30 a.m. to midnight starting November 26.', link: 'https://www.telluride-co.gov/', publishedAt: now - 2 * hr },
+      summary: 'The free gondola runs 6:30 a.m. to midnight starting November 26.', link: 'https://telluride-co.gov/', publishedAt: now - 2 * hr },
     { extId: 'demo-t2', sourceLabel: 'Town of Telluride', category: 'town', title: 'Overnight parking restrictions for snow removal',
-      summary: 'No parking on Colorado Ave. between 2 and 6 a.m. on plow nights.', link: 'https://www.telluride-co.gov/', publishedAt: now - 7 * hr },
+      summary: 'No parking on Colorado Ave. between 2 and 6 a.m. on plow nights.', link: 'https://telluride-co.gov/', publishedAt: now - 7 * hr },
   ]);
 
   db.syncItems(town.id, 'feed-koto', [
@@ -66,7 +66,7 @@ export function seedDemo(db, town) {
   };
   db.syncItems(town.id, 'feed-town-calendar', [
     { extId: 'demo-e1', sourceLabel: 'Town of Telluride', category: 'events', title: 'Town Council regular meeting',
-      summary: 'Rebekah Hall', link: 'https://www.telluride-co.gov/', publishedAt: now - day, startsAt: evAt(1, 9) },
+      summary: 'Rebekah Hall', link: 'https://telluride-co.gov/', publishedAt: now - day, startsAt: evAt(1, 9) },
     { extId: 'demo-e2', sourceLabel: 'Town of Telluride', category: 'events', title: 'Opening Day: Lifts spin at 9 a.m.',
       summary: 'Mountain Village Core', link: '#', publishedAt: now - day, startsAt: evAt(2, 9) },
     { extId: 'demo-e3', sourceLabel: 'Town of Telluride', category: 'events', title: 'Holiday tree lighting',

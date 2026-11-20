@@ -30,14 +30,14 @@
     {
       "id": "town-news",
       "label": "Town of Telluride",
-      "url": "https://www.telluride-co.gov/RSSFeed.aspx?ModID=1&CID=All-newsflash.xml",
+      "url": "https://telluride-co.gov/RSSFeed.aspx?ModID=1&CID=All-newsflash.xml",
       "category": "town",
       "everyMin": 15
     },
     {
       "id": "town-calendar",
       "label": "Town of Telluride",
-      "url": "https://www.telluride-co.gov/RSSFeed.aspx?ModID=58&CID=All-calendar.xml",
+      "url": "https://telluride-co.gov/RSSFeed.aspx?ModID=58&CID=All-calendar.xml",
       "category": "events",
       "everyMin": 60
     },
@@ -58,7 +58,7 @@
     {
       "id": "koto",
       "label": "KOTO Radio",
-      "url": "https://www.koto.org/feed/",
+      "url": "https://koto.org/feed/",
       "category": "news",
       "everyMin": 15
     }
