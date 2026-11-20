@@ -1,0 +1,6 @@
+{"type":"FeatureCollection","features":[
+ {"type":"Feature","geometry":{"type":"Point","coordinates":[-107.98,37.81]},"properties":{"id":"inc-1","type":"Chain Law","routeName":"CO 145","travelerInformationMessage":"Traction law in effect between Telluride and Lizard Head Pass.","lastUpdated":"2026-11-20T21:00:00Z"}},
+ {"type":"Feature","geometry":{"type":"Point","coordinates":[-107.85,38.15]},"properties":{"id":"inc-2","type":"Road Closure","routeName":"CO 62","travelerInformationMessage":"CO 62 closed in both directions at Dallas Divide due to a crash.","lastUpdated":"2026-11-20T21:30:00Z"}},
+ {"type":"Feature","geometry":{"type":"Point","coordinates":[-104.99,39.74]},"properties":{"id":"inc-3","type":"Crash","routeName":"I-25","travelerInformationMessage":"Crash on I-25 in Denver, right lane closed."}},
+ {"type":"Feature","geometry":{"type":"Point","coordinates":[-108.9,37.3]},"properties":{"id":"inc-4","type":"Road Closure","routeName":"CO 145","travelerInformationMessage":"CO 145 closed near Cortez."}}
+]}

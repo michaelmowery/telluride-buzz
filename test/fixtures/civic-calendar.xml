@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:calendarEvent="https://www.civicplus.com/Calendar"><channel><title>Town of Telluride - Calendar</title>
+<item><title>Town Council Regular Meeting</title><link>https://www.telluride-co.gov/Calendar.aspx?EID=1234</link><guid>https://www.telluride-co.gov/Calendar.aspx?EID=1234</guid><pubDate>Wed, 18 Nov 2026 10:00:00 -0700</pubDate><description>&lt;p&gt;Event date: December 1, 2099&lt;/p&gt;</description><calendarEvent:EventDates>December 1, 2099</calendarEvent:EventDates><calendarEvent:EventTimes>8:30 AM - 5:00 PM</calendarEvent:EventTimes><calendarEvent:Location>Rebekah Hall</calendarEvent:Location></item>
+</channel></rss>

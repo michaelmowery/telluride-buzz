@@ -1,0 +1,5 @@
+{"properties":{"periods":[
+ {"number":1,"name":"This Afternoon","isDaytime":true,"temperature":29,"temperatureUnit":"F","shortForecast":"Light Snow","detailedForecast":"Snow. High near 29. New snow accumulation of around 3 to 5 inches."},
+ {"number":2,"name":"Tonight","isDaytime":false,"temperature":12,"temperatureUnit":"F","shortForecast":"Snow Showers","detailedForecast":"Snow showers. Low around 12."},
+ {"number":3,"name":"Saturday","isDaytime":true,"temperature":27,"temperatureUnit":"F","shortForecast":"Mostly Sunny","detailedForecast":"Mostly sunny."}
+]}}

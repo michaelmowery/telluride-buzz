@@ -1,0 +1,4 @@
+{"type":"FeatureCollection","features":[
+ {"id":"https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.abc","type":"Feature","geometry":null,"properties":{"id":"urn:oid:2.49.0.1.840.0.abc","event":"Winter Storm Warning","headline":"Winter Storm Warning issued November 20 at 3:10AM MST until November 21 at 11:00AM MST by NWS Grand Junction CO","description":"* WHAT...Heavy snow. Total snow accumulations of 8 to 14 inches.","instruction":"If you must travel, keep an extra flashlight.","severity":"Severe","sent":"2026-11-20T03:10:00-07:00","effective":"2026-11-20T03:10:00-07:00","expires":"2099-11-21T11:00:00-07:00","ends":"2099-11-21T11:00:00-07:00"}},
+ {"id":"x2","type":"Feature","properties":{"id":"urn:x2","event":"Winter Weather Advisory","severity":"Moderate","sent":"2026-11-20T03:10:00-07:00","expires":"2099-01-01T00:00:00Z"}}
+]}

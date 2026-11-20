@@ -1,0 +1,12 @@
+# Add to the existing Caddyfile in /opt/meander.me/infra, then reload Caddy.
+# Pilot hostname (no domain needed): replace 1.2.3.4 with the server's IPv4.
+buzz.1.2.3.4.sslip.io {
+	encode zstd gzip
+	reverse_proxy telluride-buzz:3000
+}
+
+# Later, once the domain points at the server:
+# telluride.buzz, www.telluride.buzz {
+# 	encode zstd gzip
+# 	reverse_proxy telluride-buzz:3000
+# }

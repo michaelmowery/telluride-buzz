@@ -1,0 +1,66 @@
+{
+  "id": "telluride",
+  "name": "Telluride",
+  "hostnames": ["telluride.buzz", "www.telluride.buzz", "localhost"],
+  "timezone": "America/Denver",
+  "location": { "lat": 37.9375, "lon": -107.8123 },
+  "bbox": { "minLat": 37.55, "maxLat": 38.25, "minLon": -108.25, "maxLon": -107.55 },
+
+  "nws": {
+    "point": "37.9375,-107.8123",
+    "alertPoint": "37.9375,-107.8123"
+  },
+
+  "cdot": {
+    "routes": [
+      { "match": ["145"], "label": "CO-145", "note": "Telluride to Lizard Head Pass and Placerville" },
+      { "match": ["62"], "label": "CO-62", "note": "Dallas Divide to Ridgway" },
+      { "match": ["550"], "label": "US-550", "note": "Ridgway, Ouray, Red Mountain Pass" }
+    ],
+    "keyPlaces": ["Lizard Head", "Dallas Divide", "Keystone Hill", "Placerville", "Sawpit", "Ophir", "Rico", "Norwood"]
+  },
+
+  "lifts": {
+    "url": "https://tellurideskiresort.com/snow-report/",
+    "linkUrl": "https://tellurideskiresort.com/snow-report/",
+    "label": "Telluride Ski Resort"
+  },
+
+  "feeds": [
+    {
+      "id": "town-news",
+      "label": "Town of Telluride",
+      "url": "https://www.telluride-co.gov/RSSFeed.aspx?ModID=1&CID=All-newsflash.xml",
+      "category": "town",
+      "everyMin": 15
+    },
+    {
+      "id": "town-calendar",
+      "label": "Town of Telluride",
+      "url": "https://www.telluride-co.gov/RSSFeed.aspx?ModID=58&CID=All-calendar.xml",
+      "category": "events",
+      "everyMin": 60
+    },
+    {
+      "id": "county-news",
+      "label": "San Miguel County",
+      "url": "https://www.sanmiguelcountyco.gov/RSSFeed.aspx?ModID=1&CID=All-newsflash.xml",
+      "category": "town",
+      "everyMin": 15
+    },
+    {
+      "id": "county-alerts",
+      "label": "San Miguel County",
+      "url": "https://www.sanmiguelcountyco.gov/RSSFeed.aspx?ModID=63&CID=All-0",
+      "category": "alerts",
+      "everyMin": 5
+    },
+    {
+      "id": "koto",
+      "label": "KOTO Radio",
+      "url": "https://www.koto.org/feed/",
+      "category": "news",
+      "everyMin": 15
+    }
+  ]
+}

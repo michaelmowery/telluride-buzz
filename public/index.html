@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Telluride.Buzz</title>
+  <meta name="description" content="The real-time pulse of Telluride: what's happening in our town, right now, from sources you can trust.">
+  <meta name="theme-color" content="#2f4a3a">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/" aria-label="Telluride.Buzz home">
+      <svg class="sign" viewBox="0 0 260 44" aria-hidden="true">
+        <rect x="1" y="1" width="258" height="42" rx="6" class="sign-bg"/>
+        <rect x="5" y="5" width="250" height="34" rx="4" class="sign-line"/>
+        <text x="16" y="30" class="sign-text">TELLURIDE</text>
+        <g class="sign-dot" transform="translate(166 29)">
+          <circle r="3.6"/>
+          <path d="M6 -6 a8.5 8.5 0 0 1 0 12" />
+          <path d="M10 -10 a14 14 0 0 1 0 20" />
+        </g>
+        <text x="182" y="30" class="sign-text">BUZZ</text>
+      </svg>
+    </a>
+    <div class="status" id="status" aria-live="polite"><span class="pulse"></span><span id="status-text">Loading…</span></div>
+  </header>
+
+  <div class="preview" role="note"><strong>Preview:</strong> Telluride.Buzz is in early testing. Information may be wrong or out of date, so check the original source before you rely on it.</div>
+
+  <main id="app">
+    <section id="alerts" class="alerts" aria-label="Active alerts"></section>
+
+    <section class="tiles" aria-label="At a glance">
+      <button class="tile" data-tile="weather" aria-pressed="false">
+        <div class="tile-head"><span class="tile-title">Weather</span><span class="tile-age" data-age></span></div>
+        <div class="tile-body" data-body><div class="skeleton"></div></div>
+      </button>
+      <button class="tile" data-tile="roads" aria-pressed="false">
+        <div class="tile-head"><span class="tile-title">Roads</span><span class="tile-age" data-age></span></div>
+        <div class="tile-body" data-body><div class="skeleton"></div></div>
+      </button>
+      <button class="tile" data-tile="lifts" aria-pressed="false">
+        <div class="tile-head"><span class="tile-title">Lifts &amp; Snow</span><span class="tile-age" data-age></span></div>
+        <div class="tile-body" data-body><div class="skeleton"></div></div>
+      </button>
+      <button class="tile" data-tile="events" aria-pressed="false">
+        <div class="tile-head"><span class="tile-title">Events</span><span class="tile-age" data-age></span></div>
+        <div class="tile-body" data-body><div class="skeleton"></div></div>
+      </button>
+    </section>
+
+    <section class="feed-wrap" aria-label="Live feed">
+      <div class="feed-head">
+        <h2 id="feed-title">Live feed</h2>
+        <button id="clear-filter" class="chip clear" hidden>Show all</button>
+      </div>
+      <ol id="feed" class="feed"></ol>
+      <button id="more" class="more" hidden>Load older posts</button>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p class="mission">The real-time pulse of Telluride: what's happening in our town, right now, from sources you can trust.</p>
+    <p id="disclaimer" class="disclaimer"></p>
+    <p class="fine">Every post links to its source. Not for emergencies: call 911.</p>
+  </footer>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,3 @@
+{"type":"FeatureCollection","features":[
+ {"id":"wz-1","type":"Feature","geometry":{"type":"LineString","coordinates":[[-107.90,37.95],[-107.88,37.96]]},"properties":{"core_details":{"road_names":["CO-145"],"description":"Shoulder work near Society Turn"},"start_date":"2026-11-01T00:00:00Z","end_date":"2099-01-01T00:00:00Z","vehicle_impact":"some-lanes-closed"}}
+]}

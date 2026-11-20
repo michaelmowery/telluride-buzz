@@ -1,0 +1,23 @@
+# Runs on the Hetzner box next to the existing infra stack. It joins Caddy's network
+# (infra_default) and publishes no ports itself: Caddy is the only thing on 80/443.
+services:
+  buzz:
+    build: .
+    image: telluride-buzz:latest
+    container_name: telluride-buzz
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
+    networks:
+      - infra_default
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "3" }
+
+networks:
+  infra_default:
+    external: true
