@@ -21,6 +21,7 @@ function fromJson(html) {
     }
     return null;
   };
+  out.overnight = grab(/"(?:overnight_?snow(?:fall)?|snowOvernight|overnight)"\s*:\s*"?([\d.]+)/i);
   out.new24 = grab(/"(?:snow_?24_?hours?|twentyFourHourSnowfall|snowfall24|new_?snow_?24|last24Hours?)"\s*:\s*"?([\d.]+)/i);
   out.new48 = grab(/"(?:snow_?48_?hours?|fortyEightHourSnowfall|snowfall48|last48Hours?)"\s*:\s*"?([\d.]+)/i);
   out.base = grab(/"(?:base_?depth|baseDepth|snow_?base|midMountainBase|base)"\s*:\s*"?([\d.]+)/i);
@@ -49,9 +50,10 @@ function fromText(text) {
   const [liftsOpen, liftsTotal] = ratio('lifts?(?: open)?');
   const [trailsOpen, trailsTotal] = ratio('(?:trails|runs)(?: open)?');
   return {
-    new24: near('24[ -]?(?:hours?|hrs?|hr)') ?? near('(?:overnight|new snow)'),
+    overnight: near('(?:snow )?overnight'),
+    new24: near('24[ -]?(?:hours?|hrs?|hr)') ?? near('new snow'),
     new48: near('48[ -]?(?:hours?|hrs?|hr)'),
-    base: near('(?:base depth|mid[- ]mountain(?: base)?|base)'),
+    base: near('(?:base depth|snow depth|mid[- ]mountain(?: base)?|base)'),
     liftsOpen, liftsTotal, trailsOpen, trailsTotal,
   };
 }
@@ -61,12 +63,13 @@ export function parseSnowReport(html) {
   const t = fromText(htmlToText(html));
   const pick = (k) => j[k] ?? t[k] ?? null;
   const r = {
-    new24: pick('new24'), new48: pick('new48'), base: pick('base'),
+    overnight: pick('overnight'), new24: pick('new24'), new48: pick('new48'), base: pick('base'),
     liftsOpen: pick('liftsOpen'), liftsTotal: pick('liftsTotal'),
     trailsOpen: pick('trailsOpen'), trailsTotal: pick('trailsTotal'),
   };
   // Sanity limits: anything outside these is a mis-parse, not a powder day.
   if (r.new24 != null && r.new24 > 60) r.new24 = null;
+  if (r.overnight != null && r.overnight > 60) r.overnight = null;
   if (r.new48 != null && r.new48 > 90) r.new48 = null;
   if (r.base != null && r.base > 250) r.base = null;
   if (r.liftsTotal != null && (r.liftsTotal > 40 || (r.liftsOpen ?? 0) > r.liftsTotal)) r.liftsOpen = r.liftsTotal = null;
@@ -99,13 +102,14 @@ export function liftsJobs(town, { get = fetchText } = {}) {
         throw e;
       }
       db.setTile(town.id, 'lifts', tile);
-      if (tile.ok && tile.new24 >= 1) {
+      const fresh = Math.max(tile.new24 || 0, tile.overnight || 0);
+      if (tile.ok && fresh >= 1) {
         const day = new Date().toLocaleDateString('en-CA', { timeZone: town.timezone });
         db.syncItems(town.id, 'lifts-snow', [{
           extId: `new-snow-${day}`,
           sourceLabel: town.lifts.label,
           category: 'lifts',
-          title: `${tile.new24}" of new snow in the last 24 hours`,
+          title: tile.overnight >= tile.new24 || tile.new24 == null ? `${fresh}" of new snow overnight` : `${fresh}" of new snow in the last 24 hours`,
           summary: tile.base != null ? `Base depth ${tile.base}".` : null,
           link: tile.link,
           severity: 0,

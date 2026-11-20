@@ -85,7 +85,7 @@ function renderLifts(l) {
   const stat = (v, label, suffix = '') => (v == null ? '' : `<div class="stat"><b>${v}${suffix}</b><span>${label}</span></div>`);
   const ratio = (a, b, label) => (a == null ? '' : `<div class="stat"><b>${a}${b != null ? `<small class="muted">/${b}</small>` : ''}</b><span>${label}</span></div>`);
   setTile('lifts', `<div class="stats">
-    ${stat(l.new24, 'New (24h)', '"')}
+    ${(l.overnight || 0) > (l.new24 || 0) ? stat(l.overnight, 'Overnight', '"') : stat(l.new24, 'New (24h)', '"')}
     ${stat(l.base, 'Base', '"')}
     ${ratio(l.liftsOpen, l.liftsTotal, 'Lifts open')}
     ${ratio(l.trailsOpen, l.trailsTotal, 'Runs open')}

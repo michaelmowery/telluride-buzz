@@ -108,6 +108,16 @@ test('Snow report parser reads visible numbers and rejects nonsense', () => {
   assert.equal(junk.new24, null);
 });
 
+test('Snow report: Telluride page layout (overnight, snow depth, 0/17 lifts)', () => {
+  const r = parseSnowReport(fx('snow-report-tsr.html'));
+  assert.equal(r.overnight, 6);
+  assert.equal(r.new24, 0);
+  assert.equal(r.base, 12);
+  assert.equal(r.liftsOpen, 0);
+  assert.equal(r.liftsTotal, 17);
+  assert.equal(r.trailsTotal, 149);
+});
+
 test('Lifts tile falls back to a link when the page cannot be read', async () => {
   const db = openDb(':memory:');
   const [job] = liftsJobs(town, { get: async () => '<html>Something else entirely</html>' });
