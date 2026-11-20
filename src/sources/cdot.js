@@ -151,7 +151,7 @@ export function conditionsByRoute(data, town) {
     for (const k of ['roadCondition', 'surfaceCondition', 'primaryCondition', 'conditionDescription']) {
       if (typeof p[k] === 'string') conds.push(p[k]);
     }
-    const text = conds.filter(Boolean).join(', ');
+    const text = [...new Set(conds.filter(Boolean).map(cleanCondition).filter(Boolean))].join(', ');
     if (!text) continue;
     const segment = firstString(p, ['segmentName', 'description', 'name', 'locationDescription']) || '';
     (out[route.label] ||= []).push({ segment, text, level: classify(text) });
@@ -221,6 +221,15 @@ export function buildRoadsTile(town, { incidents = [], workZones = [], condition
     sourceLabel: LABEL,
     disclaimer: town.cdot.disclaimer || DEFAULT_DISCLAIMER,
   };
+}
+
+/** "4s - wet in areas, forecast text included" -> "Wet in areas" */
+export function cleanCondition(c) {
+  const t = String(c)
+    .replace(/^\s*\d+[a-z]?\s*-\s*/i, '')
+    .replace(/,?\s*forecast text included\.?/ig, '')
+    .trim();
+  return t ? t[0].toUpperCase() + t.slice(1) : '';
 }
 
 function shorten(s, n) {

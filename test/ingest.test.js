@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDb } from '../src/db.js';
 import { alertsToItems, forecastToTile, nwsJobs } from '../src/sources/nws.js';
-import { incidentsToItems, workZonesToItems, buildRoadsTile, cdotJobs, classify } from '../src/sources/cdot.js';
+import { incidentsToItems, workZonesToItems, buildRoadsTile, cdotJobs, classify, cleanCondition } from '../src/sources/cdot.js';
 import { feedToItems } from '../src/sources/feeds.js';
 import { parseSnowReport, liftsJobs } from '../src/sources/lifts.js';
 import { parseLocalDateTime } from '../src/time.js';
@@ -153,4 +153,10 @@ test('Backup writes a usable copy of the database', () => {
   db.backupTo(out);
   const copy = openDb(out);
   assert.equal(copy.getTiles('telluride').weather.temp, 1);
+});
+
+test('CDOT condition codes are cleaned for display', () => {
+  assert.equal(cleanCondition('4 - wet, forecast text included'), 'Wet');
+  assert.equal(cleanCondition('4s - wet in areas, forecast text included'), 'Wet in areas');
+  assert.equal(cleanCondition('Snow packed'), 'Snow packed');
 });
