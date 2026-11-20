@@ -9,7 +9,7 @@ export function jobsFor(town) {
   return [...nwsJobs(town), ...cdotJobs(town), ...liftsJobs(town), ...feedJobs(town)];
 }
 
-export function startScheduler(db, towns, { log = console } = {}) {
+export function startScheduler(db, towns, { log = console, afterRun = null } = {}) {
   const timers = [];
   let stopped = false;
 
@@ -23,6 +23,7 @@ export function startScheduler(db, towns, { log = console } = {}) {
           db.recordRun(town.id, job.id, null);
           if (failures) log.info?.(`[${town.id}/${job.id}] recovered`);
           failures = 0;
+          if (afterRun) await afterRun(town).catch((e) => log.warn?.(`[${town.id}] after-run: ${e.message}`));
         } catch (e) {
           failures++;
           db.recordRun(town.id, job.id, e.message);

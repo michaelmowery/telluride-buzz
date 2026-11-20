@@ -204,4 +204,65 @@ setInterval(setStatus, 15e3);
 
 refresh().then(schedule);
 
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+// ---------- push alerts ----------
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
+function b64ToBytes(s) {
+  const pad = '='.repeat((4 - (s.length % 4)) % 4);
+  const raw = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
+async function pushState(reg) {
+  const sub = await reg.pushManager.getSubscription();
+  return sub && Notification.permission === 'granted' ? sub : null;
+}
+
+function showPush(mode) {
+  const box = $('#push'), text = $('#push-text'), btn = $('#push-btn');
+  box.hidden = false;
+  box.classList.toggle('on', mode === 'on');
+  btn.hidden = mode === 'ios' || mode === 'blocked';
+  btn.disabled = false;
+  if (mode === 'on') { text.textContent = 'Alerts are on for this device.'; btn.textContent = 'Turn off'; }
+  else if (mode === 'ios') text.textContent = 'To get alerts on iPhone: tap Share, then "Add to Home Screen", and open Buzz from your home screen.';
+  else if (mode === 'blocked') text.textContent = 'Notifications are blocked for this site. Allow them in your browser settings to get alerts.';
+  else { text.textContent = 'Get a notification for winter storm warnings, road closures and county emergencies.'; btn.textContent = 'Turn on alerts'; }
+}
+
+async function setupPush(reg) {
+  if (!('PushManager' in window) || !('Notification' in window)) {
+    if (isIOS && !standalone) showPush('ios');
+    return;
+  }
+  if (Notification.permission === 'denied') return showPush('blocked');
+  showPush((await pushState(reg)) ? 'on' : 'off');
+
+  $('#push-btn').addEventListener('click', async () => {
+    const btn = $('#push-btn');
+    btn.disabled = true;
+    try {
+      const existing = await pushState(reg);
+      if (existing) {
+        await fetch('/api/push/unsubscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: existing }) });
+        await existing.unsubscribe();
+        return showPush('off');
+      }
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') return showPush(perm === 'denied' ? 'blocked' : 'off');
+      const { publicKey } = await (await fetch('/api/push/key')).json();
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) });
+      const r = await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub }) });
+      if (!r.ok) throw new Error(await r.text());
+      showPush('on');
+    } catch (e) {
+      $('#push-text').textContent = 'Could not turn on alerts. Please try again.';
+      btn.disabled = false;
+    }
+  });
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').then(() => navigator.serviceWorker.ready).then(setupPush).catch(() => {});
+}

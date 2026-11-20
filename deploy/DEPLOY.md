@@ -37,9 +37,20 @@ On first CDOT success, raw samples are written to `data/samples/` to tune parsin
 cd /opt/telluride-buzz && git pull && docker compose up -d --build
 ```
 
+## Push alerts
+
+- Phones sign up with the "Turn on alerts" button. On iPhone, Buzz must be added to the
+  Home Screen first (iOS 16.4+).
+- New banner-level alerts (NWS warnings, CDOT closures, county emergencies) are pushed
+  once each. Alerts older than 2 hours are never pushed, so restarts don't re-send.
+- Signing keys live in `data/vapid.json` (created on first start). Keep it: if it is
+  lost, every phone has to turn alerts on again.
+- Send a test notification to every subscribed device:
+  `docker compose exec buzz node --experimental-sqlite --no-warnings src/push-test.js "Test" "Hello from Buzz"`
+
 ## Backups
 
-- In-app: nightly SQLite copy in `/opt/telluride-buzz/data/backups/` (7 days).
+- In-app: nightly SQLite copy in `/opt/telluride-buzz/data/backups/` (7 days). Back up `data/vapid.json` too.
 - Off-box (still to decide): turn on Hetzner Backups for the server (daily, 7 kept,
   about 20% of the server price), or copy `data/backups/` nightly to Ajax or Palmyra.
   The database only holds re-fetchable feed data, so losing it costs history, not content.

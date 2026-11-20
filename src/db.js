@@ -55,6 +55,27 @@ CREATE TABLE IF NOT EXISTS source_status (
   error_count  INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (town_id, source)
 );
+
+-- Web push: browser subscriptions, which alerts were already pushed, and the latest
+-- pushed alert (what the service worker shows when a payload-less push arrives).
+CREATE TABLE IF NOT EXISTS push_subs (
+  endpoint    TEXT PRIMARY KEY,
+  town_id     TEXT NOT NULL,
+  created_at  INTEGER NOT NULL,
+  last_ok     INTEGER,
+  fail_count  INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS pushed_alerts (
+  town_id  TEXT NOT NULL,
+  item_id  INTEGER NOT NULL,
+  at       INTEGER NOT NULL,
+  PRIMARY KEY (town_id, item_id)
+);
+CREATE TABLE IF NOT EXISTS latest_push (
+  town_id  TEXT PRIMARY KEY,
+  data     TEXT NOT NULL,
+  at       INTEGER NOT NULL
+);
 `;
 
 export function openDb(file) {
@@ -196,6 +217,49 @@ function wrap(db) {
     sourceStatus(townId) {
       return db.prepare('SELECT source, last_run, last_ok, last_error, error_count FROM source_status WHERE town_id = ? ORDER BY source')
         .all(townId);
+    },
+
+    // ---------- push ----------
+    addSubscription(townId, endpoint) {
+      db.prepare(`INSERT INTO push_subs (endpoint, town_id, created_at) VALUES (?, ?, ?)
+                  ON CONFLICT (endpoint) DO UPDATE SET town_id = excluded.town_id, fail_count = 0`)
+        .run(endpoint, townId, Date.now());
+    },
+    removeSubscription(endpoint) {
+      db.prepare('DELETE FROM push_subs WHERE endpoint = ?').run(endpoint);
+    },
+    countSubscriptions() {
+      return db.prepare('SELECT COUNT(*) AS n FROM push_subs').get().n;
+    },
+    pushSubscriptions(townId) {
+      return db.prepare('SELECT endpoint FROM push_subs WHERE town_id = ?').all(townId);
+    },
+    subscriptionOk(endpoint) {
+      db.prepare('UPDATE push_subs SET last_ok = ?, fail_count = 0 WHERE endpoint = ?').run(Date.now(), endpoint);
+    },
+    subscriptionFailed(endpoint) {
+      db.prepare('UPDATE push_subs SET fail_count = fail_count + 1 WHERE endpoint = ?').run(endpoint);
+      db.prepare('DELETE FROM push_subs WHERE endpoint = ? AND fail_count >= 10').run(endpoint);
+    },
+    unpushedAlerts(townId) {
+      return db.prepare(`SELECT i.id, i.source_label, i.title, i.summary, i.link, i.severity, i.published_at
+                         FROM items i LEFT JOIN pushed_alerts p ON p.town_id = i.town_id AND p.item_id = i.id
+                         WHERE i.town_id = ? AND i.active = 1 AND i.severity >= 2 AND p.item_id IS NULL
+                           AND (i.expires_at IS NULL OR i.expires_at > ?)
+                         ORDER BY i.published_at ASC`).all(townId, Date.now())
+        .map((r) => ({ id: r.id, sourceLabel: r.source_label, title: r.title, summary: r.summary, link: r.link, severity: r.severity, publishedAt: r.published_at }));
+    },
+    markPushed(townId, itemId) {
+      db.prepare('INSERT OR IGNORE INTO pushed_alerts (town_id, item_id, at) VALUES (?, ?, ?)').run(townId, itemId, Date.now());
+    },
+    setLatestPush(townId, alert) {
+      db.prepare(`INSERT INTO latest_push (town_id, data, at) VALUES (?, ?, ?)
+                  ON CONFLICT (town_id) DO UPDATE SET data = excluded.data, at = excluded.at`)
+        .run(townId, JSON.stringify(alert), Date.now());
+    },
+    latestPush(townId) {
+      const r = db.prepare('SELECT data, at FROM latest_push WHERE town_id = ?').get(townId);
+      return r ? { ...JSON.parse(r.data), pushedAt: r.at } : null;
     },
 
     prune(days = 30) {

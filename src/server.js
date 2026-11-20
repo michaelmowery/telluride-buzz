@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { openDb } from './db.js';
 import { startScheduler } from './scheduler.js';
 import { seedDemo } from './demo.js';
+import { loadVapid, validSubscription, pushNewAlerts } from './push.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -32,12 +33,23 @@ const townFor = (req) => byHost.get(String(req.headers.host || '').split(':')[0]
 // ---------- data ----------
 const db = openDb(DEMO ? ':memory:' : path.join(DATA_DIR, 'buzz.db'));
 towns.forEach((t) => db.saveTown(t));
+// Web push (VAPID keys live in DATA_DIR/vapid.json, created on first run).
+const vapid = DEMO ? null : loadVapid(DATA_DIR);
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'https://telluride.buzz';
+const MAX_SUBSCRIPTIONS = 5000;
+
 let stopScheduler = () => {};
 if (DEMO) {
   towns.forEach((t) => seedDemo(db, t));
   log.info('DEMO mode: sample data loaded, no feeds polled');
 } else {
-  stopScheduler = startScheduler(db, towns, { log });
+  let pushing = false;
+  const afterRun = async (town) => {
+    if (pushing) return;
+    pushing = true;
+    try { await pushNewAlerts(db, town, vapid, VAPID_SUBJECT, { log }); } finally { pushing = false; }
+  };
+  stopScheduler = startScheduler(db, towns, { log, afterRun });
 }
 
 // Nightly backup: a consistent copy of the database, 7 days kept.
@@ -86,7 +98,7 @@ function health(town) {
     error: s.last_error,
     failures: s.error_count,
   }));
-  return { ok: true, demo: DEMO, uptimeSec: Math.round(process.uptime()), rssMb: Math.round(process.memoryUsage().rss / 1048576), sources };
+  return { ok: true, demo: DEMO, pushSubscribers: db.countSubscriptions(), uptimeSec: Math.round(process.uptime()), rssMb: Math.round(process.memoryUsage().rss / 1048576), sources };
 }
 
 // ---------- static ----------
@@ -135,12 +147,54 @@ const json = (res, body, maxAge = 15) =>
   send(res, 200, typeof body === 'string' ? body : JSON.stringify(body), 'application/json; charset=utf-8',
     { 'Cache-Control': `public, max-age=${maxAge}` });
 
+function readJson(req, limit = 4096) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > limit) { reject(new Error('too large')); req.destroy(); return; }
+      chunks.push(c);
+    });
+    req.on('end', () => {
+      try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')); } catch { reject(new Error('bad json')); }
+    });
+    req.on('error', reject);
+  });
+}
+
+async function handlePost(req, res, url, town) {
+  if (!String(req.headers['content-type'] || '').startsWith('application/json')) return send(res, 415, 'Use application/json');
+  let body;
+  try { body = await readJson(req); } catch { return send(res, 400, 'Bad request'); }
+  const sub = body.subscription;
+  if (url.pathname === '/api/push/subscribe') {
+    if (!vapid) return send(res, 503, 'Push is off in demo mode');
+    if (!validSubscription(sub)) return send(res, 400, 'Invalid subscription');
+    if (db.countSubscriptions() >= MAX_SUBSCRIPTIONS) return send(res, 503, 'Subscriptions full');
+    db.addSubscription(town.id, sub.endpoint);
+    return json(res, { ok: true }, 0);
+  }
+  if (url.pathname === '/api/push/unsubscribe') {
+    if (sub && typeof sub.endpoint === 'string') db.removeSubscription(sub.endpoint);
+    return json(res, { ok: true }, 0);
+  }
+  return send(res, 404, 'Not found');
+}
+
 const server = http.createServer((req, res) => {
   try {
-    if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed');
     const url = new URL(req.url, 'http://x');
     const town = townFor(req);
+    if (req.method === 'POST' && url.pathname.startsWith('/api/push/')) {
+      return handlePost(req, res, url, town).catch((e) => { log.warn(`post failed: ${e.message}`); send(res, 500, 'Server error'); });
+    }
+    if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed');
     switch (url.pathname) {
+      case '/api/push/key':
+        return vapid ? json(res, { publicKey: vapid.publicKey }, 3600) : send(res, 503, 'Push is off in demo mode');
+      case '/api/push/latest':
+        return json(res, db.latestPush(town.id) || db.alerts(town.id)[0] || null, 0);
       case '/api/home':
         return json(res, home(town));
       case '/api/feed': {
