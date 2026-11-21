@@ -5,7 +5,7 @@ export function seedDemo(db, town) {
   const now = Date.now();
   const min = 60e3, hr = 3600e3, day = 86400e3;
   db.setTile(town.id, 'weather', {
-    ok: true, temp: 24, unit: 'F', short: 'Light Snow', wind: '10 mph SW', hi: 29, lo: 12, snow: '3 to 5 inches',
+    ok: true, sourceAt: now - 47 * min, temp: 24, unit: 'F', short: 'Light Snow', wind: '10 mph SW', hi: 29, lo: 12, snow: '3 to 5 inches',
     periods: [
       { name: 'This Afternoon', temp: 29, isDaytime: true, short: 'Light Snow', detail: 'Snow. High near 29. Southwest wind 10 to 15 mph. Chance of precipitation is 90%. New snow accumulation of 2 to 4 inches possible.' },
       { name: 'Tonight', temp: 12, isDaytime: false, short: 'Snow Showers', detail: 'Snow showers, mainly before midnight. Low around 12. Chance of precipitation is 70%. New snow accumulation of 1 to 2 inches possible.' },
@@ -22,7 +22,7 @@ export function seedDemo(db, town) {
   });
 
   const incidents = [
-    { _route: 'CO-145', _level: 'caution', title: 'CO-145: Traction law in effect, Lizard Head Pass', summary: 'All vehicles must have adequate tires or chains between mile markers 56 and 64.',
+    { _route: 'CO-145', _level: 'caution', _at: now - 18 * min, title: 'CO-145: Traction law in effect, Lizard Head Pass', summary: 'All vehicles must have adequate tires or chains between mile markers 56 and 64.',
       _geo: [[[37.8115, -107.9083]]] },
     { _route: 'CO-145', _level: 'ok', title: 'CO-145 work zone: Shoulder work near Ophir, expect brief delays',
       _geo: [[[37.8590, -107.8490], [37.8530, -107.8610], [37.8460, -107.8700]]] },
@@ -38,7 +38,7 @@ export function seedDemo(db, town) {
   }));
 
   db.setTile(town.id, 'lifts', {
-    ok: true, new24: 6, new48: 9, base: 31, liftsOpen: 9, liftsTotal: 19, trailsOpen: 42, trailsTotal: 148,
+    ok: true, sourceAt: now - 5 * hr, new24: 6, new48: 9, base: 31, liftsOpen: 9, liftsTotal: 19, trailsOpen: 42, trailsTotal: 148,
     link: town.lifts?.linkUrl || '#', sourceLabel: town.lifts?.label || 'Ski Resort',
   });
 

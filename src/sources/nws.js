@@ -54,8 +54,10 @@ export function forecastToTile(forecast, hourly, town) {
   const snow = periods.slice(0, 4)
     .map((p) => (p.detailedForecast || '').match(/New snow accumulation of ([^.]+)\./i))
     .find(Boolean);
+  const fp = forecast?.properties || {};
   return {
     ok: true,
+    sourceAt: Date.parse(fp.updateTime || fp.updated || fp.generatedAt) || null,
     temp: now?.temperature ?? first?.temperature ?? null,
     unit: now?.temperatureUnit || first?.temperatureUnit || 'F',
     short: now?.shortForecast || first?.shortForecast || '',

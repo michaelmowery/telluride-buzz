@@ -48,14 +48,40 @@ function renderAlerts(alerts) {
 }
 
 // ---------- render: tiles ----------
+const SRC_SHORT = { weather: 'NWS', roads: 'CDOT', lifts: 'Resort' };
+const SRC_LONG = { weather: 'the National Weather Service', roads: 'CDOT', lifts: 'the resort' };
+/** Clock time in Telluride: "5:42 AM", "Yesterday 5:42 PM" or "Nov 19, 5:42 PM". */
+function clock(t) {
+  const d = new Date(t);
+  const time = d.toLocaleTimeString('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' });
+  const key = (x) => x.toLocaleDateString('en-CA', { timeZone: TZ });
+  if (key(d) === key(new Date())) return time;
+  if (key(d) === key(new Date(Date.now() - 86400e3))) return `Yesterday ${time}`;
+  return `${d.toLocaleDateString('en-US', { timeZone: TZ, month: 'short', day: 'numeric' })}, ${time}`;
+}
+const tileMeta = {}; // name -> { checked, source, stale }
+
+/**
+ * Top right of a tile: how long since we last got data (red when it's old).
+ * Bottom: when the source itself last updated it, e.g. "NWS updated 5:42 AM".
+ */
 function tileAge(name, tile) {
   const el = $(`.tile[data-tile="${name}"] [data-age]`);
+  const srcEl = $(`.tile[data-tile="${name}"] [data-src]`);
   const at = tile ? (tile.dataAt !== undefined ? tile.dataAt : tile.updatedAt) : null;
+  const source = tile?.sourceAt || null;
+  tileMeta[name] = { checked: at, source, stale: false };
+  if (srcEl) {
+    srcEl.innerHTML = source && SRC_SHORT[name] ? `${esc(SRC_SHORT[name])} updated<b>${esc(clock(source))}</b>` : '';
+    srcEl.title = source ? `Last updated by ${SRC_LONG[name]}: ${new Date(source).toLocaleString('en-US', { timeZone: TZ })}` : '';
+  }
   if (!at) { el.textContent = ''; el.classList.remove('stale'); return; }
   const stale = Date.now() - at > STALE_MS[name];
-  el.textContent = stale ? `as of ${ago(at)}` : ago(at);
+  tileMeta[name].stale = stale;
+  // Only speak up when our copy is old; the source's own time is at the bottom.
+  el.textContent = stale ? `as of ${ago(at)}` : '';
   el.classList.toggle('stale', stale);
-  el.title = `Updated ${new Date(at).toLocaleString()}`;
+  el.title = `We last checked ${SRC_LONG[name] || 'the source'} ${new Date(at).toLocaleString('en-US', { timeZone: TZ })}`;
 }
 
 function setTile(name, html) {
@@ -400,8 +426,11 @@ function renderPanel() {
   body.scrollTop = scroll;
   body.querySelectorAll('[data-pct]').forEach((i) => { i.style.width = `${i.dataset.pct}%`; }); // CSP: no inline style attributes
   const src = $(`.tile[data-tile="${openTile}"] [data-age]`);
-  $('#panel-age').textContent = src ? src.textContent : '';
-  $('#panel-age').className = src ? src.className : 'tile-age';
+  const meta = tileMeta[openTile];
+  const checked = meta?.checked ? `checked ${ago(meta.checked)}` : '';
+  $('#panel-age').textContent = meta?.source ? `${SRC_SHORT[openTile]} updated ${clock(meta.source)}` : (meta?.stale ? src.textContent : checked);
+  $('#panel-age').className = meta?.stale ? 'tile-age stale' : 'tile-age';
+  $('#panel-age').title = src ? src.title : '';
 }
 
 function openPanel(name) {

@@ -4,6 +4,16 @@
 // rather than showing stale or wrong numbers.
 import { fetchText } from '../http.js';
 import { htmlToText } from '../rss.js';
+import { parseLocalDateTime } from '../time.js';
+
+/** "Last Updated: November 20, 2026 at 3:39pm" -> epoch ms (resort's local time). */
+export function reportUpdatedAt(text, tz = 'America/Denver', now = Date.now()) {
+  const m = text.match(/(?:last\s+)?updated:?\s*(?:on\s+)?([A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{4})(?:,?\s*(?:at\s+)?(\d{1,2}(?::\d{2})?\s*[ap]\.?\s*m\.?))?/i);
+  if (!m) return null;
+  const t = parseLocalDateTime(tz, m[1], m[2] || '');
+  // Ignore anything in the future or more than 60 days old: that's a mis-parse.
+  return t && t <= now + 3600e3 && t > now - 60 * 86400e3 ? t : null;
+}
 
 function num(s) {
   const n = parseFloat(String(s).replace(/[^0-9.]/g, ''));
@@ -58,9 +68,10 @@ function fromText(text) {
   };
 }
 
-export function parseSnowReport(html) {
+export function parseSnowReport(html, tz = 'America/Denver') {
   const j = fromJson(html);
-  const t = fromText(htmlToText(html));
+  const text = htmlToText(html);
+  const t = fromText(text);
   const pick = (k) => j[k] ?? t[k] ?? null;
   const r = {
     overnight: pick('overnight'), new24: pick('new24'), new48: pick('new48'), base: pick('base'),
@@ -75,7 +86,7 @@ export function parseSnowReport(html) {
   if (r.liftsTotal != null && (r.liftsTotal > 40 || (r.liftsOpen ?? 0) > r.liftsTotal)) r.liftsOpen = r.liftsTotal = null;
   if (r.trailsTotal != null && (r.trailsTotal > 300 || (r.trailsOpen ?? 0) > r.trailsTotal)) r.trailsOpen = r.trailsTotal = null;
   const found = Object.values(r).filter((v) => v != null).length;
-  return { ...r, found };
+  return { ...r, found, sourceAt: reportUpdatedAt(text, tz) };
 }
 
 export function liftsJobs(town, { get = fetchText } = {}) {
@@ -87,7 +98,7 @@ export function liftsJobs(town, { get = fetchText } = {}) {
       let tile;
       try {
         const html = await get(town.lifts.url);
-        const r = parseSnowReport(html);
+        const r = parseSnowReport(html, town.timezone);
         tile = {
           ok: r.found >= 2,
           ...r,

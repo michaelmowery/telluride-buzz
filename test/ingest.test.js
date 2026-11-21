@@ -160,3 +160,17 @@ test('CDOT condition codes are cleaned for display', () => {
   assert.equal(cleanCondition('4s - wet in areas, forecast text included'), 'Wet in areas');
   assert.equal(cleanCondition('Snow packed'), 'Snow packed');
 });
+
+test('Source update times: snow report "Last Updated" and the newest CDOT stamp', async () => {
+  const { reportUpdatedAt } = await import('../src/sources/lifts.js');
+  const { buildRoadsTile } = await import('../src/sources/cdot.js');
+  const now = Date.parse('2026-11-21T12:00:00Z');
+  assert.equal(new Date(reportUpdatedAt('Last Updated: November 20, 2026 at 3:39pm', 'America/Denver', now)).toISOString(), '2026-11-20T22:39:00.000Z');
+  assert.equal(reportUpdatedAt('Last Updated: November 20, 2030 at 3:39pm', 'America/Denver', now), null, 'future dates rejected');
+  assert.equal(reportUpdatedAt('no date here'), null);
+  const town = { cdot: { routes: [{ label: 'CO-145' }] } };
+  const t1 = Date.now() - 3600e3, t2 = Date.now() - 600e3;
+  const tile = buildRoadsTile(town, { incidents: [{ _route: 'CO-145', _level: 'caution', title: 'CO-145: x', _at: t1 }], conditions: { 'CO-145': [{ text: 'Dry', level: 'ok', at: t2 }] } });
+  assert.equal(tile.sourceAt, t2);
+  assert.equal(buildRoadsTile(town, {}).sourceAt, null);
+});

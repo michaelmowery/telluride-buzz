@@ -157,6 +157,7 @@ export function incidentsToItems(data, town) {
       _route: route.label,
       _level: level,
       _geo: geoOf(f, town.bbox),
+      _at: time(p, ['lastUpdated', 'updateTime', 'updated', 'update_date', 'reportedTime', 'timestamp']),
     });
   }
   return items;
@@ -183,7 +184,7 @@ export function conditionsByRoute(data, town) {
     const text = [...new Set(conds.filter(Boolean).map(cleanCondition).filter(Boolean))].join(', ');
     if (!text) continue;
     const segment = firstString(p, ['segmentName', 'description', 'name', 'locationDescription']) || '';
-    (out[route.label] ||= []).push({ segment, text, level: classify(text), geo: geoOf(f, town.bbox) });
+    (out[route.label] ||= []).push({ segment, text, level: classify(text), geo: geoOf(f, town.bbox), at: time(p, ['lastUpdated', 'updateTime', 'updated', 'update_date', 'reportedTime', 'timestamp']) });
   }
   return out;
 }
@@ -217,6 +218,7 @@ export function workZonesToItems(data, town) {
       _route: route.label,
       _level: closed ? 'closed' : impact && impact !== 'all-lanes-open' ? 'caution' : 'ok',
       _geo: geoOf(f, town.bbox),
+      _at: time(p, ['lastUpdated', 'updateTime', 'updated', 'update_date', 'reportedTime', 'timestamp']),
     });
   }
   return items;
@@ -247,13 +249,18 @@ export function buildRoadsTile(town, { incidents = [], workZones = [], condition
       conditions: [...new Set(conds.map((c) => (c.segment ? `${c.segment}: ${c.text}` : c.text)).filter(Boolean))].slice(0, 8),
     };
   });
+  // Newest time CDOT itself stamped on anything we show (never in the future).
+  const stamps = [...incidents, ...workZones].map((i) => i._at)
+    .concat(Object.values(conditions).flat().map((c) => c.at))
+    .filter((t) => Number.isFinite(t) && t <= Date.now() + 600e3);
   return {
     ok: !!okAt,
     dataAt: okAt || null,
+    sourceAt: stamps.length ? Math.max(...stamps) : null,
     error: error ? (okAt ? 'Latest update failed; showing the last good data.' : 'Road data is unavailable right now. Check COtrip.') : null,
     routes,
     link: MAP_LINK,
-    center: [town.location.lat, town.location.lon],
+    center: town.location ? [town.location.lat, town.location.lon] : null,
     sourceLabel: LABEL,
     disclaimer: town.cdot.disclaimer || DEFAULT_DISCLAIMER,
   };
