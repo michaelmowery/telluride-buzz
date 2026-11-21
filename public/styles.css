@@ -57,12 +57,12 @@ button { font: inherit; color: inherit; }
   color: #f6efe2;
 }
 .brand { display: block; line-height: 0; }
-.sign { height: 34px; width: auto; }
-.sign-bg { fill: var(--forest-deep); stroke: #f6efe2; stroke-width: 2; }
-.sign-line { fill: none; stroke: #f6efe2; stroke-width: 1; opacity: .55; }
-.sign-text { font: 700 22px var(--slab); fill: #f6efe2; letter-spacing: 1.5px; }
-.sign-dot circle { fill: var(--amber); }
-.sign-dot path { fill: none; stroke: var(--amber); stroke-width: 2.2; stroke-linecap: round; }
+.logo { height: 48px; width: auto; display: block; }
+.logo-name { font: 700 70px var(--slab); fill: #f6efe2; }
+.logo-dot { fill: #5aa3d6; }
+.logo-ink { fill: #1a4360; }
+.logo-buzz { font: 700 50px var(--slab); }
+.logo-wave { fill: none; stroke: #f6efe2; stroke-width: 9; stroke-linecap: round; }
 .status { display: flex; align-items: center; gap: 7px; font-size: 13px; opacity: .9; white-space: nowrap; }
 .pulse { width: 8px; height: 8px; border-radius: 50%; background: #7fd18f; box-shadow: 0 0 0 0 rgba(127, 209, 143, .6); animation: pulse 2.4s infinite; }
 .status.stale .pulse { background: var(--amber); animation: none; }
