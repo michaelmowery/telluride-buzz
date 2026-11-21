@@ -385,12 +385,12 @@ async function drawRoadsMap(r) {
 
 // ---------- preferences ----------
 const THEME_INFO = [
-  ['trailhead', 'Trailhead', 'Forest green and amber, the original'],
-  ['lake', 'Blue Lake', 'Alpine blue with gold'],
+  ['lake', 'Blue Lake', 'Alpine blue with gold (default)'],
+  ['trailhead', 'Trailhead', 'Forest green and amber'],
   ['aspen', 'Aspen', 'Burnt orange and gold'],
   ['columbine', 'Columbine', 'Purple with gold'],
 ];
-const currentTheme = () => document.documentElement.dataset.palette || 'trailhead';
+const currentTheme = () => document.documentElement.dataset.palette || 'lake';
 function setTheme(t) {
   document.documentElement.dataset.palette = t;
   try { localStorage.setItem('buzz-theme', t); } catch { /* storage blocked: applies for this visit only */ }
