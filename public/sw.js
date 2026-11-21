@@ -1,8 +1,8 @@
 // App shell cached for offline use; the API is network-first with the last good
 // response as a fallback, so the app still opens on a dead cell signal.
-const SHELL = 'buzz-shell-v5';
+const SHELL = 'buzz-shell-v6';
 const API = 'buzz-api-v1';
-const SHELL_FILES = ['/', '/index.html', '/about.html', '/styles.css', '/theme.js', '/app.js', '/manifest.webmanifest', '/icons/icon.svg'];
+const SHELL_FILES = ['/', '/index.html', '/about.html', '/styles.css', '/theme.js', '/app.js', '/manifest.webmanifest', '/icons/icon.svg', '/icons/favicon.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_FILES)).then(() => self.skipWaiting()));
