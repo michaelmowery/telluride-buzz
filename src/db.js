@@ -187,14 +187,14 @@ function wrap(db) {
         .all(townId, Date.now()).map(rowToItem);
     },
 
-    upcomingEvents(townId, limit = 4) {
+    upcomingEvents(townId, limit = 4, days = 7) {
       const now = Date.now();
       return db.prepare(`SELECT id, source, source_label, category, title, summary, link, severity,
                                 published_at, starts_at, expires_at
                          FROM items WHERE town_id = ? AND active = 1 AND category = 'events'
                            AND starts_at IS NOT NULL AND starts_at >= ? AND starts_at < ?
                          ORDER BY starts_at ASC LIMIT ?`)
-        .all(townId, now - 2 * 3600e3, now + 7 * 86400e3, limit).map(rowToItem);
+        .all(townId, now - 2 * 3600e3, now + days * 86400e3, limit).map(rowToItem);
     },
 
     recordRun(townId, source, error) {

@@ -209,8 +209,12 @@ export function buildRoadsTile(town, { incidents = [], workZones = [], condition
       : conds[0]?.text ? shorten(conds[0].text, 60)
       : 'No reported issues';
     // Never show a green "no issues" when we have no data at all.
-    if (!okAt) return { label: r.label, note: r.note, level: 'unknown', status: 'No current data' };
-    return { label: r.label, note: r.note, level, status };
+    if (!okAt) return { label: r.label, note: r.note, level: 'unknown', status: 'No current data', events: [], conditions: [] };
+    return {
+      label: r.label, note: r.note, level, status,
+      events: evts.slice(0, 12).map((e) => ({ title: e.title.replace(`${r.label}: `, ''), summary: e.summary || null, level: e._level })),
+      conditions: [...new Set(conds.map((c) => (c.segment ? `${c.segment}: ${c.text}` : c.text)).filter(Boolean))].slice(0, 8),
+    };
   });
   return {
     ok: !!okAt,

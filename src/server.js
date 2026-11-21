@@ -80,7 +80,7 @@ function home(town) {
     serverTime: Date.now(),
     alerts: db.alerts(town.id),
     tiles: db.getTiles(town.id),
-    events: db.upcomingEvents(town.id, 4),
+    events: db.upcomingEvents(town.id, 40, 30),
     feed: db.feed(town.id, { limit: 40 }),
   });
   homeCache.set(town.id, { at: Date.now(), body });

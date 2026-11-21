@@ -40,22 +40,34 @@
     <section id="alerts" class="alerts" aria-label="Active alerts"></section>
 
     <section class="tiles" aria-label="At a glance">
+      <div class="tile-wrap">
       <button class="tile" data-tile="weather" aria-pressed="false">
         <div class="tile-head"><span class="tile-title">Weather</span><span class="tile-age" data-age></span></div>
         <div class="tile-body" data-body><div class="skeleton"></div></div>
       </button>
+      <button class="tile-expand" data-open="weather" aria-label="Expand Weather" title="Expand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
+      </div>
+      <div class="tile-wrap">
       <button class="tile" data-tile="roads" aria-pressed="false">
         <div class="tile-head"><span class="tile-title">Roads</span><span class="tile-age" data-age></span></div>
         <div class="tile-body" data-body><div class="skeleton"></div></div>
       </button>
+      <button class="tile-expand" data-open="roads" aria-label="Expand Roads" title="Expand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
+      </div>
+      <div class="tile-wrap">
       <button class="tile" data-tile="lifts" aria-pressed="false">
         <div class="tile-head"><span class="tile-title">Lifts &amp; Snow</span><span class="tile-age" data-age></span></div>
         <div class="tile-body" data-body><div class="skeleton"></div></div>
       </button>
+      <button class="tile-expand" data-open="lifts" aria-label="Expand Lifts and Snow" title="Expand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
+      </div>
+      <div class="tile-wrap">
       <button class="tile" data-tile="events" aria-pressed="false">
         <div class="tile-head"><span class="tile-title">Events</span><span class="tile-age" data-age></span></div>
         <div class="tile-body" data-body><div class="skeleton"></div></div>
       </button>
+      <button class="tile-expand" data-open="events" aria-label="Expand Events" title="Expand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
+      </div>
     </section>
 
     <section id="push" class="push" hidden aria-label="Alerts">
@@ -72,6 +84,16 @@
       <button id="more" class="more" hidden>Load older posts</button>
     </section>
   </main>
+
+  <dialog id="panel" class="panel" aria-labelledby="panel-title">
+    <div class="panel-grab" aria-hidden="true"><span></span></div>
+    <header class="panel-head">
+      <h2 id="panel-title"></h2>
+      <span class="tile-age" id="panel-age"></span>
+      <button class="panel-close" id="panel-close" aria-label="Close" title="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M10 14l-7 7"/></svg></button>
+    </header>
+    <div class="panel-body" id="panel-body"></div>
+  </dialog>
 
   <footer class="foot">
     <p class="mission">The real-time pulse of Telluride: what's happening in our town, right now, from sources you can trust.</p>

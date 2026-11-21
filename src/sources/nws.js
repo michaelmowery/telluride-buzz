@@ -62,9 +62,17 @@ export function forecastToTile(forecast, hourly, town) {
     wind: now ? `${now.windSpeed || ''} ${now.windDirection || ''}`.trim() : '',
     hi, lo,
     snow: snow ? snow[1].replace(/^around\s+/i, '') : null,
-    periods: periods.slice(0, 4).map((p) => ({
+    periods: periods.slice(0, 14).map((p) => ({
       name: p.name, temp: p.temperature, isDaytime: p.isDaytime, short: p.shortForecast,
+      detail: p.detailedForecast || '', wind: `${p.windSpeed || ''} ${p.windDirection || ''}`.trim(),
+      pop: p.probabilityOfPrecipitation?.value ?? null,
     })),
+    hourly: (hourly?.properties?.periods || [])
+      .filter((h) => Date.parse(h.endTime) > Date.now()).slice(0, 24)
+      .map((h) => ({
+        t: Date.parse(h.startTime), temp: h.temperature, short: h.shortForecast,
+        pop: h.probabilityOfPrecipitation?.value ?? null, wind: h.windSpeed || '',
+      })),
     link: forecastLink(town),
     sourceLabel: LABEL,
   };

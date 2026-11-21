@@ -170,6 +170,7 @@ async function refresh() {
     for (const name of ['weather', 'roads', 'lifts']) tileAge(name, t[name]);
     tileAge('events', null);
     if (!state.filter) renderFeed(data.feed || []);
+    renderPanel();
   } catch {
     // Network or server hiccup: leave the last good screen up, status shows staleness.
   }
@@ -203,6 +204,148 @@ $('#feed').addEventListener('click', (e) => {
 setInterval(setStatus, 15e3);
 
 refresh().then(schedule);
+
+// ---------- expanded tile panel ----------
+const panel = $('#panel');
+const srcLink = (url, label) => { const u = safeUrl(url); return u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(label)} ↗</a>` : ''; };
+const hourLabel = (t) => new Date(t).toLocaleTimeString('en-US', { timeZone: TZ, hour: 'numeric' });
+const dayLabel = (t) => eventTime(t).split(' · ')[0];
+
+function panelWeather(w) {
+  if (!w || !w.ok) return unavailable(w?.error);
+  const hourly = (w.hourly || []).map((h) => `<div class="hour"><time>${esc(hourLabel(h.t))}</time><b>${h.temp ?? '–'}°</b>
+    <span>${esc(h.short)}</span>${h.pop ? `<span class="pop">${h.pop}%</span>` : ''}</div>`).join('');
+  const periods = (w.periods || []).map((p) => `<div class="p-card period"><b>${esc(p.name)}</b>
+    <span class="t ${p.isDaytime ? '' : 'night'}">${p.temp ?? '–'}°</span>
+    <p>${esc(p.detail || p.short)}</p></div>`).join('');
+  return `<div class="p-card p-now"><div class="big">${w.temp ?? '–'}°<small>${esc(w.unit || 'F')}</small></div>
+      <div class="p-now-text"><div><b>${esc(w.short)}</b></div>
+      <div class="muted">${w.hi != null ? `High ${w.hi}°` : ''}${w.hi != null && w.lo != null ? ' · ' : ''}${w.lo != null ? `Low ${w.lo}°` : ''}${w.wind ? ` · Wind ${esc(w.wind)}` : ''}</div>
+      ${w.snow ? `<div><span class="snowline">❄ ${esc(w.snow)} new snow</span></div>` : ''}</div></div>
+    ${hourly ? `<h3>Next 24 hours</h3><div class="hourly">${hourly}</div>` : ''}
+    ${periods ? `<h3>Forecast</h3>${periods}` : ''}
+    <div class="p-actions">${srcLink(w.link, 'Full forecast at weather.gov')}<button data-filter="weather">Weather posts</button></div>`;
+}
+
+function panelRoads(r) {
+  if (!r) return unavailable();
+  const routes = (r.routes || []).map((x) => {
+    const lines = [
+      ...(x.events || []).map((e) => `<li>${esc(e.title)}${e.summary ? `<small>${esc(e.summary)}</small>` : ''}</li>`),
+      ...(x.conditions || []).map((c) => `<li>${esc(c)}</li>`),
+    ].join('');
+    return `<div class="p-card p-route"><div class="p-route-head"><span class="dot ${esc(x.level)}"></span><b>${esc(x.label)}</b>${x.note ? `<span class="note">${esc(x.note)}</span>` : ''}</div>
+      ${lines ? `<ul>${lines}</ul>` : `<div class="status">${esc(x.status)}</div>`}</div>`;
+  }).join('');
+  return `${r.error ? `<div class="p-card tile-error">${esc(r.error)}</div>` : ''}${routes}
+    <div class="p-actions">${srcLink(r.link, 'Live map at COtrip')}<button data-filter="roads">Road posts</button></div>
+    ${r.disclaimer ? `<p class="p-fine"><strong>Road data source:</strong> ${esc(r.disclaimer)}</p>` : ''}`;
+}
+
+function panelLifts(l) {
+  if (!l || !l.ok) return `${unavailable(l?.error)}<div class="p-actions">${srcLink(l?.link, 'Snow report')}</div>`;
+  const stat = (v, label, suffix = '"') => (v == null ? '' : `<div class="p-card"><b>${v}${suffix}</b><span>${label}</span></div>`);
+  const ratio = (a, b, label) => (a == null ? '' : `<div class="p-card"><b>${a}${b != null ? `<small class="muted">/${b}</small>` : ''}</b><span>${label}</span>
+    ${b ? `<div class="meter"><i data-pct="${Math.round((100 * a) / b)}"></i></div>` : ''}</div>`);
+  return `<h3>Snow</h3><div class="p-stats">${stat(l.overnight, 'Overnight')}${stat(l.new24, 'Last 24 hours')}${stat(l.new48, 'Last 48 hours')}${stat(l.base, 'Base depth')}</div>
+    <h3>On the mountain</h3><div class="p-stats">${ratio(l.liftsOpen, l.liftsTotal, 'Lifts open')}${ratio(l.trailsOpen, l.trailsTotal, 'Runs open')}</div>
+    <div class="p-actions">${srcLink(l.link, `Full report at ${l.sourceLabel || 'the resort'}`)}<button data-filter="lifts">Snow posts</button></div>`;
+}
+
+function panelEvents(events) {
+  if (!events?.length) return '<div class="p-card tile-error">Nothing listed for the next few weeks.</div>';
+  let lastDay = '';
+  return events.map((e) => {
+    const day = dayLabel(e.startsAt);
+    const head = day !== lastDay ? `<div class="p-day">${esc(day)}</div>` : '';
+    lastDay = day;
+    const time = eventTime(e.startsAt).split(' · ')[1] || 'All day';
+    const link = safeUrl(e.link);
+    return `${head}<div class="p-card p-event"><time>${esc(time)}</time><div>${link ? `<a href="${esc(link)}" target="_blank" rel="noopener">${esc(e.title)}</a>` : `<b>${esc(e.title)}</b>`}
+      ${e.summary ? `<small>${esc(e.summary)}</small>` : ''}<small>${esc(e.sourceLabel)}</small></div></div>`;
+  }).join('') + '<div class="p-actions"><button data-filter="events">Event posts</button></div>';
+}
+
+const PANELS = { weather: panelWeather, roads: panelRoads, lifts: panelLifts, events: panelEvents };
+let openTile = null;
+let closing = false;
+
+function renderPanel() {
+  if (!openTile || !state.data) return;
+  const t = state.data.tiles || {};
+  const data = openTile === 'events' ? state.data.events : t[openTile];
+  const body = $('#panel-body');
+  const scroll = body.scrollTop;
+  body.innerHTML = PANELS[openTile](data);
+  body.scrollTop = scroll;
+  body.querySelectorAll('[data-pct]').forEach((i) => { i.style.width = `${i.dataset.pct}%`; }); // CSP: no inline style attributes
+  const src = $(`.tile[data-tile="${openTile}"] [data-age]`);
+  $('#panel-age').textContent = src.textContent;
+  $('#panel-age').className = src.className;
+}
+
+function openPanel(name) {
+  openTile = name;
+  $('#panel-title').textContent = CATEGORY_LABEL[name];
+  $('#panel-body').scrollTop = 0;
+  renderPanel();
+  panel.classList.remove('closing');
+  panel.style.transform = '';
+  if (!panel.open) panel.showModal();
+  document.documentElement.classList.add('panel-open');
+  history.pushState({ panel: name }, '');
+}
+
+function closePanel(fromHistory = false) {
+  if (!panel.open || closing) return;
+  closing = true;
+  const done = () => {
+    closing = false;
+    panel.classList.remove('closing');
+    panel.style.transform = '';
+    panel.close();
+    document.documentElement.classList.remove('panel-open');
+    $(`.tile-expand[data-open="${openTile}"]`)?.focus();
+    openTile = null;
+  };
+  if (!fromHistory && history.state?.panel) history.back();
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return done();
+  panel.classList.add('closing');
+  setTimeout(done, 170);
+}
+
+document.querySelectorAll('.tile-expand').forEach((b) => b.addEventListener('click', () => openPanel(b.dataset.open)));
+$('#panel-close').addEventListener('click', () => closePanel());
+panel.addEventListener('cancel', (e) => { e.preventDefault(); closePanel(); }); // Esc
+panel.addEventListener('click', (e) => {
+  if (e.target === panel) return closePanel(); // tap on the backdrop
+  const f = e.target.closest('[data-filter]');
+  if (f) { closePanel(); if (state.filter !== f.dataset.filter) setFilter(f.dataset.filter); }
+});
+window.addEventListener('popstate', () => { if (panel.open) closePanel(true); });
+
+// Swipe down on the handle or header to close (phones).
+(() => {
+  let y0 = null, dy = 0;
+  const start = (e) => { if (e.target.closest('button')) return; y0 = e.touches[0].clientY; dy = 0; panel.style.transition = 'none'; };
+  const move = (e) => {
+    if (y0 == null) return;
+    dy = Math.max(0, e.touches[0].clientY - y0);
+    panel.style.transform = `translateY(${dy}px)`;
+  };
+  const end = () => {
+    if (y0 == null) return;
+    y0 = null;
+    panel.style.transition = 'transform .18s ease-out';
+    if (dy > 90) closePanel(); else panel.style.transform = '';
+  };
+  for (const el of [$('.panel-grab'), $('.panel-head')]) {
+    el.addEventListener('touchstart', start, { passive: true });
+    el.addEventListener('touchmove', move, { passive: true });
+    el.addEventListener('touchend', end);
+    el.addEventListener('touchcancel', end);
+  }
+})();
 
 // ---------- push alerts ----------
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);

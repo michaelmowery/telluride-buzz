@@ -7,20 +7,28 @@ export function seedDemo(db, town) {
   db.setTile(town.id, 'weather', {
     ok: true, temp: 24, unit: 'F', short: 'Light Snow', wind: '10 mph SW', hi: 29, lo: 12, snow: '3 to 5 inches',
     periods: [
-      { name: 'This Afternoon', temp: 29, isDaytime: true, short: 'Light Snow' },
-      { name: 'Tonight', temp: 12, isDaytime: false, short: 'Snow Showers' },
-      { name: 'Saturday', temp: 27, isDaytime: true, short: 'Mostly Sunny' },
-      { name: 'Saturday Night', temp: 8, isDaytime: false, short: 'Clear' },
+      { name: 'This Afternoon', temp: 29, isDaytime: true, short: 'Light Snow', detail: 'Snow. High near 29. Southwest wind 10 to 15 mph. Chance of precipitation is 90%. New snow accumulation of 2 to 4 inches possible.' },
+      { name: 'Tonight', temp: 12, isDaytime: false, short: 'Snow Showers', detail: 'Snow showers, mainly before midnight. Low around 12. Chance of precipitation is 70%. New snow accumulation of 1 to 2 inches possible.' },
+      { name: 'Saturday', temp: 27, isDaytime: true, short: 'Mostly Sunny', detail: 'Mostly sunny, with a high near 27. West wind around 5 mph.' },
+      { name: 'Saturday Night', temp: 8, isDaytime: false, short: 'Clear', detail: 'Clear, with a low around 8.' },
+      { name: 'Sunday', temp: 33, isDaytime: true, short: 'Sunny', detail: 'Sunny, with a high near 33.' },
+      { name: 'Sunday Night', temp: 11, isDaytime: false, short: 'Mostly Clear', detail: 'Mostly clear, with a low around 11.' },
     ],
+    hourly: Array.from({ length: 24 }, (_, i) => ({
+      t: Math.floor(now / hr) * hr + (i + 1) * hr, temp: Math.round(24 - 8 * Math.sin(i / 4)),
+      short: i < 6 ? 'Light Snow' : i < 10 ? 'Snow Showers' : 'Clear', pop: i < 6 ? 80 : i < 10 ? 50 : 0, wind: '10 mph',
+    })),
     link: 'https://forecast.weather.gov/', sourceLabel: 'National Weather Service',
   });
 
   const incidents = [
-    { _route: 'CO-145', _level: 'caution', title: 'CO-145: Traction law in effect, Lizard Head Pass' },
+    { _route: 'CO-145', _level: 'caution', title: 'CO-145: Traction law in effect, Lizard Head Pass', summary: 'All vehicles must have adequate tires or chains between mile markers 56 and 64.' },
+    { _route: 'CO-145', _level: 'ok', title: 'CO-145 work zone: Shoulder work near Ophir, expect brief delays' },
   ];
   db.setTile(town.id, 'roads', buildRoadsTile(town, {
     incidents,
-    conditions: { 'CO-62': [{ text: 'Snow packed, icy spots', level: 'caution' }], 'US-550': [{ text: 'Dry', level: 'ok' }] },
+    conditions: { 'CO-62': [{ segment: 'Dallas Divide', text: 'Snow packed, icy spots', level: 'caution' }], 'US-550': [{ segment: 'Ridgway to Ouray', text: 'Dry', level: 'ok' }] },
+    okAt: now,
   }));
 
   db.setTile(town.id, 'lifts', {
@@ -71,5 +79,9 @@ export function seedDemo(db, town) {
       summary: 'Mountain Village Core', link: '#', publishedAt: now - day, startsAt: evAt(2, 9) },
     { extId: 'demo-e3', sourceLabel: 'Town of Telluride', category: 'events', title: 'Holiday tree lighting',
       summary: 'Elks Park', link: '#', publishedAt: now - day, startsAt: evAt(3, 17) },
+    { extId: 'demo-e4', sourceLabel: 'Town of Telluride', category: 'events', title: 'Planning and Zoning Commission',
+      summary: 'Rebekah Hall', link: '#', publishedAt: now - day, startsAt: evAt(3, 18) },
+    { extId: 'demo-e5', sourceLabel: 'Town of Telluride', category: 'events', title: 'Noel Night on Main Street',
+      summary: 'Colorado Avenue', link: '#', publishedAt: now - day, startsAt: evAt(9, 0) },
   ]);
 }

@@ -1,6 +1,6 @@
 // App shell cached for offline use; the API is network-first with the last good
 // response as a fallback, so the app still opens on a dead cell signal.
-const SHELL = 'buzz-shell-v3';
+const SHELL = 'buzz-shell-v4';
 const API = 'buzz-api-v1';
 const SHELL_FILES = ['/', '/index.html', '/about.html', '/styles.css', '/app.js', '/manifest.webmanifest', '/icons/icon.svg'];
 
