@@ -115,7 +115,8 @@ function serveStatic(req, res, urlPath) {
   if (!file.startsWith(PUBLIC + path.sep)) return send(res, 403, 'Forbidden');
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) {
-      // SPA-style fallback for unknown paths without an extension.
+      // Clean URLs (/about -> about.html), then SPA-style fallback.
+      if (!path.extname(p) && fs.existsSync(path.join(PUBLIC, `${path.basename(p)}.html`)) && path.dirname(p) === '/') return serveStatic(req, res, `${p}.html`);
       if (!path.extname(p)) return serveStatic(req, res, '/');
       return send(res, 404, 'Not found');
     }
