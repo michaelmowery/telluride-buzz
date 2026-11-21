@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>About · Telluride.Buzz</title>
-  <meta name="description" content="What Telluride.Buzz is, where its information comes from, and how to report a problem.">
+  <title>About · {{site}}</title>
+  <meta name="description" content="What {{site}} is, where its information comes from, and how to report a problem.">
   <meta name="theme-color" content="#1f4e6e">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
@@ -12,60 +12,45 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/styles.css?v=10">
-  <script src="/theme.js?v=10"></script>
+  <link rel="stylesheet" href="/styles.css?v=11">
+  <script src="/theme.js?v=11"></script>
 </head>
 <body>
   <header class="top">
-    <a class="brand" href="/" aria-label="Telluride.Buzz home">
-      <svg class="logo" viewBox="30 14 504 220" width="110" height="48" aria-hidden="true">
-        <text x="318" y="172" text-anchor="end" class="logo-name">telluride</text>
-        <circle cx="400" cy="150" r="78" class="logo-dot"/>
-        <circle cx="342" cy="160" r="8" class="logo-ink"/>
-        <text x="354" y="172" class="logo-ink logo-buzz">buzz</text>
-        <path class="logo-wave" d="M423.8 61.1 A92 92 0 0 1 488.9 126.2"/>
-        <path class="logo-wave" d="M429 41.8 A112 112 0 0 1 508.2 121"/>
-        <path class="logo-wave" d="M434.2 22.5 A132 132 0 0 1 527.5 115.8"/>
-      </svg>
+    <a class="brand" href="/" aria-label="{{site}} home">
+      {{logo}}
     </a>
     <a class="back" href="/">← Back to the feed</a>
   </header>
 
   <main class="about">
-    <h1>About Telluride.Buzz</h1>
-    <p class="lede">Telluride.Buzz is the real-time pulse of Telluride: what's happening in our town, right now, from sources you can trust.</p>
+    <h1>About {{site}}</h1>
+    <p class="lede">{{site}} is the real-time pulse of {{town}}: what's happening in our town, right now, from sources you can trust.</p>
     <p>Instead of checking a dozen websites before you head out, open one page. Weather, roads, the mountain and local news are pulled together automatically, and every post links back to where it came from.</p>
 
-    <div class="preview-box" role="note"><strong>Preview:</strong> Telluride.Buzz is in early testing. Information may be wrong or out of date, so check the original source before you rely on it. It is not an emergency service: in an emergency, call 911.</div>
+    <div class="preview-box" role="note"><strong>Preview:</strong> {{site}} is in early testing. Information may be wrong or out of date, so check the original source before you rely on it. It is not an emergency service: in an emergency, call 911.</div>
 
     <h2>Where the information comes from</h2>
     <table class="sources">
       <thead><tr><th>Source</th><th>What we show</th><th>Checked</th></tr></thead>
       <tbody>
-        <tr><td>National Weather Service</td><td>Watches, warnings and advisories for Telluride</td><td>Every 3 min</td></tr>
-        <tr><td>National Weather Service</td><td>Forecast, temperature and expected snow</td><td>Every 10 min</td></tr>
-        <tr><td>Colorado Dept. of Transportation (COtrip)</td><td>Incidents, closures, road conditions and work zones on CO-145, CO-62 and US-550</td><td>Every 5 min</td></tr>
-        <tr><td>Telluride Ski Resort</td><td>Snow report: new snow, base depth, open lifts and trails</td><td>Every 15 min</td></tr>
-        <tr><td>San Miguel County</td><td>Emergency alerts</td><td>Every 5 min</td></tr>
-        <tr><td>San Miguel County</td><td>County news</td><td>Every 15 min</td></tr>
-        <tr><td>Town of Telluride</td><td>Town news and the community calendar</td><td>Every 15 to 60 min</td></tr>
-        <tr><td>KOTO Community Radio</td><td>Local news</td><td>Every 15 min</td></tr>
+        {{aboutSources}}
       </tbody>
     </table>
     <p class="muted">"Checked" is how often we ask the source for updates. A source only changes when its publisher posts something new, so a post can be older than that. Each tile shows how long ago its data was updated, and turns red when it is out of date.</p>
     <p class="muted">We don't write or edit the news. Titles and summaries come from the source, and alerts are shown as the agency issued them.</p>
 
     <h2>Alerts on your phone</h2>
-    <p>Tap <strong>Turn on alerts</strong> on the home page to get a notification for winter storm warnings, road closures and county emergencies. On iPhone, first add Telluride.Buzz to your Home Screen (Share, then Add to Home Screen). We store only the anonymous address your browser gives us to deliver the alert. No account, no email, no tracking.</p>
+    <p>Tap <strong>Turn on alerts</strong> on the home page to get a notification for winter storm warnings, road closures and county emergencies. On iPhone, first add {{site}} to your Home Screen (Share, then Add to Home Screen). We store only the anonymous address your browser gives us to deliver the alert. No account, no email, no tracking.</p>
 
     <h2>Spot a problem?</h2>
     <p>If something is wrong, missing or out of date, please tell us. Include what you saw and roughly when.</p>
-    <!-- Feedback address: change it here (one line). -->
-    <p><a class="push-btn feedback" id="feedback" href="mailto:telluridebuzz@gmail.com?subject=Telluride.Buzz%20feedback">Send feedback</a></p>
+    <!-- Feedback address: brand.feedbackEmail in config/<town>.json. -->
+    <p><a class="push-btn feedback" id="feedback" href="mailto:{{feedbackEmail}}?subject={{feedbackSubject}}">Send feedback</a></p>
 
     <h2>Fine print</h2>
     <p class="muted"><strong>Road data source:</strong> The data made available here has been modified for use from its original source, which is the State of Colorado, Department of Transportation (CDOT). THE STATE OF COLORADO AND CDOT MAKES NO REPRESENTATIONS OR WARRANTY AS TO THE COMPLETENESS, ACCURACY, TIMELINESS, OR CONTENT OF ANY DATA MADE AVAILABLE THROUGH THIS SITE. THE STATE OF COLORADO AND CDOT EXPRESSLY DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS OR IMPLIED, INCLUDING ANY IMPLIED WARRANTIES OF MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE. The data is subject to change as modifications and updates are complete. It is understood that the information contained in the Web feed is being used at one&#39;s own risk.</p>
-    <p class="muted">Telluride.Buzz is independent and is not affiliated with the Town of Telluride, San Miguel County, Telluride Ski Resort, CDOT or the National Weather Service.</p>
+    <p class="muted">{{site}} is independent and is not affiliated with {{notAffiliated}}.</p>
   </main>
 
   <footer class="foot">

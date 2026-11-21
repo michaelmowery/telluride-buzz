@@ -71,3 +71,10 @@ bash deploy/setup-autodeploy.sh
 ```
 
 It installs `deploy/server-deploy.sh` as `/usr/local/bin/telluride-buzz-deploy`, adds a GitHub-only SSH key that can run only that script (`restrict,command=...` in authorized_keys), saves the `DEPLOY_*` secrets in the repo, and runs the first deploy. To revoke: delete the `github-actions-telluride-buzz` line from the server's `~/.ssh/authorized_keys`. If you change `server-deploy.sh`, re-run the setup script to reinstall it.
+
+## Adding a town (example: durango.thetown.buzz)
+
+1. Add `config/<town>.json` with its hostnames, sources and `brand` block, and push to main (auto-deploys).
+2. DNS: an A record for the town's hostname pointing at the server (for thetown.buzz at Porkbun: host `durango`, A, 2.28.70.5).
+3. Caddy: add a block for the hostname that proxies to `telluride-buzz:3000` (see `Caddyfile.snippet`), then reload Caddy. Caddy gets the certificate on the first request.
+4. Check `https://<hostname>/api/health` for each source's status.

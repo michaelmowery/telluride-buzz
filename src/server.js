@@ -8,6 +8,8 @@ import { openDb } from './db.js';
 import { startScheduler } from './scheduler.js';
 import { seedDemo } from './demo.js';
 import { loadVapid, validSubscription, pushNewAlerts } from './push.js';
+import { renderTemplate, TEMPLATED } from './brand.js';
+import crypto from 'node:crypto';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -28,7 +30,9 @@ const towns = fs.readdirSync(CONFIG_DIR).filter((f) => f.endsWith('.json'))
 if (!towns.length) throw new Error(`No town config in ${CONFIG_DIR}`);
 const byHost = new Map();
 for (const t of towns) for (const h of t.hostnames || []) byHost.set(h.toLowerCase(), t);
-const townFor = (req) => byHost.get(String(req.headers.host || '').split(':')[0].toLowerCase()) || towns[0];
+// Unknown hostnames (the sslip.io test address, a bare IP) get the default town.
+const defaultTown = towns.find((t) => t.default) || towns[0];
+const townFor = (req) => byHost.get(String(req.headers.host || '').split(':')[0].toLowerCase()) || defaultTown;
 
 // ---------- data ----------
 const db = openDb(DEMO ? ':memory:' : path.join(DATA_DIR, 'buzz.db'));
@@ -108,7 +112,7 @@ const TYPES = {
   '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8',
 };
 
-function serveStatic(req, res, urlPath) {
+function serveStatic(req, res, urlPath, town) {
   let p = decodeURIComponent(urlPath);
   if (p === '/') p = '/index.html';
   const file = path.normalize(path.join(PUBLIC, p));
@@ -116,11 +120,12 @@ function serveStatic(req, res, urlPath) {
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) {
       // Clean URLs (/about -> about.html), then SPA-style fallback.
-      if (!path.extname(p) && fs.existsSync(path.join(PUBLIC, `${path.basename(p)}.html`)) && path.dirname(p) === '/') return serveStatic(req, res, `${p}.html`);
-      if (!path.extname(p)) return serveStatic(req, res, '/');
+      if (!path.extname(p) && fs.existsSync(path.join(PUBLIC, `${path.basename(p)}.html`)) && path.dirname(p) === '/') return serveStatic(req, res, `${p}.html`, town);
+      if (!path.extname(p)) return serveStatic(req, res, '/', town);
       return send(res, 404, 'Not found');
     }
     const ext = path.extname(file);
+    if (TEMPLATED.has(p)) return serveTemplate(req, res, file, ext, st, town);
     // Code and pages revalidate every time (cheap 304s via ETag) so a deploy never
     // leaves a browser with new HTML and old CSS/JS. Images and vendor files cache.
     const noCache = ['.html', '.css', '.js', '.webmanifest'].includes(ext) && !p.startsWith('/vendor/');
@@ -139,6 +144,22 @@ function serveStatic(req, res, urlPath) {
     if (req.method === 'HEAD') return res.end();
     fs.createReadStream(file).pipe(res);
   });
+}
+
+// Pages, manifest and service worker are filled in per town (see brand.js).
+const templateCache = new Map(); // `${town.id}:${file}` -> { mtime, body, etag }
+function serveTemplate(req, res, file, ext, st, town) {
+  const key = `${town.id}:${file}`;
+  let c = templateCache.get(key);
+  if (!c || c.mtime !== st.mtimeMs) {
+    const body = Buffer.from(renderTemplate(fs.readFileSync(file, 'utf8'), ext, town));
+    c = { mtime: st.mtimeMs, body, etag: `"${crypto.createHash('sha1').update(body).digest('base64url').slice(0, 16)}"` };
+    templateCache.set(key, c);
+  }
+  const headers = { 'Cache-Control': 'no-cache', ETag: c.etag, Vary: 'Host', ...SECURITY_HEADERS };
+  if (req.headers['if-none-match'] === c.etag) { res.writeHead(304, headers); return res.end(); }
+  res.writeHead(200, { 'Content-Type': TYPES[ext] || 'application/octet-stream', 'Content-Length': c.body.length, ...headers });
+  res.end(req.method === 'HEAD' ? undefined : c.body);
 }
 
 const SECURITY_HEADERS = {
@@ -216,7 +237,7 @@ const server = http.createServer((req, res) => {
       case '/healthz':
         return send(res, 200, 'ok');
       default:
-        return serveStatic(req, res, url.pathname);
+        return serveStatic(req, res, url.pathname, town);
     }
   } catch (e) {
     log.warn(`request failed: ${e.stack || e.message}`);
@@ -224,7 +245,7 @@ const server = http.createServer((req, res) => {
   }
 });
 
-server.listen(PORT, () => log.info(`Telluride.Buzz listening on :${PORT} (${towns.map((t) => t.id).join(', ')})`));
+server.listen(PORT, () => log.info(`Buzz listening on :${PORT} (${towns.map((t) => t.id).join(', ')})`));
 
 function shutdown() {
   log.info('shutting down');

@@ -1,7 +1,7 @@
 {
-  "name": "Telluride.Buzz",
+  "name": "{{site}}",
   "short_name": "Buzz",
-  "description": "The real-time pulse of Telluride.",
+  "description": "The real-time pulse of {{town}}.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f6efe2",

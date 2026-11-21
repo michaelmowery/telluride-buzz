@@ -1,6 +1,23 @@
 {
   "id": "telluride",
   "name": "Telluride",
+  "default": true,
+  "brand": {
+    "siteName": "Telluride.Buzz",
+    "logo": "own",
+    "feedbackEmail": "telluridebuzz@gmail.com",
+    "notAffiliated": "the Town of Telluride, San Miguel County, Telluride Ski Resort, CDOT or the National Weather Service",
+    "aboutSources": [
+      ["National Weather Service", "Watches, warnings and advisories for Telluride", "Every 3 min"],
+      ["National Weather Service", "Forecast, temperature and expected snow", "Every 10 min"],
+      ["Colorado Dept. of Transportation (COtrip)", "Incidents, closures, road conditions and work zones on CO-145, CO-62 and US-550", "Every 5 min"],
+      ["Telluride Ski Resort", "Snow report: new snow, base depth, open lifts and trails", "Every 15 min"],
+      ["San Miguel County", "Emergency alerts", "Every 5 min"],
+      ["San Miguel County", "County news", "Every 15 min"],
+      ["Town of Telluride", "Town news and the community calendar", "Every 15 to 60 min"],
+      ["KOTO Community Radio", "Local news", "Every 15 min"]
+    ]
+  },
   "hostnames": ["telluride.buzz", "www.telluride.buzz", "localhost"],
   "timezone": "America/Denver",
   "location": { "lat": 37.9375, "lon": -107.8123 },

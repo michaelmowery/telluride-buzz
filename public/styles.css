@@ -62,6 +62,7 @@ button { font: inherit; color: inherit; }
 .logo-dot { fill: #5aa3d6; }
 .logo-ink { fill: #1a4360; }
 .logo-buzz { font: 700 50px var(--slab); }
+.logo-thetown { font: 700 27px var(--slab); }
 .logo-wave { fill: none; stroke: #f6efe2; stroke-width: 9; stroke-linecap: round; }
 .status { display: flex; align-items: center; gap: 7px; font-size: 13px; opacity: .9; white-space: nowrap; }
 .pulse { width: 8px; height: 8px; border-radius: 50%; background: #7fd18f; box-shadow: 0 0 0 0 rgba(127, 209, 143, .6); animation: pulse 2.4s infinite; }

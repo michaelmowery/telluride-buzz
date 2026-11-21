@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Telluride.Buzz</title>
-  <meta name="description" content="The real-time pulse of Telluride: what's happening in our town, right now, from sources you can trust.">
+  <title>{{site}}</title>
+  <meta name="description" content="The real-time pulse of {{town}}: what's happening in our town, right now, from sources you can trust.">
   <meta name="theme-color" content="#1f4e6e">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
@@ -14,21 +14,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/styles.css?v=10">
-  <script src="/theme.js?v=10"></script>
+  <link rel="stylesheet" href="/styles.css?v=11">
+  <script src="/theme.js?v=11"></script>
 </head>
 <body>
   <header class="top">
-    <a class="brand" href="/" aria-label="Telluride.Buzz home">
-      <svg class="logo" viewBox="30 14 504 220" width="110" height="48" aria-hidden="true">
-        <text x="318" y="172" text-anchor="end" class="logo-name">telluride</text>
-        <circle cx="400" cy="150" r="78" class="logo-dot"/>
-        <circle cx="342" cy="160" r="8" class="logo-ink"/>
-        <text x="354" y="172" class="logo-ink logo-buzz">buzz</text>
-        <path class="logo-wave" d="M423.8 61.1 A92 92 0 0 1 488.9 126.2"/>
-        <path class="logo-wave" d="M429 41.8 A112 112 0 0 1 508.2 121"/>
-        <path class="logo-wave" d="M434.2 22.5 A132 132 0 0 1 527.5 115.8"/>
-      </svg>
+    <a class="brand" href="/" aria-label="{{site}} home">
+      {{logo}}
     </a>
     <div class="top-right">
       <div class="status" id="status" aria-live="polite"><span class="pulse"></span><span id="status-text">Loading…</span></div>
@@ -36,7 +28,7 @@
     </div>
   </header>
 
-  <div class="preview" role="note"><strong>Preview:</strong> Telluride.Buzz is in early testing. Information may be wrong or out of date, so check the original source before you rely on it.</div>
+  <div class="preview" role="note"><strong>Preview:</strong> {{site}} is in early testing. Information may be wrong or out of date, so check the original source before you rely on it.</div>
 
   <main id="app">
     <section id="alerts" class="alerts" aria-label="Active alerts"></section>
@@ -102,11 +94,11 @@
   </dialog>
 
   <footer class="foot">
-    <p class="mission">The real-time pulse of Telluride: what's happening in our town, right now, from sources you can trust.</p>
+    <p class="mission">The real-time pulse of {{town}}: what's happening in our town, right now, from sources you can trust.</p>
     <p id="disclaimer" class="disclaimer"><strong>Road data source:</strong> The data made available here has been modified for use from its original source, which is the State of Colorado, Department of Transportation (CDOT). THE STATE OF COLORADO AND CDOT MAKES NO REPRESENTATIONS OR WARRANTY AS TO THE COMPLETENESS, ACCURACY, TIMELINESS, OR CONTENT OF ANY DATA MADE AVAILABLE THROUGH THIS SITE. THE STATE OF COLORADO AND CDOT EXPRESSLY DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS OR IMPLIED, INCLUDING ANY IMPLIED WARRANTIES OF MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE. The data is subject to change as modifications and updates are complete. It is understood that the information contained in the Web feed is being used at one&#39;s own risk.</p>
     <p class="fine">Every post links to its source. <a href="/about">About &amp; sources</a> · <a href="#" id="prefs-link">Preferences</a> · Not for emergencies: call 911.</p>
   </footer>
 
-  <script src="/app.js?v=10" type="module"></script>
+  <script src="/app.js?v=11" type="module"></script>
 </body>
 </html>

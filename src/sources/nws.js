@@ -5,15 +5,17 @@ import { fetchJson } from '../http.js';
 const BASE = 'https://api.weather.gov';
 const LABEL = 'National Weather Service';
 
-let pointCache = null; // { point, forecast, forecastHourly, at }
+const pointCache = new Map(); // point -> { point, forecast, forecastHourly, at } (one per town)
 
 async function resolvePoint(point, get) {
-  if (pointCache && pointCache.point === point && Date.now() - pointCache.at < 24 * 3600e3) return pointCache;
+  const hit = pointCache.get(point);
+  if (hit && Date.now() - hit.at < 24 * 3600e3) return hit;
   const data = await get(`${BASE}/points/${point}`);
   const p = data.properties || {};
   if (!p.forecast) throw new Error('NWS points lookup returned no forecast URL');
-  pointCache = { point, forecast: p.forecast, forecastHourly: p.forecastHourly, at: Date.now() };
-  return pointCache;
+  const entry = { point, forecast: p.forecast, forecastHourly: p.forecastHourly, at: Date.now() };
+  pointCache.set(point, entry);
+  return entry;
 }
 
 export function severityOf(alertProps) {
