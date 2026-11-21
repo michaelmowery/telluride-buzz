@@ -1,6 +1,6 @@
 // App shell cached for offline use; the API is network-first with the last good
 // response as a fallback, so the app still opens on a dead cell signal.
-const SHELL = 'buzz-shell-v6';
+const SHELL = 'buzz-shell-v7';
 const API = 'buzz-api-v1';
 const SHELL_FILES = ['/', '/index.html', '/about.html', '/styles.css', '/theme.js', '/app.js', '/manifest.webmanifest', '/icons/icon.svg', '/icons/favicon.svg'];
 
@@ -26,14 +26,20 @@ self.addEventListener('fetch', (e) => {
     }).catch(() => caches.match(url.pathname === '/api/home' ? '/api/home' : e.request)));
     return;
   }
-  // Shell: stale-while-revalidate.
-  e.respondWith(caches.match(e.request).then((cached) => {
+  // Shell: network first so a deploy never mixes old and new files; the cached
+  // copy is used when offline or when the network takes longer than 4 s.
+  e.respondWith((async () => {
     const net = fetch(e.request).then((res) => {
-      if (res.ok) caches.open(SHELL).then((c) => c.put(e.request, res.clone()));
+      if (res.ok) { const copy = res.clone(); caches.open(SHELL).then((c) => c.put(e.request, copy)); }
       return res;
-    }).catch(() => cached);
-    return cached || net;
-  }));
+    });
+    const timeout = new Promise((r) => setTimeout(r, 4000));
+    try {
+      const res = await Promise.race([net, timeout]);
+      if (res) return res;
+    } catch { /* offline */ }
+    return (await caches.match(e.request)) || net;
+  })());
 });
 
 // Push: the server sends an empty push; fetch the alert it refers to and show it.
