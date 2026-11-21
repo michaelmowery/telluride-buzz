@@ -61,3 +61,13 @@ cd /opt/telluride-buzz && git pull && docker compose up -d --build
 docker compose down                 # stops the app; Caddy and other sites unaffected
 # remove the Caddy block and reload Caddy to take the hostname offline
 ```
+
+## Automatic deploys (GitHub Actions)
+
+Every push to `main` runs the tests and then redeploys. One-time setup, on the Mac, from a fresh clone:
+
+```
+bash deploy/setup-autodeploy.sh
+```
+
+It installs `deploy/server-deploy.sh` as `/usr/local/bin/telluride-buzz-deploy`, adds a GitHub-only SSH key that can run only that script (`restrict,command=...` in authorized_keys), saves the `DEPLOY_*` secrets in the repo, and runs the first deploy. To revoke: delete the `github-actions-telluride-buzz` line from the server's `~/.ssh/authorized_keys`. If you change `server-deploy.sh`, re-run the setup script to reinstall it.
