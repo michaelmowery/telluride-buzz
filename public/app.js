@@ -1,7 +1,7 @@
 // Telluride.Buzz home screen. Polls /api/home every 60 s while visible.
 const POLL_MS = 60e3;
 const STALE_MS = { weather: 45 * 60e3, roads: 20 * 60e3, lifts: 90 * 60e3, events: 6 * 3600e3 };
-const CATEGORY_LABEL = { weather: 'Weather', roads: 'Roads', lifts: 'Lifts & Snow', events: 'Events', town: 'Town', news: 'News' };
+const CATEGORY_LABEL = { weather: 'Weather', roads: 'Roads', lifts: 'Lifts & Snow', events: 'Events', town: 'Town', news: 'News', prefs: 'Preferences' };
 
 const $ = (s, el = document) => el.querySelector(s);
 const state = { data: null, filter: null, lastOk: 0, timer: null, feed: [], seen: new Set() };
@@ -357,7 +357,30 @@ async function drawRoadsMap(r) {
   }, 250);
 }
 
-const PANELS = { weather: panelWeather, roads: panelRoads, lifts: panelLifts, events: panelEvents };
+// ---------- preferences ----------
+const THEME_INFO = [
+  ['trailhead', 'Trailhead', 'Forest green and amber, the original'],
+  ['lake', 'Blue Lake', 'Alpine blue with gold'],
+  ['aspen', 'Aspen', 'Burnt orange and gold'],
+  ['columbine', 'Columbine', 'Purple with gold'],
+];
+const currentTheme = () => document.documentElement.dataset.palette || 'trailhead';
+function setTheme(t) {
+  document.documentElement.dataset.palette = t;
+  try { localStorage.setItem('buzz-theme', t); } catch { /* storage blocked: applies for this visit only */ }
+  const m = document.querySelector('meta[name="theme-color"]');
+  if (m && window.BUZZ_THEMES?.[t]) m.content = window.BUZZ_THEMES[t];
+}
+function panelPrefs() {
+  const cur = currentTheme();
+  return `<h3>Color theme</h3>
+    <div class="themes" role="radiogroup" aria-label="Color theme">${THEME_INFO.map(([id, name, desc]) => `
+      <button class="theme-opt" role="radio" aria-checked="${id === cur}" data-theme="${id}">
+        <span class="swatch sw-${id}"><i></i><i></i><i></i></span><b>${esc(name)}</b><small>${esc(desc)}</small></button>`).join('')}</div>
+    <p class="prefs-note">Saved on this device only. Road and alert colors stay the same in every theme. Dark mode follows your phone's setting.</p>`;
+}
+
+const PANELS = { weather: panelWeather, roads: panelRoads, lifts: panelLifts, events: panelEvents, prefs: panelPrefs };
 let openTile = null;
 let closing = false;
 
@@ -377,8 +400,8 @@ function renderPanel() {
   body.scrollTop = scroll;
   body.querySelectorAll('[data-pct]').forEach((i) => { i.style.width = `${i.dataset.pct}%`; }); // CSP: no inline style attributes
   const src = $(`.tile[data-tile="${openTile}"] [data-age]`);
-  $('#panel-age').textContent = src.textContent;
-  $('#panel-age').className = src.className;
+  $('#panel-age').textContent = src ? src.textContent : '';
+  $('#panel-age').className = src ? src.className : 'tile-age';
 }
 
 function openPanel(name) {
@@ -403,7 +426,7 @@ function closePanel(fromHistory = false) {
     panel.style.transform = '';
     panel.close();
     document.documentElement.classList.remove('panel-open');
-    $(`.tile[data-tile="${openTile}"]`)?.focus();
+    (openTile === 'prefs' ? $('#prefs-btn') : $(`.tile[data-tile="${openTile}"]`))?.focus();
     openTile = null;
   };
   if (!fromHistory && history.state?.panel) history.back();
@@ -414,11 +437,15 @@ function closePanel(fromHistory = false) {
 
 document.querySelectorAll('.tile-expand').forEach((b) => b.addEventListener('click', () => openPanel(b.dataset.open)));
 $('#panel-close').addEventListener('click', () => closePanel());
+$('#prefs-btn').addEventListener('click', () => openPanel('prefs'));
+$('#prefs-link').addEventListener('click', (e) => { e.preventDefault(); openPanel('prefs'); });
 panel.addEventListener('cancel', (e) => { e.preventDefault(); closePanel(); }); // Esc
 panel.addEventListener('click', (e) => {
   if (e.target === panel) return closePanel(); // tap on the backdrop
   const f = e.target.closest('[data-filter]');
   if (f) { closePanel(); if (state.filter !== f.dataset.filter) setFilter(f.dataset.filter); return; }
+  const th = e.target.closest('[data-theme]');
+  if (th) { setTheme(th.dataset.theme); return renderPanel(); }
   const nav = e.target.closest('[data-cal]');
   if (nav) { calOffset = Math.max(0, calOffset + Number(nav.dataset.cal)); return renderPanel(); }
   const day = e.target.closest('[data-day]');

@@ -15,6 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="/styles.css">
+  <script src="/theme.js"></script>
 </head>
 <body>
   <header class="top">
@@ -31,7 +32,10 @@
         <text x="182" y="30" class="sign-text">BUZZ</text>
       </svg>
     </a>
-    <div class="status" id="status" aria-live="polite"><span class="pulse"></span><span id="status-text">Loading…</span></div>
+    <div class="top-right">
+      <div class="status" id="status" aria-live="polite"><span class="pulse"></span><span id="status-text">Loading…</span></div>
+      <button class="prefs-btn" id="prefs-btn" aria-label="Preferences" title="Preferences" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+    </div>
   </header>
 
   <div class="preview" role="note"><strong>Preview:</strong> Telluride.Buzz is in early testing. Information may be wrong or out of date, so check the original source before you rely on it.</div>
@@ -98,7 +102,7 @@
   <footer class="foot">
     <p class="mission">The real-time pulse of Telluride: what's happening in our town, right now, from sources you can trust.</p>
     <p id="disclaimer" class="disclaimer"><strong>Road data source:</strong> The data made available here has been modified for use from its original source, which is the State of Colorado, Department of Transportation (CDOT). THE STATE OF COLORADO AND CDOT MAKES NO REPRESENTATIONS OR WARRANTY AS TO THE COMPLETENESS, ACCURACY, TIMELINESS, OR CONTENT OF ANY DATA MADE AVAILABLE THROUGH THIS SITE. THE STATE OF COLORADO AND CDOT EXPRESSLY DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS OR IMPLIED, INCLUDING ANY IMPLIED WARRANTIES OF MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE. The data is subject to change as modifications and updates are complete. It is understood that the information contained in the Web feed is being used at one&#39;s own risk.</p>
-    <p class="fine">Every post links to its source. <a href="/about">About &amp; sources</a> · Not for emergencies: call 911.</p>
+    <p class="fine">Every post links to its source. <a href="/about">About &amp; sources</a> · <a href="#" id="prefs-link">Preferences</a> · Not for emergencies: call 911.</p>
   </footer>
 
   <script src="/app.js" type="module"></script>

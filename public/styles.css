@@ -1,6 +1,7 @@
 :root {
   --forest: #2f4a3a;
   --forest-2: #3e5f4b;
+  --forest-deep: #2a4433;
   --amber: #d98e2b;
   --amber-soft: #f3d9a8;
   --cream: #f6efe2;
@@ -57,7 +58,7 @@ button { font: inherit; color: inherit; }
 }
 .brand { display: block; line-height: 0; }
 .sign { height: 34px; width: auto; }
-.sign-bg { fill: #2a4433; stroke: #f6efe2; stroke-width: 2; }
+.sign-bg { fill: var(--forest-deep); stroke: #f6efe2; stroke-width: 2; }
 .sign-line { fill: none; stroke: #f6efe2; stroke-width: 1; opacity: .55; }
 .sign-text { font: 700 22px var(--slab); fill: #f6efe2; letter-spacing: 1.5px; }
 .sign-dot circle { fill: var(--amber); }
@@ -317,3 +318,59 @@ html.panel-open { overflow: hidden; }
 .cal-grid > button i { position: absolute; bottom: 4px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--amber); }
 .cal-grid > .today { box-shadow: inset 0 0 0 2px var(--forest-2); }
 @media (prefers-color-scheme: dark) { .cal-grid > .today { box-shadow: inset 0 0 0 2px var(--amber); } }
+
+/* ---------- header right ---------- */
+.top-right { display: flex; align-items: center; gap: 10px; }
+.prefs-btn { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid rgba(246, 239, 226, .35); border-radius: 10px; background: transparent; color: #f6efe2; cursor: pointer; }
+.prefs-btn:hover { background: rgba(255, 255, 255, .1); }
+.prefs-btn:focus-visible { outline: 3px solid var(--amber); outline-offset: 1px; }
+.prefs-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- preferences ---------- */
+.themes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.theme-opt { display: flex; flex-direction: column; gap: 8px; text-align: left; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); cursor: pointer; }
+.theme-opt[aria-checked="true"] { border-color: var(--forest-2); box-shadow: 0 0 0 2px var(--forest-2); }
+@media (prefers-color-scheme: dark) { .theme-opt[aria-checked="true"] { border-color: var(--amber); box-shadow: 0 0 0 2px var(--amber); } }
+.theme-opt b { font: 700 15px var(--slab); }
+.theme-opt small { color: var(--ink-2); font-size: 12.5px; }
+.swatch { display: flex; height: 30px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
+.swatch i { flex: 1; }
+.sw-trailhead i:nth-child(1) { background: #2f4a3a; } .sw-trailhead i:nth-child(2) { background: #d98e2b; } .sw-trailhead i:nth-child(3) { background: #f6efe2; }
+.sw-lake i:nth-child(1) { background: #1f4e6e; } .sw-lake i:nth-child(2) { background: #e3a33a; } .sw-lake i:nth-child(3) { background: #eef3f6; }
+.sw-aspen i:nth-child(1) { background: #8a3f12; } .sw-aspen i:nth-child(2) { background: #f0b232; } .sw-aspen i:nth-child(3) { background: #faf0e4; }
+.sw-columbine i:nth-child(1) { background: #4a3570; } .sw-columbine i:nth-child(2) { background: #e6b23e; } .sw-columbine i:nth-child(3) { background: #f4f0f8; }
+.prefs-note { font-size: 13px; color: var(--ink-2); margin-top: 14px; }
+
+/* ---------- color themes ----------
+   Each theme changes the brand colors and backgrounds. Status colors (--ok,
+   --caution, --closed, --rust) stay the same in every theme so road and alert
+   colors always mean the same thing. */
+html[data-palette="lake"] {
+  --forest: #1f4e6e; --forest-2: #2e6a8e; --forest-deep: #1a4360;
+  --amber: #e3a33a; --amber-soft: #f6e3b4;
+  --cream: #eef3f6; --paper: #fbfdfe; --line: #d3dfe7;
+}
+html[data-palette="aspen"] {
+  --forest: #8a3f12; --forest-2: #9c4a17; --forest-deep: #763510;
+  --amber: #f0b232; --amber-soft: #f9e1b5;
+  --cream: #faf0e4; --paper: #fffaf3; --line: #ecd8c0;
+}
+html[data-palette="columbine"] {
+  --forest: #4a3570; --forest-2: #5e4689; --forest-deep: #3e2c60;
+  --amber: #e6b23e; --amber-soft: #eadff5;
+  --cream: #f4f0f8; --paper: #fdfbff; --line: #dfd5ea;
+}
+@media (prefers-color-scheme: dark) {
+  html[data-palette="lake"] {
+    --cream: #161c21; --paper: #1e262d; --line: #2f3a44; --ink: #e6edf2; --ink-2: #a5b2bd;
+    --amber-soft: #3a2f1c; --forest-2: #6fa6cc;
+  }
+  html[data-palette="aspen"] {
+    --cream: #1f1915; --paper: #29211b; --line: #3d3128; --ink: #f3e9de; --ink-2: #bba997;
+    --amber-soft: #3d2c16; --forest-2: #e0925a;
+  }
+  html[data-palette="columbine"] {
+    --cream: #1a1720; --paper: #231f2b; --line: #373042; --ink: #ece6f3; --ink-2: #b1a7bf;
+    --amber-soft: #2f2640; --forest-2: #b29ad9;
+  }
+}
