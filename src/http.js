@@ -1,5 +1,5 @@
 // Small fetch wrapper: timeout, identifying User-Agent, size cap, clear errors.
-const UA = process.env.USER_AGENT || 'TellurideBuzz/0.1 (+https://telluride.buzz; pilot)';
+const UA = process.env.USER_AGENT || 'TellurideBuzz/0.1 (+https://telluride.buzz; telluridebuzz@gmail.com)';
 const MAX_BYTES = 5 * 1024 * 1024;
 
 export async function fetchText(url, { timeoutMs = 20000, headers = {} } = {}) {
