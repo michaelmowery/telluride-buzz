@@ -121,11 +121,19 @@ function serveStatic(req, res, urlPath) {
       return send(res, 404, 'Not found');
     }
     const ext = path.extname(file);
-    const noCache = ext === '.html' || p === '/sw.js' || ext === '.webmanifest';
+    // Code and pages revalidate every time (cheap 304s via ETag) so a deploy never
+    // leaves a browser with new HTML and old CSS/JS. Images and vendor files cache.
+    const noCache = ['.html', '.css', '.js', '.webmanifest'].includes(ext) && !p.startsWith('/vendor/');
+    const etag = `"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, { ETag: etag, 'Cache-Control': noCache ? 'no-cache' : 'public, max-age=3600', ...SECURITY_HEADERS });
+      return res.end();
+    }
     res.writeHead(200, {
       'Content-Type': TYPES[ext] || 'application/octet-stream',
       'Content-Length': st.size,
       'Cache-Control': noCache ? 'no-cache' : 'public, max-age=3600',
+      ETag: etag,
       ...SECURITY_HEADERS,
     });
     if (req.method === 'HEAD') return res.end();
