@@ -188,7 +188,8 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('online', () => { refresh(); setStatus(); });
 window.addEventListener('offline', setStatus);
 
-document.querySelectorAll('.tile').forEach((t) => t.addEventListener('click', () => setFilter(t.dataset.tile)));
+// Tapping a tile opens its expanded panel; the panel has a button to filter the feed.
+document.querySelectorAll('.tile').forEach((t) => t.addEventListener('click', () => openPanel(t.dataset.tile)));
 $('#clear-filter').addEventListener('click', () => setFilter(state.filter));
 $('#more').addEventListener('click', () => {
   const last = state.feed[state.feed.length - 1];
@@ -305,7 +306,7 @@ function closePanel(fromHistory = false) {
     panel.style.transform = '';
     panel.close();
     document.documentElement.classList.remove('panel-open');
-    $(`.tile-expand[data-open="${openTile}"]`)?.focus();
+    $(`.tile[data-tile="${openTile}"]`)?.focus();
     openTile = null;
   };
   if (!fromHistory && history.state?.panel) history.back();
