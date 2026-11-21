@@ -22,12 +22,18 @@ export function seedDemo(db, town) {
   });
 
   const incidents = [
-    { _route: 'CO-145', _level: 'caution', title: 'CO-145: Traction law in effect, Lizard Head Pass', summary: 'All vehicles must have adequate tires or chains between mile markers 56 and 64.' },
-    { _route: 'CO-145', _level: 'ok', title: 'CO-145 work zone: Shoulder work near Ophir, expect brief delays' },
+    { _route: 'CO-145', _level: 'caution', title: 'CO-145: Traction law in effect, Lizard Head Pass', summary: 'All vehicles must have adequate tires or chains between mile markers 56 and 64.',
+      _geo: [[[37.8115, -107.9083]]] },
+    { _route: 'CO-145', _level: 'ok', title: 'CO-145 work zone: Shoulder work near Ophir, expect brief delays',
+      _geo: [[[37.8590, -107.8490], [37.8530, -107.8610], [37.8460, -107.8700]]] },
   ];
   db.setTile(town.id, 'roads', buildRoadsTile(town, {
     incidents,
-    conditions: { 'CO-62': [{ segment: 'Dallas Divide', text: 'Snow packed, icy spots', level: 'caution' }], 'US-550': [{ segment: 'Ridgway to Ouray', text: 'Dry', level: 'ok' }] },
+    conditions: {
+      'CO-145': [{ segment: 'Telluride to Placerville', text: 'Wet in areas', level: 'ok', geo: [[[37.9530, -107.8730], [37.9720, -107.9300], [38.0160, -108.0530]]] }],
+      'CO-62': [{ segment: 'Dallas Divide', text: 'Snow packed, icy spots', level: 'caution', geo: [[[38.0160, -108.0530], [38.0900, -107.9800], [38.1300, -107.8800], [38.1520, -107.7560]]] }],
+      'US-550': [{ segment: 'Ridgway to Ouray', text: 'Dry', level: 'ok', geo: [[[38.1520, -107.7560], [38.0900, -107.7200], [38.0230, -107.6720]]] }],
+    },
     okAt: now,
   }));
 

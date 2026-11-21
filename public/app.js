@@ -238,7 +238,9 @@ function panelRoads(r) {
     return `<div class="p-card p-route"><div class="p-route-head"><span class="dot ${esc(x.level)}"></span><b>${esc(x.label)}</b>${x.note ? `<span class="note">${esc(x.note)}</span>` : ''}</div>
       ${lines ? `<ul>${lines}</ul>` : `<div class="status">${esc(x.status)}</div>`}</div>`;
   }).join('');
-  return `${r.error ? `<div class="p-card tile-error">${esc(r.error)}</div>` : ''}${routes}
+  return `<div class="roads-map-wrap"><div class="roads-map" id="roads-map-slot"></div>
+      <div class="map-legend"><span><i class="lg ok"></i>Open</span><span><i class="lg caution"></i>Caution</span><span><i class="lg closed"></i>Closed</span><span class="muted">Tap a line or dot for details</span></div></div>
+    ${r.error ? `<div class="p-card tile-error">${esc(r.error)}</div>` : ''}${routes}
     <div class="p-actions">${srcLink(r.link, 'Live map at COtrip')}<button data-filter="roads">Road posts</button></div>
     ${r.disclaimer ? `<p class="p-fine"><strong>Road data source:</strong> ${esc(r.disclaimer)}</p>` : ''}`;
 }
@@ -253,18 +255,106 @@ function panelLifts(l) {
     <div class="p-actions">${srcLink(l.link, `Full report at ${l.sourceLabel || 'the resort'}`)}<button data-filter="lifts">Snow posts</button></div>`;
 }
 
+const dayKey = (t) => new Date(t).toLocaleDateString('en-CA', { timeZone: TZ });
+let calOffset = 0; // months from the current one
+
+function calendarHtml(events) {
+  const has = new Map();
+  for (const e of events) { const k = dayKey(e.startsAt); has.set(k, (has.get(k) || 0) + 1); }
+  const today = dayKey(Date.now());
+  const [ty, tm] = today.split('-').map(Number);
+  const first = new Date(Date.UTC(ty, tm - 1 + calOffset, 1));
+  const y = first.getUTCFullYear(), m = first.getUTCMonth() + 1;
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const lastKey = dayKey(Date.now() + 30 * 86400e3);
+  const pad = (n) => String(n).padStart(2, '0');
+  let cells = '<span></span>'.repeat(first.getUTCDay());
+  for (let d = 1; d <= days; d++) {
+    const k = `${y}-${pad(m)}-${pad(d)}`;
+    const n = has.get(k) || 0;
+    const cls = [k === today ? 'today' : '', n ? 'has' : '', k < today ? 'past' : ''].join(' ').trim();
+    cells += n
+      ? `<button class="${cls}" data-day="${k}" aria-label="${esc(dayLabel(Date.parse(`${k}T12:00:00-07:00`)))}: ${n} event${n > 1 ? 's' : ''}">${d}<i></i></button>`
+      : `<span class="${cls}">${d}</span>`;
+  }
+  const title = first.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const canNext = `${y}-${pad(m)}-${pad(days)}` < lastKey;
+  return `<div class="p-card cal">
+    <div class="cal-head"><button data-cal="-1" aria-label="Previous month" ${calOffset <= 0 ? 'disabled' : ''}>‹</button><b>${esc(title)}</b><button data-cal="1" aria-label="Next month" ${canNext ? '' : 'disabled'}>›</button></div>
+    <div class="cal-grid cal-dow"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+    <div class="cal-grid">${cells}</div></div>`;
+}
+
 function panelEvents(events) {
   if (!events?.length) return '<div class="p-card tile-error">Nothing listed for the next few weeks.</div>';
   let lastDay = '';
-  return events.map((e) => {
+  return calendarHtml(events) + events.map((e) => {
     const day = dayLabel(e.startsAt);
-    const head = day !== lastDay ? `<div class="p-day">${esc(day)}</div>` : '';
+    const head = day !== lastDay ? `<div class="p-day" id="day-${dayKey(e.startsAt)}">${esc(day)}</div>` : '';
     lastDay = day;
     const time = eventTime(e.startsAt).split(' · ')[1] || 'All day';
     const link = safeUrl(e.link);
     return `${head}<div class="p-card p-event"><time>${esc(time)}</time><div>${link ? `<a href="${esc(link)}" target="_blank" rel="noopener">${esc(e.title)}</a>` : `<b>${esc(e.title)}</b>`}
       ${e.summary ? `<small>${esc(e.summary)}</small>` : ''}<small>${esc(e.sourceLabel)}</small></div></div>`;
   }).join('') + '<div class="p-actions"><button data-filter="events">Event posts</button></div>';
+}
+
+// ---------- roads map (Leaflet + OpenStreetMap, loaded only when needed) ----------
+let leafletReady = null;
+let roadsMap = null, roadsLayer = null;
+function loadLeaflet() {
+  leafletReady ||= new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet'; css.href = '/vendor/leaflet/leaflet.css';
+    document.head.append(css);
+    const js = document.createElement('script');
+    js.src = '/vendor/leaflet/leaflet.js';
+    js.onload = () => resolve(window.L);
+    js.onerror = () => { leafletReady = null; reject(new Error('map failed to load')); };
+    document.head.append(js);
+  });
+  return leafletReady;
+}
+const LEVEL_COLOR = { ok: '#3d7a4f', caution: '#c27c12', closed: '#a5432a', unknown: '#8a8478' };
+
+async function drawRoadsMap(r) {
+  const el = $('#roads-map');
+  if (!el || !r) return;
+  let L;
+  try { L = await loadLeaflet(); } catch { el.innerHTML = '<div class="tile-error map-err">The map could not load. Use the COtrip link below.</div>'; return; }
+  if (!roadsMap || roadsMap.getContainer() !== el) {
+    roadsMap?.remove();
+    roadsMap = L.map(el, { scrollWheelZoom: false, zoomSnap: 0.5 }).setView(r.center || [37.94, -107.81], 9);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 17,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
+    }).addTo(roadsMap);
+    roadsLayer = L.layerGroup().addTo(roadsMap);
+    roadsMap.fitAfterOpen = true;
+  }
+  roadsLayer.clearLayers();
+  const bounds = [];
+  const add = (geo, level, html, weight) => {
+    for (const path of geo || []) {
+      const color = LEVEL_COLOR[level] || LEVEL_COLOR.unknown;
+      const layer = path.length === 1
+        ? L.circleMarker(path[0], { radius: 8, color: '#fff', weight: 2, fillColor: color, fillOpacity: 1 })
+        : L.polyline(path, { color, weight, opacity: 0.9, lineCap: 'round' });
+      layer.bindPopup(html).addTo(roadsLayer);
+      bounds.push(...path);
+    }
+  };
+  for (const route of r.routes || []) {
+    for (const s of route.segments || []) add(s.geo, s.level, `<b>${esc(route.label)}</b><br>${esc(s.text)}`, 5);
+  }
+  for (const route of r.routes || []) {
+    for (const e of route.events || []) add(e.geo, e.level, `<b>${esc(route.label)}</b><br>${esc(e.title)}${e.summary ? `<br><small>${esc(e.summary)}</small>` : ''}`, 7);
+  }
+  setTimeout(() => {
+    roadsMap.invalidateSize();
+    if (roadsMap.fitAfterOpen && bounds.length) roadsMap.fitBounds(bounds, { padding: [24, 24], maxZoom: 12 });
+    roadsMap.fitAfterOpen = false;
+  }, 250);
 }
 
 const PANELS = { weather: panelWeather, roads: panelRoads, lifts: panelLifts, events: panelEvents };
@@ -277,7 +367,13 @@ function renderPanel() {
   const data = openTile === 'events' ? state.data.events : t[openTile];
   const body = $('#panel-body');
   const scroll = body.scrollTop;
+  const liveMap = $('#roads-map', body);
   body.innerHTML = PANELS[openTile](data);
+  const slot = $('#roads-map-slot', body);
+  if (slot) {
+    if (liveMap) slot.replaceWith(liveMap); else slot.id = 'roads-map';
+    drawRoadsMap(data);
+  }
   body.scrollTop = scroll;
   body.querySelectorAll('[data-pct]').forEach((i) => { i.style.width = `${i.dataset.pct}%`; }); // CSP: no inline style attributes
   const src = $(`.tile[data-tile="${openTile}"] [data-age]`);
@@ -286,6 +382,7 @@ function renderPanel() {
 }
 
 function openPanel(name) {
+  if (name !== openTile) calOffset = 0;
   openTile = name;
   $('#panel-title').textContent = CATEGORY_LABEL[name];
   $('#panel-body').scrollTop = 0;
@@ -321,7 +418,15 @@ panel.addEventListener('cancel', (e) => { e.preventDefault(); closePanel(); }); 
 panel.addEventListener('click', (e) => {
   if (e.target === panel) return closePanel(); // tap on the backdrop
   const f = e.target.closest('[data-filter]');
-  if (f) { closePanel(); if (state.filter !== f.dataset.filter) setFilter(f.dataset.filter); }
+  if (f) { closePanel(); if (state.filter !== f.dataset.filter) setFilter(f.dataset.filter); return; }
+  const nav = e.target.closest('[data-cal]');
+  if (nav) { calOffset = Math.max(0, calOffset + Number(nav.dataset.cal)); return renderPanel(); }
+  const day = e.target.closest('[data-day]');
+  if (day) {
+    const head = document.getElementById(`day-${day.dataset.day}`);
+    const body = $('#panel-body');
+    if (head) body.scrollTo({ top: head.offsetTop - body.offsetTop - 8, behavior: 'smooth' });
+  }
 });
 window.addEventListener('popstate', () => { if (panel.open) closePanel(true); });
 

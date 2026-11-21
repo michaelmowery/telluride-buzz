@@ -288,3 +288,32 @@ html.panel-open { overflow: hidden; }
 .p-route-head b { white-space: nowrap; }
 .p-route ul li:first-child { border-top: 0; }
 .p-day:first-child { margin-top: 2px; }
+
+/* ---------- roads map ---------- */
+.roads-map-wrap { margin-bottom: 12px; }
+.roads-map { height: 280px; border-radius: var(--radius); border: 1px solid var(--line); overflow: hidden; background: var(--paper); z-index: 0; }
+@media (min-width: 720px) { .roads-map { height: 380px; } }
+.map-err { padding: 16px; }
+.map-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; margin-top: 6px; align-items: center; }
+.map-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.lg { display: inline-block; width: 16px; height: 4px; border-radius: 2px; background: var(--ok); }
+.lg.caution { background: var(--caution); }
+.lg.closed { background: var(--closed); }
+.leaflet-popup-content { font: 13.5px/1.4 var(--sans); margin: 10px 12px; }
+.leaflet-container a.leaflet-popup-close-button { width: 28px; height: 28px; font-size: 20px; }
+
+/* ---------- events calendar ---------- */
+.cal { margin-bottom: 6px; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.cal-head b { font: 700 15px var(--slab); }
+.cal-head button { width: 36px; height: 32px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); font-size: 18px; line-height: 1; cursor: pointer; }
+.cal-head button:disabled { opacity: .35; cursor: default; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+.cal-dow span { font-size: 11px; font-weight: 600; color: var(--ink-2); padding: 2px 0; }
+.cal-grid > span, .cal-grid > button { position: relative; height: 38px; display: grid; place-items: center; font-size: 14px; border-radius: 10px; border: 0; background: none; }
+.cal-grid > .past { color: var(--ink-2); opacity: .5; }
+.cal-grid > button { cursor: pointer; font-weight: 700; color: var(--ink); }
+.cal-grid > button:hover { background: var(--cream); }
+.cal-grid > button i { position: absolute; bottom: 4px; left: 50%; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--amber); }
+.cal-grid > .today { box-shadow: inset 0 0 0 2px var(--forest-2); }
+@media (prefers-color-scheme: dark) { .cal-grid > .today { box-shadow: inset 0 0 0 2px var(--amber); } }

@@ -97,6 +97,34 @@ function time(p, keys) {
   return null;
 }
 
+/**
+ * Compact map geometry: a list of paths, each a list of [lat, lon] (a point is a
+ * path of one). Only coordinates inside the town's box, rounded, at most ~60 per path.
+ */
+export function geoOf(f, b) {
+  const g = f?.geometry;
+  if (!g || !g.coordinates) return null;
+  const pt = (c) => (typeof c?.[0] === 'number' && typeof c?.[1] === 'number' ? c : null);
+  const inside = ([lon, lat]) => !b || (lat >= b.minLat && lat <= b.maxLat && lon >= b.minLon && lon <= b.maxLon);
+  const r = (n) => Math.round(n * 1e5) / 1e5;
+  const paths = [];
+  (function walk(c) {
+    if (!Array.isArray(c)) return;
+    if (pt(c)) { paths.push([c]); return; }
+    if (c.length && pt(c[0])) { paths.push(c); return; }
+    for (const x of c) walk(x);
+  })(g.coordinates);
+  const out = [];
+  for (const path of paths.slice(0, 20)) {
+    const keep = path.filter((c) => pt(c) && inside(c));
+    if (!keep.length) continue;
+    const step = Math.ceil(keep.length / 60);
+    const thin = keep.filter((_, i) => i % step === 0 || i === keep.length - 1);
+    out.push(thin.map(([lon, lat]) => [r(lat), r(lon)]));
+  }
+  return out.length ? out : null;
+}
+
 export function classify(text) {
   if (/\b(closed|closure|closes)\b/i.test(text) && !/\b(re-?opened|lane closed|shoulder closed|right lane|left lane)\b/i.test(text)) return 'closed';
   if (/chain law|traction law|code 15|code 16|icy|snow packed|snowpacked|slick|avalanche|rock ?fall|one lane|flagger|delays?/i.test(text)) return 'caution';
@@ -128,6 +156,7 @@ export function incidentsToItems(data, town) {
       expiresAt: time(p, ['clearTime', 'endTime', 'end_date', 'estimatedClearTime']),
       _route: route.label,
       _level: level,
+      _geo: geoOf(f, town.bbox),
     });
   }
   return items;
@@ -154,7 +183,7 @@ export function conditionsByRoute(data, town) {
     const text = [...new Set(conds.filter(Boolean).map(cleanCondition).filter(Boolean))].join(', ');
     if (!text) continue;
     const segment = firstString(p, ['segmentName', 'description', 'name', 'locationDescription']) || '';
-    (out[route.label] ||= []).push({ segment, text, level: classify(text) });
+    (out[route.label] ||= []).push({ segment, text, level: classify(text), geo: geoOf(f, town.bbox) });
   }
   return out;
 }
@@ -187,6 +216,7 @@ export function workZonesToItems(data, town) {
       expiresAt: end,
       _route: route.label,
       _level: closed ? 'closed' : impact && impact !== 'all-lanes-open' ? 'caution' : 'ok',
+      _geo: geoOf(f, town.bbox),
     });
   }
   return items;
@@ -212,7 +242,8 @@ export function buildRoadsTile(town, { incidents = [], workZones = [], condition
     if (!okAt) return { label: r.label, note: r.note, level: 'unknown', status: 'No current data', events: [], conditions: [] };
     return {
       label: r.label, note: r.note, level, status,
-      events: evts.slice(0, 12).map((e) => ({ title: e.title.replace(`${r.label}: `, ''), summary: e.summary || null, level: e._level })),
+      events: evts.slice(0, 12).map((e) => ({ title: e.title.replace(`${r.label}: `, ''), summary: e.summary || null, level: e._level, geo: e._geo || null })),
+      segments: conds.filter((c) => c.geo).slice(0, 20).map((c) => ({ text: c.segment ? `${c.segment}: ${c.text}` : c.text, level: c.level, geo: c.geo })),
       conditions: [...new Set(conds.map((c) => (c.segment ? `${c.segment}: ${c.text}` : c.text)).filter(Boolean))].slice(0, 8),
     };
   });
@@ -222,6 +253,7 @@ export function buildRoadsTile(town, { incidents = [], workZones = [], condition
     error: error ? (okAt ? 'Latest update failed; showing the last good data.' : 'Road data is unavailable right now. Check COtrip.') : null,
     routes,
     link: MAP_LINK,
+    center: [town.location.lat, town.location.lon],
     sourceLabel: LABEL,
     disclaimer: town.cdot.disclaimer || DEFAULT_DISCLAIMER,
   };
