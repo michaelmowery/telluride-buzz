@@ -139,10 +139,24 @@ function postHtml(p) {
   </li>`;
 }
 
+// ---------- show / hide (Preferences) ----------
+const HIDE_KEY = 'buzz-hide';
+function hidden() { return new Set((document.documentElement.dataset.hide || '').split(' ').filter(Boolean)); }
+function setHidden(key, hide) {
+  const h = hidden();
+  if (hide) h.add(key); else h.delete(key);
+  document.documentElement.dataset.hide = [...h].join(' ');
+  try { localStorage.setItem(HIDE_KEY, JSON.stringify([...h])); } catch { /* storage blocked: this visit only */ }
+}
+// Feed topics the person hid ("feed-roads" etc.). The filtered views from a panel still show everything.
+const shownInFeed = (p) => state.filter || !hidden().has(`feed-${p.category}`);
+
 function renderFeed(items) {
   state.feed = items;
   const el = $('#feed');
-  el.innerHTML = items.length ? items.map(postHtml).join('') : '<li class="empty">No posts yet. New items appear here as sources update.</li>';
+  const visible = items.filter(shownInFeed);
+  el.innerHTML = visible.length ? visible.map(postHtml).join('')
+    : `<li class="empty">${items.length ? 'Nothing here from the topics you chose. Change them in Preferences.' : 'No posts yet. New items appear here as sources update.'}</li>`;
   $('#more').hidden = items.length < 40;
 }
 
@@ -166,7 +180,7 @@ async function loadFeed(before) {
     const { items } = await r.json();
     if (before) {
       state.feed = state.feed.concat(items);
-      $('#feed').insertAdjacentHTML('beforeend', items.map(postHtml).join(''));
+      $('#feed').insertAdjacentHTML('beforeend', items.filter(shownInFeed).map(postHtml).join(''));
       $('#more').hidden = items.length < 40;
     } else renderFeed(items);
   } catch { /* keep what is on screen */ }
@@ -403,7 +417,24 @@ function panelPrefs() {
     <div class="themes" role="radiogroup" aria-label="Color theme">${THEME_INFO.map(([id, name, desc]) => `
       <button class="theme-opt" role="radio" aria-checked="${id === cur}" data-theme="${id}">
         <span class="swatch sw-${id}"><i></i><i></i><i></i></span><b>${esc(name)}</b><small>${esc(desc)}</small></button>`).join('')}</div>
-    <p class="prefs-note">Saved on this device only. Road and alert colors stay the same in every theme. Dark mode follows your phone's setting.</p>`;
+    <p class="prefs-note">Road and alert colors stay the same in every theme. Dark mode follows your phone's setting.</p>
+    <h3>Show on the home screen</h3>
+    <div class="toggles">${SHOW_OPTS.map(toggleHtml).join('')}</div>
+    <h3>Topics in the live feed</h3>
+    <div class="toggles">${FEED_OPTS.map(toggleHtml).join('')}</div>
+    <p class="prefs-note">Emergency and weather warnings in the red banner always show. Everything here is saved on this device only.</p>`;
+}
+const SHOW_OPTS = [
+  ['weather', 'Weather tile'], ['roads', 'Roads tile'], ['lifts', 'Lifts & Snow tile'], ['events', 'Events tile'],
+  ['push', 'Phone alerts box'], ['feed', 'Live feed'],
+];
+const FEED_OPTS = [
+  ['feed-weather', 'Weather'], ['feed-roads', 'Roads'], ['feed-lifts', 'Snow report'], ['feed-events', 'Events'],
+  ['feed-town', 'Town and County news'], ['feed-news', 'Local news (KOTO)'],
+];
+function toggleHtml([key, label]) {
+  const on = !hidden().has(key);
+  return `<button class="toggle" role="switch" aria-checked="${on}" data-toggle="${esc(key)}"><span>${esc(label)}</span><i class="switch" aria-hidden="true"></i></button>`;
 }
 
 const PANELS = { weather: panelWeather, roads: panelRoads, lifts: panelLifts, events: panelEvents, prefs: panelPrefs };
@@ -473,6 +504,13 @@ panel.addEventListener('click', (e) => {
   if (e.target === panel) return closePanel(); // tap on the backdrop
   const f = e.target.closest('[data-filter]');
   if (f) { closePanel(); if (state.filter !== f.dataset.filter) setFilter(f.dataset.filter); return; }
+  const tg = e.target.closest('[data-toggle]');
+  if (tg) {
+    const key = tg.dataset.toggle;
+    setHidden(key, !hidden().has(key));
+    if (key.startsWith('feed-') && !state.filter) renderFeed(state.data?.feed || []);
+    return renderPanel();
+  }
   const th = e.target.closest('[data-theme]');
   if (th) { setTheme(th.dataset.theme); return renderPanel(); }
   const nav = e.target.closest('[data-cal]');

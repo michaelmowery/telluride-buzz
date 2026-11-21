@@ -377,3 +377,23 @@ html[data-palette="columbine"] {
     --amber-soft: #2f2640; --forest-2: #b29ad9;
   }
 }
+
+/* ---------- hidden sections (Preferences) ---------- */
+html[data-hide~="weather"] [data-show="weather"],
+html[data-hide~="roads"] [data-show="roads"],
+html[data-hide~="lifts"] [data-show="lifts"],
+html[data-hide~="events"] [data-show="events"],
+html[data-hide~="push"] [data-show="push"],
+html[data-hide~="feed"] [data-show="feed"] { display: none !important; }
+html[data-hide~="weather"][data-hide~="roads"][data-hide~="lifts"][data-hide~="events"] .tiles { display: none; }
+.toggles { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
+.toggle { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; cursor: pointer; }
+.toggle:first-child { border-top: 0; }
+.toggle span { flex: 1; }
+.toggle span small { display: block; color: var(--ink-2); font-size: 12.5px; }
+.switch { flex: none; position: relative; width: 44px; height: 26px; border-radius: 13px; background: var(--line); transition: background .15s; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.toggle[aria-checked="true"] .switch { background: var(--forest-2); }
+@media (prefers-color-scheme: dark) { .toggle[aria-checked="true"] .switch { background: var(--amber); } }
+.toggle[aria-checked="true"] .switch::after { transform: translateX(18px); }
+.toggle:focus-visible { outline: 3px solid var(--amber); outline-offset: -3px; }
