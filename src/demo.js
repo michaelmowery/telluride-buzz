@@ -27,7 +27,9 @@ export function seedDemo(db, town) {
     { _route: 'CO-145', _level: 'ok', title: 'CO-145 work zone: Shoulder work near Ophir, expect brief delays',
       _geo: [[[37.8590, -107.8490], [37.8530, -107.8610], [37.8460, -107.8700]]] },
   ];
-  db.setTile(town.id, 'roads', buildRoadsTile(town, {
+  const cdot = (town.sources || []).find((x) => x.adapter === 'cdot')?.settings || town.cdot || { routes: [{ match: ['145'], label: 'CO-145' }], keyPlaces: [] };
+  const resort = (() => { const r = (town.sources || []).find((x) => x.adapter === 'snow-report'); return r ? { ...r.settings, label: r.label } : town.lifts; })();
+  db.setTile(town.id, 'roads', buildRoadsTile({ ...town, cdot }, {
     incidents,
     conditions: {
       'CO-145': [{ segment: 'Telluride to Placerville', text: 'Wet in areas', level: 'ok', geo: [[[37.9530, -107.8730], [37.9720, -107.9300], [38.0160, -108.0530]]] }],
@@ -39,7 +41,7 @@ export function seedDemo(db, town) {
 
   db.setTile(town.id, 'lifts', {
     ok: true, sourceAt: now - 5 * hr, new24: 6, new48: 9, base: 31, liftsOpen: 9, liftsTotal: 19, trailsOpen: 42, trailsTotal: 148,
-    link: town.lifts?.linkUrl || '#', sourceLabel: town.lifts?.label || 'Ski Resort',
+    link: resort?.linkUrl || resort?.url || '#', sourceLabel: resort?.label || 'Ski Resort',
   });
 
   db.syncItems(town.id, 'nws-alerts', [{
@@ -57,8 +59,8 @@ export function seedDemo(db, town) {
   }]);
 
   db.syncItems(town.id, 'lifts-snow', [{
-    extId: 'demo-snow', sourceLabel: town.lifts?.label || 'Ski Resort', category: 'lifts',
-    title: '6" of new snow in the last 24 hours', summary: 'Base depth 31".', link: town.lifts?.linkUrl, publishedAt: now - 3 * hr,
+    extId: 'demo-snow', sourceLabel: resort?.label || 'Ski Resort', category: 'lifts',
+    title: '6" of new snow in the last 24 hours', summary: 'Base depth 31".', link: resort?.linkUrl || resort?.url, publishedAt: now - 3 * hr,
   }]);
 
   db.syncItems(town.id, 'feed-town-news', [

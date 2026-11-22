@@ -124,8 +124,9 @@ export function liftsJobs(town, { get = fetchText } = {}) {
       resorts: list,
     });
   };
+  const jobId = (res, i) => res.jobId || (i === 0 ? 'lifts-snow' : `lifts-snow-${res.id}`);
   return resorts.map((res, i) => ({
-    id: i === 0 ? 'lifts-snow' : `lifts-snow-${res.id}`,
+    id: jobId(res, i),
     everyMin: 15,
     async run(db) {
       const base = { id: res.id, name: res.name, link: res.linkUrl || res.url, sourceLabel: res.label };
@@ -146,7 +147,7 @@ export function liftsJobs(town, { get = fetchText } = {}) {
         const reportAt = entry.sourceAt || Date.now();
         const day = new Date(reportAt).toLocaleDateString('en-CA', { timeZone: town.timezone });
         const when = entry.overnight >= entry.new24 || entry.new24 == null ? 'overnight' : 'in the last 24 hours';
-        db.syncItems(town.id, i === 0 ? 'lifts-snow' : `lifts-snow-${res.id}`, [{
+        db.syncItems(town.id, jobId(res, i), [{
           extId: `new-snow-${day}`,
           sourceLabel: res.label,
           category: 'lifts',

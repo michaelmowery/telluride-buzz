@@ -10,6 +10,9 @@ import { seedDemo } from './demo.js';
 import { loadVapid, validSubscription, pushNewAlerts } from './push.js';
 import { renderTemplate, TEMPLATED, townUrl } from './brand.js';
 import { HUB_HOSTS, renderHub, snapshot, townForPath } from './hub.js';
+import { importConfigs, loadTowns } from './towns.js';
+import { createAdmin } from './admin.js';
+import { sourceHealth } from './health.js';
 import crypto from 'node:crypto';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -25,26 +28,49 @@ const log = {
   warn: (...a) => console.warn(new Date().toISOString(), 'WARN', ...a),
 };
 
-// ---------- towns ----------
-const towns = fs.readdirSync(CONFIG_DIR).filter((f) => f.endsWith('.json'))
-  .map((f) => JSON.parse(fs.readFileSync(path.join(CONFIG_DIR, f), 'utf8')));
-if (!towns.length) throw new Error(`No town config in ${CONFIG_DIR}`);
-const byHost = new Map();
-for (const t of towns) for (const h of t.hostnames || []) byHost.set(h.toLowerCase(), t);
-// Unknown hostnames (the sslip.io test address, a bare IP) get the default town.
-const defaultTown = towns.find((t) => t.default) || towns[0];
-const hostOf = (req) => String(req.headers.host || '').split(':')[0].toLowerCase();
-const townFor = (req) => byHost.get(String(req.headers.host || '').split(':')[0].toLowerCase()) || defaultTown;
-
 // ---------- data ----------
 const db = openDb(DEMO ? ':memory:' : path.join(DATA_DIR, 'buzz.db'));
-towns.forEach((t) => db.saveTown(t));
+
+// ---------- towns ----------
+// Towns and their sources live in the database. config/*.json is imported once per
+// town (first start after this change); after that the admin is where towns change.
+const configs = fs.existsSync(CONFIG_DIR)
+  ? fs.readdirSync(CONFIG_DIR).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(fs.readFileSync(path.join(CONFIG_DIR, f), 'utf8')))
+  : [];
+importConfigs(db, configs, { log });
+
+let towns = [];        // every town, drafts included
+let publicTowns = [];  // live towns: the town picker and thetown.buzz list these
+let byHost = new Map();
+let defaultTown = null;
+const homeCache = new Map(); // townId -> { at, body }
+const templateCache = new Map(); // `${town.id}:${file}` -> { mtime, body, etag }
+let hubCache = null; // { at, mtime, body, etag }
+
+function refreshTowns() {
+  towns = loadTowns(db);
+  if (!towns.length) throw new Error(`No towns in the database and no town config in ${CONFIG_DIR}`);
+  publicTowns = towns.filter((t) => t.status !== 'draft');
+  byHost = new Map();
+  for (const t of towns) for (const h of t.hostnames || []) byHost.set(h.toLowerCase(), t);
+  // Unknown hostnames (the sslip.io test address, a bare IP) get the default town.
+  defaultTown = towns.find((t) => t.default) || publicTowns[0] || towns[0];
+  for (const t of towns) db.pruneStatus(t.id, t.sources.map((s) => s.key));
+  homeCache.clear();
+  templateCache.clear();
+  hubCache = null;
+}
+refreshTowns();
+/** Towns shown in a town's picker: the live ones, plus itself while it is a draft. */
+const pickerTowns = (town) => (town.status === 'draft' ? [...publicTowns, town] : publicTowns);
+const hostOf = (req) => String(req.headers.host || '').split(':')[0].toLowerCase();
+const townFor = (req) => byHost.get(hostOf(req)) || defaultTown;
 // Web push (VAPID keys live in DATA_DIR/vapid.json, created on first run).
 const vapid = DEMO ? null : loadVapid(DATA_DIR);
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'https://telluride.buzz';
 const MAX_SUBSCRIPTIONS = 5000;
 
-let stopScheduler = () => {};
+let scheduler = { reload() {}, runNow: () => false, stop() {} };
 if (DEMO) {
   towns.forEach((t) => seedDemo(db, t));
   log.info('DEMO mode: sample data loaded, no feeds polled');
@@ -55,8 +81,22 @@ if (DEMO) {
     pushing = true;
     try { await pushNewAlerts(db, town, vapid, VAPID_SUBJECT, { log }); } finally { pushing = false; }
   };
-  stopScheduler = startScheduler(db, towns, { log, afterRun });
+  scheduler = startScheduler(db, towns, { log, afterRun });
 }
+
+// ---------- admin ----------
+const admin = createAdmin({
+  db,
+  log,
+  runNow: (townId, key) => scheduler.runNow(townId, key),
+  onChange() {
+    const before = new Set(towns.map((t) => t.id));
+    refreshTowns();
+    if (DEMO) towns.filter((t) => !before.has(t.id)).forEach((t) => seedDemo(db, t));
+    const r = scheduler.reload(towns);
+    if (r) log.info(`scheduler: ${r.started} started, ${r.stopped} stopped, ${r.running} running`);
+  },
+});
 
 // Nightly backup: a consistent copy of the database, 7 days kept.
 function backup() {
@@ -76,7 +116,6 @@ setTimeout(backup, 60e3);
 const backupTimer = setInterval(backup, 24 * 3600e3);
 
 // ---------- API ----------
-const homeCache = new Map(); // townId -> { at, body }
 
 function home(town) {
   const c = homeCache.get(town.id);
@@ -96,13 +135,14 @@ function home(town) {
 const CATEGORIES = new Set(['weather', 'roads', 'lifts', 'events', 'town', 'news']);
 
 function health(town) {
-  const sources = db.sourceStatus(town.id).map((s) => ({
-    source: s.source,
-    ok: !s.last_error,
-    lastRun: s.last_run,
-    lastOk: s.last_ok,
-    error: s.last_error,
-    failures: s.error_count,
+  const sources = sourceHealth(town, db.sourceStatus(town.id)).map((s) => ({
+    source: s.key,
+    ok: s.color === 'green',
+    color: s.color,
+    lastRun: s.lastRun,
+    lastOk: s.lastOk,
+    error: s.error,
+    failures: s.failures,
   }));
   return { ok: true, demo: DEMO, pushSubscribers: db.countSubscriptions(), uptimeSec: Math.round(process.uptime()), rssMb: Math.round(process.memoryUsage().rss / 1048576), sources };
 }
@@ -149,12 +189,11 @@ function serveStatic(req, res, urlPath, town) {
 }
 
 // Pages, manifest and service worker are filled in per town (see brand.js).
-const templateCache = new Map(); // `${town.id}:${file}` -> { mtime, body, etag }
 function serveTemplate(req, res, file, ext, st, town) {
   const key = `${town.id}:${file}`;
   let c = templateCache.get(key);
   if (!c || c.mtime !== st.mtimeMs) {
-    const body = Buffer.from(renderTemplate(fs.readFileSync(file, 'utf8'), ext, town, towns));
+    const body = Buffer.from(renderTemplate(fs.readFileSync(file, 'utf8'), ext, town, pickerTowns(town)));
     c = { mtime: st.mtimeMs, body, etag: `"${crypto.createHash('sha1').update(body).digest('base64url').slice(0, 16)}"` };
     templateCache.set(key, c);
   }
@@ -165,12 +204,11 @@ function serveTemplate(req, res, file, ext, st, town) {
 }
 
 // thetown.buzz home page (see hub.js). Re-rendered at most once a minute.
-let hubCache = null; // { at, mtime, body, etag }
 function serveHub(req, res) {
   const file = path.join(PUBLIC, 'hub.html');
   const st = fs.statSync(file);
   if (!hubCache || hubCache.mtime !== st.mtimeMs || Date.now() - hubCache.at > 60e3) {
-    const body = Buffer.from(renderHub(fs.readFileSync(file, 'utf8'), towns, (t) => snapshot(db.getTiles(t.id), db.alerts(t.id))));
+    const body = Buffer.from(renderHub(fs.readFileSync(file, 'utf8'), publicTowns, (t) => snapshot(db.getTiles(t.id), db.alerts(t.id))));
     hubCache = { at: Date.now(), mtime: st.mtimeMs, body, etag: `"${crypto.createHash('sha1').update(body).digest('base64url').slice(0, 16)}"` };
   }
   const headers = { 'Cache-Control': 'no-cache', ETag: hubCache.etag, Vary: 'Host', ...SECURITY_HEADERS };
@@ -193,6 +231,10 @@ function send(res, status, body, type = 'text/plain; charset=utf-8', extra = {})
 const json = (res, body, maxAge = 15) =>
   send(res, 200, typeof body === 'string' ? body : JSON.stringify(body), 'application/json; charset=utf-8',
     { 'Cache-Control': `public, max-age=${maxAge}` });
+
+function sendAdmin(res, r) {
+  send(res, r.status, JSON.stringify(r.body), 'application/json; charset=utf-8', { 'Cache-Control': 'no-store', ...(r.headers || {}) });
+}
 
 function readJson(req, limit = 4096) {
   return new Promise((resolve, reject) => {
@@ -233,6 +275,16 @@ const server = http.createServer((req, res) => {
   try {
     const url = new URL(req.url, 'http://x');
     const town = townFor(req);
+    if (url.pathname.startsWith('/api/admin/')) {
+      return admin.handle(req, url, () => readJson(req, 64 * 1024).catch(() => ({})))
+        .then((r) => sendAdmin(res, r))
+        .catch((e) => { log.warn(`admin failed: ${e.stack || e.message}`); sendAdmin(res, { status: 500, body: { ok: false, error: 'Server error' } }); });
+    }
+    if (/^\/admin(\.html|\.js|\.css|\/.*)?$/.test(url.pathname)) {
+      if (!admin.enabled) return send(res, 404, 'Not found');
+      if (url.pathname === '/admin.js' || url.pathname === '/admin.css') return serveStatic(req, res, url.pathname, town);
+      return serveStatic(req, res, '/admin.html', town);
+    }
     if (req.method === 'POST' && url.pathname.startsWith('/api/push/')) {
       return handlePost(req, res, url, town).catch((e) => { log.warn(`post failed: ${e.message}`); send(res, 500, 'Server error'); });
     }
@@ -240,7 +292,7 @@ const server = http.createServer((req, res) => {
     if (HUB_HOSTS.has(hostOf(req))) {
       // thetown.buzz: home page, /<town> redirects to that town's site, assets as usual.
       if (url.pathname === '/' || url.pathname === '/index.html') return serveHub(req, res);
-      const t = townForPath(url.pathname, towns);
+      const t = townForPath(url.pathname, publicTowns);
       if (t) return send(res, 302, `Moved to ${townUrl(t)}`, undefined, { Location: townUrl(t) });
       if (!path.extname(url.pathname) && !url.pathname.startsWith('/api/') && url.pathname !== '/healthz') {
         return send(res, 302, 'Moved', undefined, { Location: '/' });
@@ -262,6 +314,12 @@ const server = http.createServer((req, res) => {
       }
       case '/api/health':
         return json(res, health(town), 0);
+      case '/api/tls-ask': {
+        // Caddy's on_demand_tls asks here before issuing a certificate, so only
+        // addresses that belong to a town (or thetown.buzz) ever get one.
+        const d = String(url.searchParams.get('domain') || '').toLowerCase();
+        return byHost.has(d) || HUB_HOSTS.has(d) ? send(res, 200, 'ok') : send(res, 404, 'unknown domain');
+      }
       case '/healthz':
         return send(res, 200, 'ok');
       default:
@@ -273,11 +331,11 @@ const server = http.createServer((req, res) => {
   }
 });
 
-server.listen(PORT, () => log.info(`Buzz listening on :${PORT} (${towns.map((t) => t.id).join(', ')})`));
+server.listen(PORT, () => log.info(`Buzz listening on :${PORT} (${towns.map((t) => `${t.id}${t.status === 'draft' ? ' [draft]' : ''}`).join(', ')})${admin.enabled ? ', admin on' : ''}`));
 
 function shutdown() {
   log.info('shutting down');
-  stopScheduler();
+  scheduler.stop();
   clearInterval(backupTimer);
   server.close(() => { db.close(); process.exit(0); });
   setTimeout(() => process.exit(0), 5000).unref();

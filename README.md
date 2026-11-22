@@ -36,8 +36,14 @@ npm test
   and tiles show when their data was last updated (red "as of" when stale).
 - Roads never shows a green "no issues" without fresh CDOT data, and always shows
   CDOT's Source Data disclaimer (`cdot.disclaimer` in the town config).
-- Sources live in `config/telluride.json`. A second town is another config file with
-  its own hostnames; the app picks the town by hostname.
+- Towns and their sources live in the database (`towns`, `sources` tables) and are
+  managed in the admin at `/admin` (needs `ADMIN_PASSWORD` in `.env`). Each source is a
+  row naming a shared adapter in `src/adapters.js` (RSS, iCal, NWS alerts/forecast,
+  CDOT, snow report page, resort alerts JSON, Meander). Adding a town needs no code
+  change or deploy. The app picks the town by hostname.
+- `config/*.json` is only an import format: on first start each file is imported once,
+  after which the database wins. The admin can export a town back to the same format.
+- The source health board is at `/admin#health` (red = failing over an hour).
 - Nightly, the app writes a consistent copy of the database to `data/backups/`
   (7 days kept).
 

@@ -39,3 +39,24 @@ export async function fetchJson(url, opts = {}) {
 export function redact(url) {
   return String(url).replace(/(api[_-]?key=)[^&]+/gi, '$1***');
 }
+
+/**
+ * Shared fetch: towns that read the same address (CDOT's statewide feeds, a
+ * shared NWS point) within `ttlMs` get one request between them. Concurrent
+ * callers wait on the same request.
+ */
+const shared = new Map(); // `${kind} ${url}` -> { at, promise }
+function sharedFetch(kind, fn, ttlMs = 60e3) {
+  return (url, opts = {}) => {
+    const key = `${kind} ${url}`;
+    const hit = shared.get(key);
+    if (hit && Date.now() - hit.at < ttlMs) return hit.promise;
+    const promise = fn(url, opts);
+    shared.set(key, { at: Date.now(), promise });
+    promise.catch(() => shared.delete(key)); // never cache a failure
+    if (shared.size > 500) for (const [k, v] of shared) if (Date.now() - v.at > ttlMs) shared.delete(k);
+    return promise;
+  };
+}
+export const sharedText = sharedFetch('text', fetchText);
+export const sharedJson = sharedFetch('json', fetchJson);
