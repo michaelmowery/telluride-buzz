@@ -18,6 +18,7 @@
       ["National Weather Service", "Forecast, temperature and expected snow", "Every 10 min"],
       ["Colorado Dept. of Transportation (COtrip)", "Incidents, closures, road conditions and work zones on US-550, US-160 and CO-172", "Every 5 min"],
       ["Purgatory Resort", "Snow report: new snow, base depth, open lifts and trails", "Every 15 min"],
+      ["Purgatory Resort", "Mountain alerts, events and resort news", "Every 10 to 60 min"],
       ["City of Durango", "Emergency alerts, city news and the community calendar", "Every 5 to 60 min"],
       ["The Durango Herald", "Local news headlines (local section only)", "Every 15 min"]
     ]
@@ -41,7 +42,14 @@
     "url": "https://www.purgatory.ski/mountain/weather-conditions-webcams/",
     "linkUrl": "https://www.purgatory.ski/mountain/weather-conditions-webcams/",
     "label": "Purgatory Resort",
+    "name": "Purgatory",
     "valueFirst": true
+  },
+
+  "resortAlerts": {
+    "url": "https://www.purgatory.ski/wp-content/uploads/sites/2/m-json/alerts.json",
+    "linkUrl": "https://www.purgatory.ski/mountain/weather-conditions-webcams/",
+    "label": "Purgatory Resort"
   },
 
   "feeds": [
@@ -64,6 +72,21 @@
       "label": "City of Durango",
       "url": "https://www.durangoco.gov/RSSFeed.aspx?ModID=58&CID=All-calendar.xml",
       "category": "events",
+      "everyMin": 60
+    },
+    {
+      "id": "purgatory-events",
+      "label": "Purgatory Resort",
+      "url": "https://www.purgatory.ski/events/feed/",
+      "category": "events",
+      "startFromPubDate": true,
+      "everyMin": 60
+    },
+    {
+      "id": "purgatory-news",
+      "label": "Purgatory Resort",
+      "url": "https://www.purgatory.ski/feed/",
+      "category": "news",
       "everyMin": 60
     },
     {

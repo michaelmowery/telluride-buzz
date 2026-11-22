@@ -94,48 +94,70 @@ export function parseSnowReport(html, tz = 'America/Denver', { valueFirst = fals
   return { ...r, found, sourceAt: reportUpdatedAt(text, tz) };
 }
 
+/** A town's ski resorts: config `lifts` may be one resort or a list. */
+export function resortsOf(town) {
+  return [].concat(town.lifts || []).filter((r) => r?.url)
+    .map((r, i) => ({ ...r, id: r.id || (i === 0 ? 'main' : `resort-${i + 1}`), name: r.name || r.label }));
+}
+
+const SORRY = 'See the resort’s snow report for today’s numbers.';
+
+/**
+ * One job per resort. The Lifts & Snow tile holds every resort under `resorts`
+ * (in config order), and the first resort's numbers also sit at the top level for
+ * older clients. Each feed post names its mountain.
+ */
 export function liftsJobs(town, { get = fetchText } = {}) {
-  if (!town.lifts?.url) return [];
-  return [{
-    id: 'lifts-snow',
+  const resorts = resortsOf(town);
+  const multi = resorts.length > 1;
+  const saveTile = (db, entry) => {
+    const prev = db.getTiles(town.id).lifts;
+    const byId = new Map((prev?.resorts || []).map((r) => [r.id, r]));
+    byId.set(entry.id, entry);
+    const list = resorts.map((r) => byId.get(r.id)).filter(Boolean);
+    const first = list.find((r) => r.ok) || list[0];
+    const { id, name, ...top } = first;
+    db.setTile(town.id, 'lifts', {
+      ...top,
+      ok: list.some((r) => r.ok),
+      sourceAt: Math.max(0, ...list.map((r) => r.sourceAt || 0)) || null,
+      resorts: list,
+    });
+  };
+  return resorts.map((res, i) => ({
+    id: i === 0 ? 'lifts-snow' : `lifts-snow-${res.id}`,
     everyMin: 15,
     async run(db) {
-      let tile;
+      const base = { id: res.id, name: res.name, link: res.linkUrl || res.url, sourceLabel: res.label };
+      let entry;
       try {
-        const html = await get(town.lifts.url);
-        const r = parseSnowReport(html, town.timezone, { valueFirst: !!town.lifts.valueFirst });
-        tile = {
-          ok: r.found >= 2,
-          ...r,
-          link: town.lifts.linkUrl || town.lifts.url,
-          sourceLabel: town.lifts.label,
-          error: r.found >= 2 ? null : 'See the resort’s snow report for today’s numbers.',
-        };
+        const html = await get(res.url);
+        const r = parseSnowReport(html, town.timezone, { valueFirst: !!res.valueFirst });
+        entry = { ...base, ok: r.found >= 2, ...r, error: r.found >= 2 ? null : SORRY };
       } catch (e) {
-        tile = { ok: false, link: town.lifts.linkUrl || town.lifts.url, sourceLabel: town.lifts.label,
-          error: 'See the resort’s snow report for today’s numbers.' };
-        db.setTile(town.id, 'lifts', tile);
+        saveTile(db, { ...base, ok: false, error: SORRY });
         throw e;
       }
-      db.setTile(town.id, 'lifts', tile);
-      const fresh = Math.max(tile.new24 || 0, tile.overnight || 0);
-      if (tile.ok && fresh >= 1) {
+      saveTile(db, entry);
+      const fresh = Math.max(entry.new24 || 0, entry.overnight || 0);
+      if (entry.ok && fresh >= 1) {
         // Key the post by the date of the resort's own report, not our clock, so an
         // unchanged report doesn't become a second identical post the next day.
-        const reportAt = tile.sourceAt || Date.now();
+        const reportAt = entry.sourceAt || Date.now();
         const day = new Date(reportAt).toLocaleDateString('en-CA', { timeZone: town.timezone });
-        db.syncItems(town.id, 'lifts-snow', [{
+        const when = entry.overnight >= entry.new24 || entry.new24 == null ? 'overnight' : 'in the last 24 hours';
+        db.syncItems(town.id, i === 0 ? 'lifts-snow' : `lifts-snow-${res.id}`, [{
           extId: `new-snow-${day}`,
-          sourceLabel: town.lifts.label,
+          sourceLabel: res.label,
           category: 'lifts',
-          title: tile.overnight >= tile.new24 || tile.new24 == null ? `${fresh}" of new snow overnight` : `${fresh}" of new snow in the last 24 hours`,
-          summary: tile.base != null ? `Base depth ${tile.base}".` : null,
-          link: tile.link,
+          title: `${res.name}: ${fresh}" of new snow ${when}`,
+          summary: entry.base != null ? `Base depth ${entry.base}".` : null,
+          link: entry.link,
           severity: 0,
           publishedAt: Math.min(reportAt, Date.now()),
-        }], { deactivateMissing: true }); // only the latest snow report stays in the feed
+        }], { deactivateMissing: true }); // only the latest snow report per resort stays in the feed
       }
-      if (!tile.ok) throw new Error(`Snow report page parsed, but only ${tile.found} values recognised`);
+      if (!entry.ok) throw new Error(`Snow report page parsed, but only ${entry.found} values recognised`);
     },
-  }];
+  }));
 }

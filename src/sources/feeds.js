@@ -13,8 +13,9 @@ export function feedToItems(xml, feed, town) {
     if (!e.title) continue;
     let startsAt = null;
     if (feed.category === 'events') {
-      startsAt = parseLocalDateTime(town.timezone, e.eventDates || '', e.eventTimes || '')
-        ?? guessEventStart(e, town);
+      // The Events Calendar (WordPress) puts each event's start time in pubDate.
+      startsAt = feed.startFromPubDate ? (e.publishedAt || null)
+        : parseLocalDateTime(town.timezone, e.eventDates || '', e.eventTimes || '') ?? guessEventStart(e, town);
     }
     const publishedAt = e.publishedAt || Date.now();
     if (feed.category !== 'events' && publishedAt < cutoff) continue;
@@ -25,7 +26,7 @@ export function feedToItems(xml, feed, town) {
       sourceLabel: feed.label,
       category: feed.category === 'alerts' ? 'town' : feed.category,
       title: e.title,
-      summary: [e.eventLocation, e.summary].filter(Boolean).join(' · ') || null,
+      summary: [e.eventLocation, stripWpFooter(e.summary)].filter(Boolean).join(' · ') || null,
       link: e.link,
       // Emergency notices from the county/town go to the banner.
       severity: isAlert ? (/(evacuat|shelter in place|emergency|closure|boil water|wildfire|avalanche)/i.test(e.title) ? 2 : 1) : 0,
@@ -37,6 +38,9 @@ export function feedToItems(xml, feed, town) {
   }
   return out;
 }
+
+/** WordPress adds "The post X appeared first on Y." to every feed summary. */
+const stripWpFooter = (s) => (s ? s.replace(/\s*The post .{1,300}? appeared first on .{1,120}?\.?\s*$/s, '').trim() || null : s);
 
 /** Calendar RSS without a structured date: look for one in the summary text. */
 function guessEventStart(e, town) {
