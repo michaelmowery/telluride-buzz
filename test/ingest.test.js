@@ -208,3 +208,12 @@ test('Snow report: an unchanged report never shows up twice in the feed', async 
   assert.equal(snow.length, 1);
   assert.equal(snow[0].title, '6" of new snow overnight');
 });
+
+test('Purgatory snow report: values come before labels (3" 24 Hr, 2 of 12 Lifts Open)', () => {
+  const r = parseSnowReport(fx('snow-report-purgatory.html'), 'America/Denver', { valueFirst: true });
+  assert.equal(r.new24, 3);
+  assert.equal(r.new48, 3);
+  assert.equal(r.base, 14);
+  assert.deepEqual([r.liftsOpen, r.liftsTotal], [2, 12]);
+  assert.deepEqual([r.trailsOpen, r.trailsTotal], [5, 114]);
+});

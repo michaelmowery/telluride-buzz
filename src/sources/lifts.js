@@ -43,18 +43,23 @@ function fromJson(html) {
 }
 
 /** Then visible text, e.g. "24 Hours 6"" or "Base Depth 32 in" or "Lifts Open 12 / 19". */
-function fromText(text) {
+function fromText(text, valueFirst = false) {
   const t = text.replace(/\s+/g, ' ');
-  const near = (label, after = true) => {
-    const re = after
-      ? new RegExp(`${label}[^0-9]{0,25}(\\d+(?:\\.\\d+)?)\\s*(?:"|”|in\\b|inches|cm)?`, 'i')
-      : new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(?:"|”|in\\b|inches)\\s*${label}`, 'i');
-    const m = t.match(re);
+  // Most pages put the label first ("24 Hours 6"). Some (Purgatory) put the value
+  // first ('3" 24 Hr', "2 of 12 Lifts Open"); config `lifts.valueFirst` tries that first.
+  const before = (label) => {
+    const m = t.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(?:"|”|″|in\\b|inches)\\s*${label}`, 'i'));
     return m ? num(m[1]) : null;
   };
+  const after = (label) => {
+    const m = t.match(new RegExp(`${label}[^0-9]{0,25}(\\d+(?:\\.\\d+)?)\\s*(?:"|”|″|in\\b|inches|cm)?`, 'i'));
+    return m ? num(m[1]) : null;
+  };
+  const near = (label) => (valueFirst ? before(label) ?? after(label) : after(label));
   const ratio = (label) => {
-    const m = t.match(new RegExp(`${label}[^0-9]{0,25}(\\d+)\\s*(?:/|of)\\s*(\\d+)`, 'i'))
-      || t.match(new RegExp(`(\\d+)\\s*(?:/|of)\\s*(\\d+)\\s*${label}`, 'i'));
+    const labelFirst = new RegExp(`${label}[^0-9]{0,25}(\\d+)\\s*(?:/|of)\\s*(\\d+)`, 'i');
+    const numFirst = new RegExp(`(\\d+)\\s*(?:/|of)\\s*(\\d+)\\s*${label}`, 'i');
+    const m = valueFirst ? t.match(numFirst) || t.match(labelFirst) : t.match(labelFirst) || t.match(numFirst);
     return m ? [num(m[1]), num(m[2])] : [null, null];
   };
   const [liftsOpen, liftsTotal] = ratio('lifts?(?: open)?');
@@ -68,10 +73,10 @@ function fromText(text) {
   };
 }
 
-export function parseSnowReport(html, tz = 'America/Denver') {
+export function parseSnowReport(html, tz = 'America/Denver', { valueFirst = false } = {}) {
   const j = fromJson(html);
   const text = htmlToText(html);
-  const t = fromText(text);
+  const t = fromText(text, valueFirst);
   const pick = (k) => j[k] ?? t[k] ?? null;
   const r = {
     overnight: pick('overnight'), new24: pick('new24'), new48: pick('new48'), base: pick('base'),
@@ -98,7 +103,7 @@ export function liftsJobs(town, { get = fetchText } = {}) {
       let tile;
       try {
         const html = await get(town.lifts.url);
-        const r = parseSnowReport(html, town.timezone);
+        const r = parseSnowReport(html, town.timezone, { valueFirst: !!town.lifts.valueFirst });
         tile = {
           ok: r.found >= 2,
           ...r,

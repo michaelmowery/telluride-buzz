@@ -6,21 +6,20 @@
   "hostnames": ["durango.thetown.buzz", "durango.localhost"],
   "timezone": "America/Denver",
   "location": { "lat": 37.2753, "lon": -107.8801 },
-  "bbox": { "minLat": 36.95, "maxLat": 37.85, "minLon": -108.65, "maxLon": -106.75 },
+  "bbox": { "minLat": 36.95, "maxLat": 37.85, "minLon": -108.65, "maxLon": -107.45 },
 
   "brand": {
     "siteName": "Durango Buzz",
     "logo": "thetown",
     "feedbackEmail": "telluridebuzz@gmail.com",
-    "notAffiliated": "the City of Durango, La Plata County, Purgatory Resort, The Durango Herald, CDOT or the National Weather Service",
+    "notAffiliated": "the City of Durango, Purgatory Resort, The Durango Herald, CDOT or the National Weather Service",
     "aboutSources": [
       ["National Weather Service", "Watches, warnings and advisories for Durango", "Every 3 min"],
       ["National Weather Service", "Forecast, temperature and expected snow", "Every 10 min"],
       ["Colorado Dept. of Transportation (COtrip)", "Incidents, closures, road conditions and work zones on US-550, US-160 and CO-172", "Every 5 min"],
       ["Purgatory Resort", "Snow report: new snow, base depth, open lifts and trails", "Every 15 min"],
       ["City of Durango", "Emergency alerts, city news and the community calendar", "Every 5 to 60 min"],
-      ["La Plata County", "County news", "Every 15 min"],
-      ["The Durango Herald", "Local news headlines", "Every 15 min"]
+      ["The Durango Herald", "Local news headlines (local section only)", "Every 15 min"]
     ]
   },
 
@@ -32,16 +31,17 @@
   "cdot": {
     "routes": [
       { "match": ["550"], "label": "US-550", "note": "Durango to Purgatory, Coal Bank and Molas passes, Silverton; south to New Mexico" },
-      { "match": ["160"], "label": "US-160", "note": "Hesperus, Mancos and Cortez to the west; Bayfield, Pagosa Springs and Wolf Creek Pass to the east" },
+      { "match": ["160"], "label": "US-160", "note": "Hesperus and Mancos to the west; Bayfield to the east" },
       { "match": ["172"], "label": "CO-172", "note": "Durango-La Plata County Airport and Ignacio" }
     ],
-    "keyPlaces": ["Coal Bank", "Molas", "Purgatory", "Hesperus", "Bayfield", "Wolf Creek", "Mancos", "Silverton", "Ignacio", "Durango"]
+    "keyPlaces": ["Coal Bank", "Molas", "Purgatory", "Hesperus", "Bayfield", "Mancos", "Silverton", "Ignacio", "Durango"]
   },
 
   "lifts": {
-    "url": "https://www.purgatory.ski/mountain/snow-report/",
-    "linkUrl": "https://www.purgatory.ski/mountain/snow-report/",
-    "label": "Purgatory Resort"
+    "url": "https://www.purgatory.ski/mountain/weather-conditions-webcams/",
+    "linkUrl": "https://www.purgatory.ski/mountain/weather-conditions-webcams/",
+    "label": "Purgatory Resort",
+    "valueFirst": true
   },
 
   "feeds": [
@@ -67,16 +67,9 @@
       "everyMin": 60
     },
     {
-      "id": "county-news",
-      "label": "La Plata County",
-      "url": "https://www.lpcgov.org/RSSFeed.aspx?ModID=1&CID=All-newsflash.xml",
-      "category": "town",
-      "everyMin": 15
-    },
-    {
       "id": "herald",
       "label": "The Durango Herald",
-      "url": "https://www.durangoherald.com/feed/",
+      "url": "https://www.durangoherald.com/local-news/feed/",
       "category": "news",
       "everyMin": 15
     }
