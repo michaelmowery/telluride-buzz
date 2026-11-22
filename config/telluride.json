@@ -40,14 +40,14 @@
     {
       "id": "town-news",
       "label": "Town of Telluride",
-      "url": "https://telluride-co.gov/RSSFeed.aspx?ModID=1&CID=All-newsflash.xml",
+      "url": ["https://www.telluride-co.gov/RSSFeed.aspx?ModID=1&CID=All-newsflash.xml", "https://telluride-co.gov/RSSFeed.aspx?ModID=1&CID=All-newsflash.xml"],
       "category": "town",
       "everyMin": 15
     },
     {
       "id": "town-calendar",
       "label": "Town of Telluride",
-      "url": "https://telluride-co.gov/RSSFeed.aspx?ModID=58&CID=All-calendar.xml",
+      "url": ["https://www.telluride-co.gov/RSSFeed.aspx?ModID=58&CID=All-calendar.xml", "https://telluride-co.gov/RSSFeed.aspx?ModID=58&CID=All-calendar.xml"],
       "category": "events",
       "everyMin": 60
     },
