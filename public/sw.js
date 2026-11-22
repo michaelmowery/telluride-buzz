@@ -1,8 +1,8 @@
 // App shell cached for offline use; the API is network-first with the last good
 // response as a fallback, so the app still opens on a dead cell signal.
-const SHELL = 'buzz-shell-v9';
+const SHELL = 'buzz-shell-v10';
 const API = 'buzz-api-v1';
-const SHELL_FILES = ['/', '/index.html', '/about.html', '/styles.css', '/theme.js', '/app.js', '/manifest.webmanifest', '/icons/icon.svg', '/icons/favicon.svg'];
+const SHELL_FILES = ['/', '/index.html', '/about.html', '/styles.css', '/theme.js', '/towns.js', '/app.js', '/manifest.webmanifest', '/icons/icon.svg', '/icons/favicon.svg'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_FILES)).then(() => self.skipWaiting()));
@@ -50,8 +50,8 @@ self.addEventListener('push', (e) => {
       const r = await fetch('/api/push/latest', { cache: 'no-store' });
       a = await r.json();
     } catch { /* offline: fall back to a generic notice */ }
-    const title = a?.title || 'Telluride.Buzz alert';
-    const body = [a?.sourceLabel, a?.summary].filter(Boolean).join(': ').slice(0, 240) || 'Open Telluride.Buzz for details.';
+    const title = a?.title || '{{site}} alert';
+    const body = [a?.sourceLabel, a?.summary].filter(Boolean).join(': ').slice(0, 240) || 'Open {{site}} for details.';
     await self.registration.showNotification(title, {
       body,
       icon: '/icons/icon-192.png',

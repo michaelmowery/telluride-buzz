@@ -10,3 +10,10 @@ buzz.1.2.3.4.sslip.io {
 # 	encode zstd gzip
 # 	reverse_proxy telluride-buzz:3000
 # }
+
+# Other towns run in the same container; the app picks the town from the hostname
+# (config/<town>.json "hostnames"). Add each town's address to Caddy:
+# durango.thetown.buzz {
+# 	encode zstd gzip
+# 	reverse_proxy telluride-buzz:3000
+# }

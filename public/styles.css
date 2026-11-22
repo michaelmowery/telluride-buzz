@@ -56,12 +56,31 @@ button { font: inherit; color: inherit; }
   background: var(--forest);
   color: #f6efe2;
 }
-.brand { display: block; line-height: 0; }
+.brand { display: flex; align-items: center; gap: 4px; line-height: 0; text-decoration: none; }
+.brand-wrap { position: relative; }
+.brand-caret { fill: none; stroke: #f6efe2; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; opacity: .75; transition: transform .15s; }
+.brand[aria-expanded="true"] .brand-caret { transform: rotate(180deg); }
+.brand:focus-visible { outline: 3px solid var(--amber); outline-offset: 4px; border-radius: 6px; }
+.town-menu { position: absolute; top: calc(100% + 10px); left: -6px; z-index: 20; width: min(300px, calc(100vw - 20px));
+  background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .18); padding: 8px; }
+.town-menu[hidden] { display: none; }
+.town-menu-title { margin: 4px 8px 8px; font: 600 12px var(--sans, inherit); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.town-menu ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.town-opt { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 10px; text-decoration: none; }
+.town-opt:hover, .town-opt:focus-visible { background: var(--cream); outline: none; }
+.town-opt[aria-current] { background: var(--cream); }
+.town-logo { flex: none; background: var(--forest); border-radius: 8px; padding: 6px 8px; line-height: 0; }
+.logo-sm { height: 34px; }
+.town-txt { display: grid; gap: 2px; line-height: 1.25; }
+.town-txt strong { font-weight: 600; }
+.town-txt small { color: var(--ink-2); font-size: 12.5px; }
 .logo { height: 48px; width: auto; display: block; }
 .logo-name { font: 700 70px var(--slab); fill: #f6efe2; }
 .logo-dot { fill: #5aa3d6; }
 .logo-ink { fill: #1a4360; }
 .logo-buzz { font: 700 50px var(--slab); }
+.logo-thetown { font: 700 27px var(--slab); }
 .logo-wave { fill: none; stroke: #f6efe2; stroke-width: 9; stroke-linecap: round; }
 .status { display: flex; align-items: center; gap: 7px; font-size: 13px; opacity: .9; white-space: nowrap; }
 .pulse { width: 8px; height: 8px; border-radius: 50%; background: #7fd18f; box-shadow: 0 0 0 0 rgba(127, 209, 143, .6); animation: pulse 2.4s infinite; }
