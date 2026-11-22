@@ -72,6 +72,10 @@ button { font: inherit; color: inherit; }
 .town-opt[aria-current] { background: var(--cream); }
 .town-logo { flex: none; background: var(--forest); border-radius: 8px; padding: 6px 8px; line-height: 0; }
 .logo-sm { height: 34px; }
+.town-all { display: block; margin: 6px 0 0; padding: 10px 8px 4px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--ink-2); text-decoration: none; }
+.town-all strong { color: var(--forest-2); font-weight: 600; }
+@media (prefers-color-scheme: dark) { .town-all strong { color: var(--amber); } }
+.town-all:hover strong, .town-all:focus-visible strong { text-decoration: underline; }
 .town-txt { display: grid; gap: 2px; line-height: 1.25; }
 .town-txt strong { font-weight: 600; }
 .town-txt small { color: var(--ink-2); font-size: 12.5px; }
