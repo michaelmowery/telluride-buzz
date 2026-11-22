@@ -8,7 +8,8 @@ import { openDb } from './db.js';
 import { startScheduler } from './scheduler.js';
 import { seedDemo } from './demo.js';
 import { loadVapid, validSubscription, pushNewAlerts } from './push.js';
-import { renderTemplate, TEMPLATED } from './brand.js';
+import { renderTemplate, TEMPLATED, townUrl } from './brand.js';
+import { HUB_HOSTS, renderHub, snapshot, townForPath } from './hub.js';
 import crypto from 'node:crypto';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -32,6 +33,7 @@ const byHost = new Map();
 for (const t of towns) for (const h of t.hostnames || []) byHost.set(h.toLowerCase(), t);
 // Unknown hostnames (the sslip.io test address, a bare IP) get the default town.
 const defaultTown = towns.find((t) => t.default) || towns[0];
+const hostOf = (req) => String(req.headers.host || '').split(':')[0].toLowerCase();
 const townFor = (req) => byHost.get(String(req.headers.host || '').split(':')[0].toLowerCase()) || defaultTown;
 
 // ---------- data ----------
@@ -162,6 +164,21 @@ function serveTemplate(req, res, file, ext, st, town) {
   res.end(req.method === 'HEAD' ? undefined : c.body);
 }
 
+// thetown.buzz home page (see hub.js). Re-rendered at most once a minute.
+let hubCache = null; // { at, mtime, body, etag }
+function serveHub(req, res) {
+  const file = path.join(PUBLIC, 'hub.html');
+  const st = fs.statSync(file);
+  if (!hubCache || hubCache.mtime !== st.mtimeMs || Date.now() - hubCache.at > 60e3) {
+    const body = Buffer.from(renderHub(fs.readFileSync(file, 'utf8'), towns, (t) => snapshot(db.getTiles(t.id), db.alerts(t.id))));
+    hubCache = { at: Date.now(), mtime: st.mtimeMs, body, etag: `"${crypto.createHash('sha1').update(body).digest('base64url').slice(0, 16)}"` };
+  }
+  const headers = { 'Cache-Control': 'no-cache', ETag: hubCache.etag, Vary: 'Host', ...SECURITY_HEADERS };
+  if (req.headers['if-none-match'] === hubCache.etag) { res.writeHead(304, headers); return res.end(); }
+  res.writeHead(200, { 'Content-Type': TYPES['.html'], 'Content-Length': hubCache.body.length, ...headers });
+  res.end(req.method === 'HEAD' ? undefined : hubCache.body);
+}
+
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
@@ -220,6 +237,17 @@ const server = http.createServer((req, res) => {
       return handlePost(req, res, url, town).catch((e) => { log.warn(`post failed: ${e.message}`); send(res, 500, 'Server error'); });
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed');
+    if (HUB_HOSTS.has(hostOf(req))) {
+      // thetown.buzz: home page, /<town> redirects to that town's site, assets as usual.
+      if (url.pathname === '/' || url.pathname === '/index.html') return serveHub(req, res);
+      const t = townForPath(url.pathname, towns);
+      if (t) return send(res, 302, `Moved to ${townUrl(t)}`, undefined, { Location: townUrl(t) });
+      if (!path.extname(url.pathname) && !url.pathname.startsWith('/api/') && url.pathname !== '/healthz') {
+        return send(res, 302, 'Moved', undefined, { Location: '/' });
+      }
+    } else if (/^\/hub(\.html)?$/.test(url.pathname)) {
+      return send(res, 404, 'Not found'); // the hub template only renders on thetown.buzz
+    }
     switch (url.pathname) {
       case '/api/push/key':
         return vapid ? json(res, { publicKey: vapid.publicKey }, 3600) : send(res, 503, 'Push is off in demo mode');

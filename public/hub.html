@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>thetown.buzz</title>
+  <meta name="description" content="The real-time pulse of your town: weather, roads, snow, alerts and local news, right now, from sources you can trust.">
+  <meta name="theme-color" content="#1f4e6e">
+  <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="/styles.css?v=14">
+  <script src="/theme.js?v=14"></script>
+</head>
+<body class="hub">
+  <header class="top">
+    <a class="brand" href="/" aria-label="thetown.buzz home">{{logo}}</a>
+    <div class="status"><span class="pulse"></span><span>Live in {{townCount}} towns</span></div>
+  </header>
+
+  <main>
+    <section class="hub-hero">
+      <h1>The real-time pulse of your town.</h1>
+      <p>Weather, roads, snow, alerts and local news for mountain towns, right now, from sources you can trust.</p>
+    </section>
+
+    <section aria-labelledby="hub-towns-title">
+      <h2 class="hub-h2" id="hub-towns-title">Pick your town</h2>
+      <ul class="hub-towns">
+      {{towns}}
+      </ul>
+    </section>
+
+    <section class="hub-how" aria-label="How it works">
+      <div><h3>Official sources first</h3><p>The National Weather Service, CDOT, town and county alerts, the ski report and local news, gathered in one place.</p></div>
+      <div><h3>Every post links to its source</h3><p>Tap any item to read the original, so you can always check it for yourself.</p></div>
+      <div><h3>Free, no sign-up</h3><p>Open your town's page and add it to your home screen. Turn on alerts if you want them.</p></div>
+    </section>
+
+    <section class="hub-ask">
+      <h2>Want Buzz in your town?</h2>
+      <p>We're adding towns one at a time. Tell us where you live and what you'd want on it.</p>
+      <a class="push-btn" href="mailto:{{feedbackEmail}}?subject={{feedbackSubject}}">Suggest your town</a>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p class="mission">thetown.buzz is the real-time pulse of your town: what's happening where you live, right now, from sources you can trust.</p>
+    <p class="fine">In early testing, so check the original source before you rely on anything here. Not affiliated with the agencies and businesses whose information it shows. Not for emergencies: call 911.</p>
+  </footer>
+</body>
+</html>
