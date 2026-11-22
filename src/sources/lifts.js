@@ -115,7 +115,10 @@ export function liftsJobs(town, { get = fetchText } = {}) {
       db.setTile(town.id, 'lifts', tile);
       const fresh = Math.max(tile.new24 || 0, tile.overnight || 0);
       if (tile.ok && fresh >= 1) {
-        const day = new Date().toLocaleDateString('en-CA', { timeZone: town.timezone });
+        // Key the post by the date of the resort's own report, not our clock, so an
+        // unchanged report doesn't become a second identical post the next day.
+        const reportAt = tile.sourceAt || Date.now();
+        const day = new Date(reportAt).toLocaleDateString('en-CA', { timeZone: town.timezone });
         db.syncItems(town.id, 'lifts-snow', [{
           extId: `new-snow-${day}`,
           sourceLabel: town.lifts.label,
@@ -124,8 +127,8 @@ export function liftsJobs(town, { get = fetchText } = {}) {
           summary: tile.base != null ? `Base depth ${tile.base}".` : null,
           link: tile.link,
           severity: 0,
-          publishedAt: Date.now(),
-        }], { deactivateMissing: false });
+          publishedAt: Math.min(reportAt, Date.now()),
+        }], { deactivateMissing: true }); // only the latest snow report stays in the feed
       }
       if (!tile.ok) throw new Error(`Snow report page parsed, but only ${tile.found} values recognised`);
     },

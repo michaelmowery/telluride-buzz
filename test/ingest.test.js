@@ -196,3 +196,15 @@ test('meander.me: only posts tagged for Telluride.Buzz, linked back to meander.m
   assert.equal(tried.length, 2);
   assert.ok(tried[1].startsWith('https://cms.meander.me/'));
 });
+
+test('Snow report: an unchanged report never shows up twice in the feed', async () => {
+  const db = openDb(':memory:');
+  const [job] = liftsJobs(town, { get: async () => fx('snow-report-tsr.html') });
+  await job.run(db);
+  // A post left over from an earlier day with the same numbers.
+  db.syncItems(town.id, 'lifts-snow', [{ extId: 'new-snow-2000-01-01', sourceLabel: 'Telluride Ski Resort', category: 'lifts', title: '6" of new snow overnight', summary: 'Base depth 12".', publishedAt: Date.now() - 864e5 }], { deactivateMissing: false });
+  await job.run(db);
+  const snow = db.feed(town.id).filter((i) => i.category === 'lifts');
+  assert.equal(snow.length, 1);
+  assert.equal(snow[0].title, '6" of new snow overnight');
+});
