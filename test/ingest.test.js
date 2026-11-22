@@ -206,5 +206,59 @@ test('Snow report: an unchanged report never shows up twice in the feed', async 
   await job.run(db);
   const snow = db.feed(town.id).filter((i) => i.category === 'lifts');
   assert.equal(snow.length, 1);
-  assert.equal(snow[0].title, '6" of new snow overnight');
+  assert.equal(snow[0].title, 'Telluride Ski Resort: 6" of new snow overnight');
+});
+
+test('Purgatory snow report: values come before labels (3" 24 Hr, 2 of 12 Lifts Open)', () => {
+  const r = parseSnowReport(fx('snow-report-purgatory.html'), 'America/Denver', { valueFirst: true });
+  assert.equal(r.new24, 3);
+  assert.equal(r.new48, 3);
+  assert.equal(r.base, 14);
+  assert.deepEqual([r.liftsOpen, r.liftsTotal], [2, 12]);
+  assert.deepEqual([r.trailsOpen, r.trailsTotal], [5, 114]);
+});
+
+test('Several resorts in one town: the tile lists each mountain by name', async () => {
+  const { resortsOf } = await import('../src/sources/lifts.js');
+  const two = { ...town, id: 'two', lifts: [
+    { url: 'https://a.example/', label: 'Purgatory Resort', name: 'Purgatory', valueFirst: true },
+    { url: 'https://b.example/', label: 'Telluride Ski Resort' },
+  ] };
+  assert.deepEqual(resortsOf(two).map((r) => [r.id, r.name]), [['main', 'Purgatory'], ['resort-2', 'Telluride Ski Resort']]);
+  const db = openDb(':memory:');
+  const pages = { 'https://a.example/': fx('snow-report-purgatory.html'), 'https://b.example/': fx('snow-report-tsr.html') };
+  const jobs = liftsJobs(two, { get: async (u) => pages[u] });
+  assert.deepEqual(jobs.map((j) => j.id), ['lifts-snow', 'lifts-snow-resort-2']);
+  await jobs[1].run(db);
+  await jobs[0].run(db);
+  const tile = db.getTiles('two').lifts;
+  assert.deepEqual(tile.resorts.map((r) => r.name), ['Purgatory', 'Telluride Ski Resort']); // config order
+  assert.equal(tile.resorts[0].base, 14);
+  assert.equal(tile.name, undefined);
+  const titles = db.feed('two').filter((i) => i.category === 'lifts').map((i) => i.title).sort();
+  assert.deepEqual(titles, ['Purgatory: 3" of new snow in the last 24 hours', 'Telluride Ski Resort: 6" of new snow overnight']);
+});
+
+test('Resort alerts JSON: current alert shows, expired and future ones do not', async () => {
+  const { resortAlertsToItems } = await import('../src/sources/resort-alerts.js');
+  const now = Date.UTC(2026, 10, 20, 20, 0); // 1:00 PM MST
+  const json = [
+    { id: 'a', headline: 'Opening Day Is Here!', content: 'Ski and ride  off Lift 2.', starts: '202611201216', expires: '202611201700', link: { links_to: 'https://www.purgatory.ski/x/' } },
+    { id: 'b', headline: 'Old', starts: '202611190800', expires: '202611191700' },
+    { id: 'c', headline: 'Later', starts: '202611210800', expires: '202611211700' },
+  ];
+  const items = resortAlertsToItems(json, { label: 'Purgatory Resort' }, 'America/Denver', now);
+  assert.deepEqual(items.map((i) => i.title), ['Opening Day Is Here!']);
+  assert.equal(items[0].summary, 'Ski and ride off Lift 2.');
+  assert.equal(items[0].expiresAt, Date.UTC(2026, 10, 21, 0, 0));
+  assert.equal(items[0].category, 'lifts');
+});
+
+test('Events Calendar RSS: start time from pubDate, WordPress footer removed', () => {
+  const xml = `<rss><channel><item><title>Thanksgiving Dinner</title><link>https://www.purgatory.ski/event/thanksgiving-dinner/</link>
+    <pubDate>Thu, 26 Nov 2099 23:30:00 +0000</pubDate><guid>e1</guid>
+    <description><![CDATA[<p>Buffet at Purgy’s.</p><p>The post <a href="x">Thanksgiving Dinner</a> appeared first on <a href="y">Purgatory Resort</a>.</p>]]></description></item></channel></rss>`;
+  const [ev] = feedToItems(xml, { id: 'purgatory-events', label: 'Purgatory Resort', category: 'events', startFromPubDate: true }, town);
+  assert.equal(ev.startsAt, Date.UTC(2099, 10, 26, 23, 30));
+  assert.equal(ev.summary, 'Buffet at Purgy’s.');
 });

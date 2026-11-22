@@ -106,16 +106,32 @@ function renderRoads(r) {
   setTile('roads', `${rows}${r.error ? `<div class="tile-error">${esc(r.error)}</div>` : ''}`);
 }
 
+/** Each resort in the Lifts & Snow tile (older servers sent one resort at the top level). */
+const resortsIn = (l) => (l?.resorts?.length ? l.resorts : l ? [l] : []);
+
 function renderLifts(l) {
-  if (!l || !l.ok) return setTile('lifts', unavailable(l?.error));
+  const list = resortsIn(l);
+  if (!list.some((r) => r.ok)) return setTile('lifts', unavailable(l?.error));
   const stat = (v, label, suffix = '') => (v == null ? '' : `<div class="stat"><b>${v}${suffix}</b><span>${label}</span></div>`);
   const ratio = (a, b, label) => (a == null ? '' : `<div class="stat"><b>${a}${b != null ? `<small class="muted">/${b}</small>` : ''}</b><span>${label}</span></div>`);
-  setTile('lifts', `<div class="stats">
-    ${(l.overnight || 0) > (l.new24 || 0) ? stat(l.overnight, 'Overnight', '"') : stat(l.new24, 'New (24h)', '"')}
-    ${stat(l.base, 'Base', '"')}
-    ${ratio(l.liftsOpen, l.liftsTotal, 'Lifts open')}
-    ${ratio(l.trailsOpen, l.trailsTotal, 'Runs open')}
+  const fresh = (r) => ((r.overnight || 0) > (r.new24 || 0) ? [r.overnight, 'overnight'] : [r.new24, 'new']);
+  if (list.length === 1) {
+    const r = list[0];
+    const [snow, word] = fresh(r);
+    return setTile('lifts', `<div class="mountain">${esc(r.name || r.sourceLabel || '')}</div><div class="stats">
+    ${stat(snow, word === 'overnight' ? 'Overnight' : 'New (24h)', '"')}
+    ${stat(r.base, 'Base', '"')}
+    ${ratio(r.liftsOpen, r.liftsTotal, 'Lifts open')}
+    ${ratio(r.trailsOpen, r.trailsTotal, 'Runs open')}
   </div>`);
+  }
+  // Several mountains: one compact row each.
+  setTile('lifts', list.map((r) => {
+    if (!r.ok) return `<div class="mtn-row"><b>${esc(r.name)}</b><span>No report</span></div>`;
+    const [snow, word] = fresh(r);
+    const bits = [snow != null ? `${snow}" ${word}` : null, r.liftsOpen != null ? `${r.liftsOpen}${r.liftsTotal != null ? `/${r.liftsTotal}` : ''} lifts` : null].filter(Boolean);
+    return `<div class="mtn-row"><b>${esc(r.name)}</b><span>${esc(bits.join(' · ') || 'Report posted')}</span></div>`;
+  }).join(''));
 }
 
 function renderEvents(events) {
@@ -286,13 +302,21 @@ function panelRoads(r) {
 }
 
 function panelLifts(l) {
-  if (!l || !l.ok) return `${unavailable(l?.error)}<div class="p-actions">${srcLink(l?.link, 'Snow report')}</div>`;
+  const list = resortsIn(l);
+  if (!list.length) return unavailable(l?.error);
   const stat = (v, label, suffix = '"') => (v == null ? '' : `<div class="p-card"><b>${v}${suffix}</b><span>${label}</span></div>`);
   const ratio = (a, b, label) => (a == null ? '' : `<div class="p-card"><b>${a}${b != null ? `<small class="muted">/${b}</small>` : ''}</b><span>${label}</span>
     ${b ? `<div class="meter"><i data-pct="${Math.round((100 * a) / b)}"></i></div>` : ''}</div>`);
-  return `<h3>Snow</h3><div class="p-stats">${stat(l.overnight, 'Overnight')}${stat(l.new24, 'Last 24 hours')}${stat(l.new48, 'Last 48 hours')}${stat(l.base, 'Base depth')}</div>
-    <h3>On the mountain</h3><div class="p-stats">${ratio(l.liftsOpen, l.liftsTotal, 'Lifts open')}${ratio(l.trailsOpen, l.trailsTotal, 'Runs open')}</div>
-    <div class="p-actions">${srcLink(l.link, `Full report at ${l.sourceLabel || 'the resort'}`)}<button data-filter="lifts">Snow posts</button></div>`;
+  const one = (r) => {
+    const name = esc(r.name || r.sourceLabel || 'The resort');
+    if (!r.ok) return `<h3 class="p-mountain">${name}</h3>${unavailable(r.error)}<div class="p-actions">${srcLink(r.link, 'Snow report')}</div>`;
+    const updated = r.sourceAt ? `<span class="muted"> · updated ${esc(clock(r.sourceAt))}</span>` : '';
+    return `<h3 class="p-mountain">${name}${updated}</h3>
+    <h4>Snow</h4><div class="p-stats">${stat(r.overnight, 'Overnight')}${stat(r.new24, 'Last 24 hours')}${stat(r.new48, 'Last 48 hours')}${stat(r.base, 'Base depth')}</div>
+    <h4>On the mountain</h4><div class="p-stats">${ratio(r.liftsOpen, r.liftsTotal, 'Lifts open')}${ratio(r.trailsOpen, r.trailsTotal, 'Runs open')}</div>
+    <div class="p-actions">${srcLink(r.link, `Full report at ${r.sourceLabel || 'the resort'}`)}</div>`;
+  };
+  return `${list.map(one).join('')}<div class="p-actions"><button data-filter="lifts">Snow posts</button></div>`;
 }
 
 const dayKey = (t) => new Date(t).toLocaleDateString('en-CA', { timeZone: TZ });
