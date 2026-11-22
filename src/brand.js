@@ -7,6 +7,8 @@
 // "thetown" style: town name beside the circle, "thetown" stacked above ".buzz"
 // inside it, so no logo implies we own that town's .buzz domain.
 
+import { ADAPTERS } from './adapters.js';
+
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const jsStr = (s) => JSON.stringify(String(s ?? '')).slice(1, -1);
 
@@ -53,11 +55,25 @@ export function townMenu(town, towns) {
     </nav>`;
 }
 
+/** About page rows built from the town's sources when the brand doesn't list them by hand. */
+export function aboutRows(town) {
+  const rows = [];
+  for (const s of (town.sources || []).filter((x) => x.enabled !== false)) {
+    const a = ADAPTERS[s.adapter];
+    if (!a) continue;
+    const every = Number(s.everyMin) || a.defaultEvery;
+    const row = [s.label, s.about || a.description, every >= 60 ? `Every ${Math.round(every / 60)} hour${every >= 120 ? 's' : ''}` : `Every ${every} min`];
+    const same = rows.find((r) => r[0] === row[0] && r[1] === row[1]);
+    if (!same) rows.push(row);
+  }
+  return rows;
+}
+
 /** Values for one town. `site` is the name used in sentences ("Durango Buzz is in early testing"). */
 export function brandValues(town, towns = [town]) {
   const b = town.brand || {};
   const site = b.siteName || `${town.name} Buzz`;
-  const rows = (b.aboutSources || []).map(([src, what, every]) =>
+  const rows = (b.aboutSources || aboutRows(town)).map(([src, what, every]) =>
     `<tr><td>${esc(src)}</td><td>${esc(what)}</td><td>${esc(every)}</td></tr>`).join('\n        ');
   return {
     site,

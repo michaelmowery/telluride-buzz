@@ -8,10 +8,32 @@ PRAGMA journal_mode = WAL;
 PRAGMA synchronous = NORMAL;
 PRAGMA busy_timeout = 5000;
 
+-- Towns are data: one row per town (config holds hostnames, map point, brand...).
 CREATE TABLE IF NOT EXISTS towns (
   id         TEXT PRIMARY KEY,
   name       TEXT NOT NULL,
   config     TEXT NOT NULL
+);
+
+-- Each feed or scrape a town reads. adapter names shared code (src/adapters.js);
+-- key is the id items and health use for it (e.g. nws-alerts, feed-koto).
+CREATE TABLE IF NOT EXISTS sources (
+  town_id    TEXT NOT NULL,
+  key        TEXT NOT NULL,
+  adapter    TEXT NOT NULL,
+  label      TEXT NOT NULL,
+  about      TEXT,                     -- one line for the About page
+  settings   TEXT NOT NULL DEFAULT '{}',
+  every_min  REAL,
+  enabled    INTEGER NOT NULL DEFAULT 1,
+  sort       INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (town_id, key)
+);
+
+CREATE TABLE IF NOT EXISTS meta (
+  key   TEXT PRIMARY KEY,
+  value TEXT
 );
 
 -- Every feed lands here: tiles, the live feed and the alert banner all read it.
@@ -82,7 +104,19 @@ export function openDb(file) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec(SCHEMA);
+  migrate(db);
   return wrap(db);
+}
+
+/** Columns added after the first deploy (CREATE TABLE IF NOT EXISTS won't add them). */
+function migrate(db) {
+  const has = (table, col) => db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col);
+  const add = (table, col, def) => { if (!has(table, col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`); };
+  add('towns', 'status', "TEXT NOT NULL DEFAULT 'live'"); // draft | live
+  add('towns', 'created_at', 'INTEGER');
+  add('towns', 'updated_at', 'INTEGER');
+  add('source_status', 'failing_since', 'INTEGER');
+  add('source_status', 'last_items', 'INTEGER');
 }
 
 function wrap(db) {
@@ -101,10 +135,70 @@ function wrap(db) {
   return {
     raw: db,
 
-    saveTown(town) {
-      db.prepare(`INSERT INTO towns (id, name, config) VALUES (?, ?, ?)
-                  ON CONFLICT (id) DO UPDATE SET name = excluded.name, config = excluded.config`)
-        .run(town.id, town.name, JSON.stringify(town));
+    // ---------- towns and sources ----------
+    saveTown(town, status = null) {
+      const now = Date.now();
+      const { sources, status: st, ...config } = town;
+      db.prepare(`INSERT INTO towns (id, name, config, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+                  ON CONFLICT (id) DO UPDATE SET name = excluded.name, config = excluded.config,
+                    status = COALESCE(?, towns.status), updated_at = excluded.updated_at`)
+        .run(town.id, town.name, JSON.stringify(config), status || st || 'live', now, now, status || st || null);
+    },
+
+    listTowns() {
+      return db.prepare('SELECT id, name, config, status, created_at, updated_at FROM towns ORDER BY name').all()
+        .map((r) => ({ ...JSON.parse(r.config), id: r.id, name: r.name, status: r.status, createdAt: r.created_at, updatedAt: r.updated_at }));
+    },
+
+    deleteTown(id) {
+      db.exec('BEGIN');
+      try {
+        for (const t of ['towns']) db.prepare(`DELETE FROM ${t} WHERE id = ?`).run(id);
+        for (const t of ['sources', 'source_status', 'tiles', 'items', 'push_subs', 'pushed_alerts', 'latest_push']) db.prepare(`DELETE FROM ${t} WHERE town_id = ?`).run(id);
+        db.exec('COMMIT');
+      } catch (e) { db.exec('ROLLBACK'); throw e; }
+    },
+
+    listSources(townId = null) {
+      const rows = townId
+        ? db.prepare('SELECT * FROM sources WHERE town_id = ? ORDER BY sort, key').all(townId)
+        : db.prepare('SELECT * FROM sources ORDER BY town_id, sort, key').all();
+      return rows.map((r) => ({
+        townId: r.town_id, key: r.key, adapter: r.adapter, label: r.label, about: r.about,
+        settings: JSON.parse(r.settings || '{}'), everyMin: r.every_min, enabled: !!r.enabled, sort: r.sort, updatedAt: r.updated_at,
+      }));
+    },
+
+    saveSource(townId, s) {
+      db.prepare(`INSERT INTO sources (town_id, key, adapter, label, about, settings, every_min, enabled, sort, updated_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  ON CONFLICT (town_id, key) DO UPDATE SET adapter = excluded.adapter, label = excluded.label,
+                    about = excluded.about, settings = excluded.settings, every_min = excluded.every_min,
+                    enabled = excluded.enabled, sort = excluded.sort, updated_at = excluded.updated_at`)
+        .run(townId, s.key, s.adapter, s.label, s.about || null, JSON.stringify(s.settings || {}),
+          s.everyMin ?? null, s.enabled === false ? 0 : 1, s.sort ?? 0, Date.now());
+    },
+
+    setSourceEnabled(townId, key, enabled) {
+      db.prepare('UPDATE sources SET enabled = ?, updated_at = ? WHERE town_id = ? AND key = ?').run(enabled ? 1 : 0, Date.now(), townId, key);
+    },
+
+    /** Remove a source, its health row and its posts. */
+    deleteSource(townId, key, itemSources = [key]) {
+      db.prepare('DELETE FROM sources WHERE town_id = ? AND key = ?').run(townId, key);
+      db.prepare('DELETE FROM source_status WHERE town_id = ? AND source = ?').run(townId, key);
+      for (const s of itemSources) db.prepare('UPDATE items SET active = 0 WHERE town_id = ? AND source = ?').run(townId, s);
+    },
+
+    /** Drop health rows for jobs that no longer exist (e.g. after a source was renamed). */
+    pruneStatus(townId, keys) {
+      const ph = keys.map(() => '?').join(',');
+      db.prepare(`DELETE FROM source_status WHERE town_id = ?${keys.length ? ` AND source NOT IN (${ph})` : ''}`).run(townId, ...keys);
+    },
+
+    getMeta(key) { return db.prepare('SELECT value FROM meta WHERE key = ?').get(key)?.value ?? null; },
+    setMeta(key, value) {
+      db.prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value').run(key, String(value));
     },
 
     /**
@@ -200,23 +294,28 @@ function wrap(db) {
     recordRun(townId, source, error) {
       const now = Date.now();
       if (error) {
-        db.prepare(`INSERT INTO source_status (town_id, source, last_run, last_error, error_count)
-                    VALUES (?, ?, ?, ?, 1)
+        db.prepare(`INSERT INTO source_status (town_id, source, last_run, last_error, error_count, failing_since)
+                    VALUES (?, ?, ?, ?, 1, ?)
                     ON CONFLICT (town_id, source) DO UPDATE SET last_run = excluded.last_run,
-                      last_error = excluded.last_error, error_count = error_count + 1`)
-          .run(townId, source, now, clip(String(error), 500));
+                      last_error = excluded.last_error, error_count = error_count + 1,
+                      failing_since = COALESCE(source_status.failing_since, excluded.failing_since)`)
+          .run(townId, source, now, clip(String(error), 500), now);
       } else {
-        db.prepare(`INSERT INTO source_status (town_id, source, last_run, last_ok, last_error, error_count)
-                    VALUES (?, ?, ?, ?, NULL, 0)
+        const items = db.prepare('SELECT COUNT(*) AS n FROM items WHERE town_id = ? AND source LIKE ? AND active = 1').get(townId, `${source}%`).n;
+        db.prepare(`INSERT INTO source_status (town_id, source, last_run, last_ok, last_error, error_count, failing_since, last_items)
+                    VALUES (?, ?, ?, ?, NULL, 0, NULL, ?)
                     ON CONFLICT (town_id, source) DO UPDATE SET last_run = excluded.last_run,
-                      last_ok = excluded.last_ok, last_error = NULL, error_count = 0`)
-          .run(townId, source, now, now);
+                      last_ok = excluded.last_ok, last_error = NULL, error_count = 0, failing_since = NULL,
+                      last_items = excluded.last_items`)
+          .run(townId, source, now, now, items);
       }
     },
 
-    sourceStatus(townId) {
-      return db.prepare('SELECT source, last_run, last_ok, last_error, error_count FROM source_status WHERE town_id = ? ORDER BY source')
-        .all(townId);
+    sourceStatus(townId = null) {
+      const cols = 'town_id, source, last_run, last_ok, last_error, error_count, failing_since, last_items';
+      return townId
+        ? db.prepare(`SELECT ${cols} FROM source_status WHERE town_id = ? ORDER BY source`).all(townId)
+        : db.prepare(`SELECT ${cols} FROM source_status ORDER BY town_id, source`).all();
     },
 
     // ---------- push ----------
