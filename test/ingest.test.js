@@ -174,3 +174,25 @@ test('Source update times: snow report "Last Updated" and the newest CDOT stamp'
   assert.equal(tile.sourceAt, t2);
   assert.equal(buildRoadsTile(town, {}).sourceAt, null);
 });
+
+test('meander.me: only posts tagged for Telluride.Buzz, linked back to meander.me', async () => {
+  const { meanderToItems, meanderUrl, meanderJobs } = await import('../src/sources/meander.js');
+  const now = Date.parse('2026-11-22T12:00:00Z');
+  const items = meanderToItems(fxj('meander-posts.json'), town.meander, now);
+  assert.deepEqual(items.map((i) => i.title), ['First chair at Gold Hill', 'Backdated hike']);
+  assert.equal(items[0].link, 'https://meander.me/posts/first-chair-gold-hill');
+  assert.equal(items[0].sourceLabel, 'Meander.me');
+  assert.equal(items[0].publishedAt, Date.parse('2026-11-20T15:00:00Z'));
+  assert.equal(items[1].publishedAt, Date.parse('2026-10-05T12:00:00-07:00'));
+  const url = decodeURIComponent(meanderUrl('http://strapi:1337', town.meander));
+  assert.ok(url.startsWith('http://strapi:1337/api/posts?'));
+  assert.ok(url.includes('filters[$or][0][tags][slug][$eqi]=telluride-buzz'));
+
+  // Falls back to the public API when the private address is unreachable.
+  const tried = [];
+  const [job] = meanderJobs(town, { get: async (u) => { tried.push(u); if (u.startsWith('http://strapi')) throw new Error('ENOTFOUND'); return fxj('meander-posts.json'); } });
+  const db = openDb(':memory:');
+  await job.run(db);
+  assert.equal(tried.length, 2);
+  assert.ok(tried[1].startsWith('https://cms.meander.me/'));
+});

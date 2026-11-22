@@ -430,7 +430,7 @@ const SHOW_OPTS = [
 ];
 const FEED_OPTS = [
   ['feed-weather', 'Weather'], ['feed-roads', 'Roads'], ['feed-lifts', 'Snow report'], ['feed-events', 'Events'],
-  ['feed-town', 'Town and County news'], ['feed-news', 'Local news (KOTO)'],
+  ['feed-town', 'Town and County news'], ['feed-news', 'Local news (KOTO, Meander.me)'],
 ];
 function toggleHtml([key, label]) {
   const on = !hidden().has(key);

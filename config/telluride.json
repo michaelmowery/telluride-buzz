@@ -26,6 +26,16 @@
     "label": "Telluride Ski Resort"
   },
 
+  "meander": {
+    "label": "Meander.me",
+    "api": ["http://strapi:1337", "https://cms.meander.me"],
+    "site": "https://meander.me",
+    "tags": ["telluride-buzz", "telluridebuzz"],
+    "tagName": "telluride.buzz",
+    "category": "news",
+    "everyMin": 15
+  },
+
   "feeds": [
     {
       "id": "town-news",

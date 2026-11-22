@@ -1,0 +1,6 @@
+{"data":[
+ {"id":7,"documentId":"abc123","title":"First chair at Gold Hill","slug":"first-chair-gold-hill","excerpt":"Opening day notes.","publishedAt":"2026-11-20T15:00:00.000Z","displayDate":"2026-11-20","tags":[{"name":"telluride.buzz","slug":"telluride-buzz"},{"name":"Telluride","slug":"telluride"}]},
+ {"id":8,"documentId":"def456","title":"Durango food tour","slug":"durango-food","excerpt":null,"publishedAt":"2026-11-19T15:00:00.000Z","displayDate":null,"tags":[{"name":"Durango","slug":"durango"}]},
+ {"id":9,"documentId":"ghi789","title":"Backdated hike","slug":"bear-creek","excerpt":"Bear Creek in October.","publishedAt":"2026-11-21T15:00:00.000Z","displayDate":"2026-10-05","tags":[{"name":"Telluride.Buzz","slug":"telluridebuzz"}]},
+ {"id":10,"documentId":"old1","title":"Old post","slug":"old","publishedAt":"2025-01-01T00:00:00.000Z","tags":[{"name":"telluride.buzz","slug":"telluride-buzz"}]}
+],"meta":{"pagination":{"page":1,"pageSize":25,"pageCount":1,"total":4}}}
