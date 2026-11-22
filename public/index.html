@@ -14,14 +14,19 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/styles.css?v=11">
-  <script src="/theme.js?v=11"></script>
+  <link rel="stylesheet" href="/styles.css?v=13">
+  <script src="/theme.js?v=13"></script>
+  <script src="/towns.js?v=13" defer></script>
 </head>
 <body>
   <header class="top">
-    <a class="brand" href="/" aria-label="{{site}} home">
-      {{logo}}
-    </a>
+    <div class="brand-wrap">
+      <a class="brand" href="/" id="brand" aria-label="{{site}}: choose a town" aria-haspopup="true" aria-expanded="false" aria-controls="town-menu">
+        {{logo}}
+        <svg class="brand-caret" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </a>
+      {{townMenu}}
+    </div>
     <div class="top-right">
       <div class="status" id="status" aria-live="polite"><span class="pulse"></span><span id="status-text">Loading…</span></div>
       <button class="prefs-btn" id="prefs-btn" aria-label="Preferences" title="Preferences" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
@@ -34,7 +39,7 @@
     <section id="alerts" class="alerts" aria-label="Active alerts"></section>
 
     <section class="tiles" aria-label="At a glance">
-      <div class="tile-wrap">
+      <div class="tile-wrap" data-show="weather">
       <button class="tile" data-tile="weather" aria-pressed="false" aria-haspopup="dialog">
         <div class="tile-head"><span class="tile-title">Weather</span><span class="tile-age" data-age></span></div>
         <div class="tile-body" data-body><div class="skeleton"></div></div>
@@ -42,7 +47,7 @@
       </button>
       <button class="tile-expand" tabindex="-1" aria-hidden="true" data-open="weather" aria-label="Expand Weather" title="Expand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
       </div>
-      <div class="tile-wrap">
+      <div class="tile-wrap" data-show="roads">
       <button class="tile" data-tile="roads" aria-pressed="false" aria-haspopup="dialog">
         <div class="tile-head"><span class="tile-title">Roads</span><span class="tile-age" data-age></span></div>
         <div class="tile-body" data-body><div class="skeleton"></div></div>
@@ -50,7 +55,7 @@
       </button>
       <button class="tile-expand" tabindex="-1" aria-hidden="true" data-open="roads" aria-label="Expand Roads" title="Expand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
       </div>
-      <div class="tile-wrap">
+      <div class="tile-wrap" data-show="lifts">
       <button class="tile" data-tile="lifts" aria-pressed="false" aria-haspopup="dialog">
         <div class="tile-head"><span class="tile-title">Lifts &amp; Snow</span><span class="tile-age" data-age></span></div>
         <div class="tile-body" data-body><div class="skeleton"></div></div>
@@ -58,7 +63,7 @@
       </button>
       <button class="tile-expand" tabindex="-1" aria-hidden="true" data-open="lifts" aria-label="Expand Lifts and Snow" title="Expand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
       </div>
-      <div class="tile-wrap">
+      <div class="tile-wrap" data-show="events">
       <button class="tile" data-tile="events" aria-pressed="false" aria-haspopup="dialog">
         <div class="tile-head"><span class="tile-title">Events</span><span class="tile-age" data-age></span></div>
         <div class="tile-body" data-body><div class="skeleton"></div></div>
@@ -68,12 +73,12 @@
       </div>
     </section>
 
-    <section id="push" class="push" hidden aria-label="Alerts">
+    <section id="push" class="push" data-show="push" hidden aria-label="Alerts">
       <div class="push-text" id="push-text">Get a notification for winter storm warnings, road closures and county emergencies.</div>
       <button id="push-btn" class="push-btn">Turn on alerts</button>
     </section>
 
-    <section class="feed-wrap" aria-label="Live feed">
+    <section class="feed-wrap" data-show="feed" aria-label="Live feed">
       <div class="feed-head">
         <h2 id="feed-title">Live feed</h2>
         <button id="clear-filter" class="chip clear" hidden>Show all</button>
@@ -99,6 +104,6 @@
     <p class="fine">Every post links to its source. <a href="/about">About &amp; sources</a> · <a href="#" id="prefs-link">Preferences</a> · Not for emergencies: call 911.</p>
   </footer>
 
-  <script src="/app.js?v=11" type="module"></script>
+  <script src="/app.js?v=13" type="module"></script>
 </body>
 </html>

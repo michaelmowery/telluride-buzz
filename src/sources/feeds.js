@@ -51,7 +51,12 @@ export function feedJobs(town, { get = fetchText } = {}) {
     id: `feed-${feed.id}`,
     everyMin: feed.everyMin || 15,
     async run(db) {
-      const xml = await get(feed.url);
+      // A feed may list fallback addresses (e.g. with and without www.).
+      let xml, lastErr;
+      for (const url of [].concat(feed.url)) {
+        try { xml = await get(url, { headers: { Accept: 'application/rss+xml, application/xml;q=0.9, */*;q=0.8' } }); break; } catch (e) { lastErr = e; }
+      }
+      if (xml === undefined) throw lastErr;
       const items = feedToItems(xml, feed, town);
       // News feeds roll forward, so keep older items active; calendars and alerts are authoritative lists.
       db.syncItems(town.id, `feed-${feed.id}`, items, { deactivateMissing: feed.category !== 'news' && feed.category !== 'town' });

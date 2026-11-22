@@ -12,14 +12,19 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/styles.css?v=11">
-  <script src="/theme.js?v=11"></script>
+  <link rel="stylesheet" href="/styles.css?v=13">
+  <script src="/theme.js?v=13"></script>
+  <script src="/towns.js?v=13" defer></script>
 </head>
 <body>
   <header class="top">
-    <a class="brand" href="/" aria-label="{{site}} home">
-      {{logo}}
-    </a>
+    <div class="brand-wrap">
+      <a class="brand" href="/" id="brand" aria-label="{{site}}: choose a town" aria-haspopup="true" aria-expanded="false" aria-controls="town-menu">
+        {{logo}}
+        <svg class="brand-caret" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </a>
+      {{townMenu}}
+    </div>
     <a class="back" href="/">← Back to the feed</a>
   </header>
 

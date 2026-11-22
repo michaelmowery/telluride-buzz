@@ -152,7 +152,7 @@ function serveTemplate(req, res, file, ext, st, town) {
   const key = `${town.id}:${file}`;
   let c = templateCache.get(key);
   if (!c || c.mtime !== st.mtimeMs) {
-    const body = Buffer.from(renderTemplate(fs.readFileSync(file, 'utf8'), ext, town));
+    const body = Buffer.from(renderTemplate(fs.readFileSync(file, 'utf8'), ext, town, towns));
     c = { mtime: st.mtimeMs, body, etag: `"${crypto.createHash('sha1').update(body).digest('base64url').slice(0, 16)}"` };
     templateCache.set(key, c);
   }

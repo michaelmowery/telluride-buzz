@@ -1,6 +1,8 @@
 {
   "id": "telluride",
   "name": "Telluride",
+  "state": "CO",
+  "url": "https://telluride.buzz",
   "default": true,
   "brand": {
     "siteName": "Telluride.Buzz",
@@ -15,7 +17,8 @@
       ["San Miguel County", "Emergency alerts", "Every 5 min"],
       ["San Miguel County", "County news", "Every 15 min"],
       ["Town of Telluride", "Town news and the community calendar", "Every 15 to 60 min"],
-      ["KOTO Community Radio", "Local news", "Every 15 min"]
+      ["KOTO Community Radio", "Local news", "Every 15 min"],
+      ["Meander.me", "Telluride stories from the meander.me blog, tagged for Telluride.Buzz", "Every 15 min"]
     ]
   },
   "hostnames": ["telluride.buzz", "www.telluride.buzz", "localhost"],
@@ -43,18 +46,28 @@
     "label": "Telluride Ski Resort"
   },
 
+  "meander": {
+    "label": "Meander.me",
+    "api": ["http://strapi:1337", "https://cms.meander.me"],
+    "site": "https://meander.me",
+    "tags": ["telluride-buzz", "telluridebuzz"],
+    "tagName": "telluride.buzz",
+    "category": "news",
+    "everyMin": 15
+  },
+
   "feeds": [
     {
       "id": "town-news",
       "label": "Town of Telluride",
-      "url": "https://telluride-co.gov/RSSFeed.aspx?ModID=1&CID=All-newsflash.xml",
+      "url": ["https://www.telluride-co.gov/RSSFeed.aspx?ModID=1&CID=All-newsflash.xml", "https://telluride-co.gov/RSSFeed.aspx?ModID=1&CID=All-newsflash.xml"],
       "category": "town",
       "everyMin": 15
     },
     {
       "id": "town-calendar",
       "label": "Town of Telluride",
-      "url": "https://telluride-co.gov/RSSFeed.aspx?ModID=58&CID=All-calendar.xml",
+      "url": ["https://www.telluride-co.gov/RSSFeed.aspx?ModID=58&CID=All-calendar.xml", "https://telluride-co.gov/RSSFeed.aspx?ModID=58&CID=All-calendar.xml"],
       "category": "events",
       "everyMin": 60
     },

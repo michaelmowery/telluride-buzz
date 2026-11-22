@@ -1,6 +1,8 @@
 {
   "id": "durango",
   "name": "Durango",
+  "state": "CO",
+  "url": "https://durango.thetown.buzz",
   "hostnames": ["durango.thetown.buzz", "durango.localhost"],
   "timezone": "America/Denver",
   "location": { "lat": 37.2753, "lon": -107.8801 },

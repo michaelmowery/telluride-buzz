@@ -9,4 +9,8 @@
   var m = document.querySelector('meta[name="theme-color"]');
   if (m) m.content = THEMES[t];
   window.BUZZ_THEMES = THEMES;
+  // Home screen sections this device chose to hide (Preferences).
+  var hide = [];
+  try { hide = JSON.parse(localStorage.getItem('buzz-hide') || '[]'); } catch (e) { /* ignore */ }
+  document.documentElement.dataset.hide = Array.isArray(hide) ? hide.join(' ') : '';
 })();

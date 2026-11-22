@@ -56,7 +56,25 @@ button { font: inherit; color: inherit; }
   background: var(--forest);
   color: #f6efe2;
 }
-.brand { display: block; line-height: 0; }
+.brand { display: flex; align-items: center; gap: 4px; line-height: 0; text-decoration: none; }
+.brand-wrap { position: relative; }
+.brand-caret { fill: none; stroke: #f6efe2; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; opacity: .75; transition: transform .15s; }
+.brand[aria-expanded="true"] .brand-caret { transform: rotate(180deg); }
+.brand:focus-visible { outline: 3px solid var(--amber); outline-offset: 4px; border-radius: 6px; }
+.town-menu { position: absolute; top: calc(100% + 10px); left: -6px; z-index: 20; width: min(300px, calc(100vw - 20px));
+  background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .18); padding: 8px; }
+.town-menu[hidden] { display: none; }
+.town-menu-title { margin: 4px 8px 8px; font: 600 12px var(--sans, inherit); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.town-menu ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.town-opt { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 10px; text-decoration: none; }
+.town-opt:hover, .town-opt:focus-visible { background: var(--cream); outline: none; }
+.town-opt[aria-current] { background: var(--cream); }
+.town-logo { flex: none; background: var(--forest); border-radius: 8px; padding: 6px 8px; line-height: 0; }
+.logo-sm { height: 34px; }
+.town-txt { display: grid; gap: 2px; line-height: 1.25; }
+.town-txt strong { font-weight: 600; }
+.town-txt small { color: var(--ink-2); font-size: 12.5px; }
 .logo { height: 48px; width: auto; display: block; }
 .logo-name { font: 700 70px var(--slab); fill: #f6efe2; }
 .logo-dot { fill: #5aa3d6; }
@@ -378,3 +396,23 @@ html[data-palette="columbine"] {
     --amber-soft: #2f2640; --forest-2: #b29ad9;
   }
 }
+
+/* ---------- hidden sections (Preferences) ---------- */
+html[data-hide~="weather"] [data-show="weather"],
+html[data-hide~="roads"] [data-show="roads"],
+html[data-hide~="lifts"] [data-show="lifts"],
+html[data-hide~="events"] [data-show="events"],
+html[data-hide~="push"] [data-show="push"],
+html[data-hide~="feed"] [data-show="feed"] { display: none !important; }
+html[data-hide~="weather"][data-hide~="roads"][data-hide~="lifts"][data-hide~="events"] .tiles { display: none; }
+.toggles { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
+.toggle { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; cursor: pointer; }
+.toggle:first-child { border-top: 0; }
+.toggle span { flex: 1; }
+.toggle span small { display: block; color: var(--ink-2); font-size: 12.5px; }
+.switch { flex: none; position: relative; width: 44px; height: 26px; border-radius: 13px; background: var(--line); transition: background .15s; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.toggle[aria-checked="true"] .switch { background: var(--forest-2); }
+@media (prefers-color-scheme: dark) { .toggle[aria-checked="true"] .switch { background: var(--amber); } }
+.toggle[aria-checked="true"] .switch::after { transform: translateX(18px); }
+.toggle:focus-visible { outline: 3px solid var(--amber); outline-offset: -3px; }

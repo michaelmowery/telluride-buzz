@@ -12,7 +12,7 @@ const towns = fs.readdirSync(path.join(root, 'config')).filter((f) => f.endsWith
 
 test('every templated file fills every placeholder for every town', () => {
   for (const t of towns) for (const f of ['index.html', 'about.html', 'manifest.webmanifest', 'sw.js']) {
-    const out = renderTemplate(page(f), path.extname(f), t);
+    const out = renderTemplate(page(f), path.extname(f), t, towns);
     assert.ok(!/\{\{\w+\}\}/.test(out), `${t.id} ${f} has an unfilled placeholder`);
     if (f === 'manifest.webmanifest') JSON.parse(out);
   }
@@ -34,4 +34,14 @@ test('exactly one default town, and hostnames never overlap', () => {
   assert.deepEqual(towns.filter((t) => t.default).map((t) => t.id), ['telluride']);
   const all = towns.flatMap((t) => t.hostnames);
   assert.equal(new Set(all).size, all.length);
+});
+
+test('logo opens a town picker listing every town in its own logo', () => {
+  const tel = renderTemplate(page('index.html'), '.html', cfg('telluride'), towns);
+  assert.match(tel, /id="town-menu"/);
+  assert.match(tel, /href="https:\/\/durango\.thetown\.buzz"/);
+  assert.match(tel, /href="\/" aria-current="page"/);
+  const menu = tel.slice(tel.indexOf('id="town-menu"'));
+  assert.match(menu, />telluride<\/text>[\s\S]*?>buzz<\/text>/);
+  assert.match(menu, />durango<\/text>[\s\S]*?>thetown<\/text>/);
 });
