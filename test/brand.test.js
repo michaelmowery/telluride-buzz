@@ -22,7 +22,8 @@ test('Telluride keeps its own logo and name; Durango uses the thetown logo', () 
   const tel = renderTemplate(page('index.html'), '.html', cfg('telluride'));
   assert.match(tel, /<title>Telluride\.Buzz<\/title>/);
   assert.match(tel, />telluride<\/text>/);
-  assert.ok(!tel.includes('thetown'));
+  assert.ok(!/>thetown<\/text>/.test(tel), 'Telluride logo must not use the thetown style');
+  assert.match(tel, /href="https:\/\/thetown\.buzz"/, 'town menu links to thetown.buzz');
   const dur = renderTemplate(page('index.html'), '.html', cfg('durango'));
   assert.match(dur, /<title>Durango Buzz<\/title>/);
   assert.match(dur, />durango<\/text>/);

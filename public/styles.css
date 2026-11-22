@@ -72,6 +72,10 @@ button { font: inherit; color: inherit; }
 .town-opt[aria-current] { background: var(--cream); }
 .town-logo { flex: none; background: var(--forest); border-radius: 8px; padding: 6px 8px; line-height: 0; }
 .logo-sm { height: 34px; }
+.town-all { display: block; margin: 6px 0 0; padding: 10px 8px 4px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--ink-2); text-decoration: none; }
+.town-all strong { color: var(--forest-2); font-weight: 600; }
+@media (prefers-color-scheme: dark) { .town-all strong { color: var(--amber); } }
+.town-all:hover strong, .town-all:focus-visible strong { text-decoration: underline; }
 .town-txt { display: grid; gap: 2px; line-height: 1.25; }
 .town-txt strong { font-weight: 600; }
 .town-txt small { color: var(--ink-2); font-size: 12.5px; }
@@ -416,6 +420,43 @@ html[data-hide~="weather"][data-hide~="roads"][data-hide~="lifts"][data-hide~="e
 @media (prefers-color-scheme: dark) { .toggle[aria-checked="true"] .switch { background: var(--amber); } }
 .toggle[aria-checked="true"] .switch::after { transform: translateX(18px); }
 .toggle:focus-visible { outline: 3px solid var(--amber); outline-offset: -3px; }
+
+/* ---------- thetown.buzz home (hub.html) ---------- */
+.hub main { max-width: 860px; }
+.hub-hero { padding: 22px 0 6px; }
+.hub-hero h1 { font: 700 clamp(28px, 6vw, 42px)/1.12 var(--slab); margin: 0 0 10px; color: var(--ink); }
+.hub-hero p { font-size: 17px; color: var(--ink-2); margin: 0; max-width: 560px; }
+.hub-h2 { font: 700 13px var(--slab); text-transform: uppercase; letter-spacing: .8px; color: var(--forest-2); margin: 26px 0 10px; }
+@media (prefers-color-scheme: dark) { .hub-h2 { color: var(--amber); } }
+.hub-towns { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+@media (min-width: 640px) { .hub-towns { grid-template-columns: 1fr 1fr; } }
+.hub-town { display: flex; flex-direction: column; height: 100%; text-decoration: none; background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; transition: border-color .15s, transform .1s; }
+.hub-town:hover { border-color: var(--amber); }
+.hub-town:active { transform: scale(.99); }
+.hub-town:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+.hub-town-logo { background: var(--forest); padding: 14px 16px; line-height: 0; }
+.hub-town-body { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px 14px; flex: 1; }
+.hub-town-body strong { font: 700 18px var(--slab); }
+.hub-live { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.hub-live li { font-size: 13px; background: var(--cream); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; }
+.hub-live li b { font-weight: 700; }
+.hub-live .hub-live-alert { background: var(--rust-soft); border-color: transparent; color: var(--rust); }
+@media (prefers-color-scheme: dark) { .hub-live .hub-live-alert { color: #f2b6a6; } }
+.hub-live-none { margin: 0; font-size: 13px; color: var(--ink-2); }
+.hub-town-go { margin-top: auto; font-weight: 600; font-size: 14.5px; color: var(--forest-2); }
+@media (prefers-color-scheme: dark) { .hub-town-go { color: var(--amber); } }
+.hub-town-go > span::after { content: " →"; }
+.hub-town-go small { display: block; font-weight: 400; font-size: 12.5px; color: var(--ink-2); }
+.hub-how { display: grid; gap: 14px; margin: 30px 0 8px; }
+@media (min-width: 640px) { .hub-how { grid-template-columns: repeat(3, 1fr); } }
+.hub-how h3 { font: 700 15px var(--slab); margin: 0 0 4px; }
+.hub-how p { margin: 0; font-size: 14px; color: var(--ink-2); }
+.hub-ask { margin: 26px 0 10px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+.hub-ask h2 { font: 700 20px var(--slab); margin: 0 0 6px; }
+.hub-ask p { margin: 0 0 14px; color: var(--ink-2); font-size: 14.5px; }
+.hub-ask .push-btn { display: inline-block; text-decoration: none; padding: 10px 18px; font-size: 14.5px; }
+.hub .foot { max-width: 860px; }
 
 /* ---------- Lifts & Snow: which mountain ---------- */
 .mountain { font-size: 12.5px; font-weight: 600; color: var(--ink-2); margin: -2px 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

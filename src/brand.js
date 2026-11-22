@@ -49,6 +49,7 @@ export function townMenu(town, towns) {
       <ul>
         ${rows}
       </ul>
+      <a class="town-all" href="https://thetown.buzz">See all towns at <strong>thetown.buzz</strong></a>
     </nav>`;
 }
 
