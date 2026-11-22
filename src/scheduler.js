@@ -5,9 +5,10 @@ import { cdotJobs } from './sources/cdot.js';
 import { feedJobs } from './sources/feeds.js';
 import { liftsJobs } from './sources/lifts.js';
 import { meanderJobs } from './sources/meander.js';
+import { resortAlertsJobs } from './sources/resort-alerts.js';
 
 export function jobsFor(town) {
-  return [...nwsJobs(town), ...cdotJobs(town), ...liftsJobs(town), ...feedJobs(town), ...meanderJobs(town)];
+  return [...nwsJobs(town), ...cdotJobs(town), ...liftsJobs(town), ...feedJobs(town), ...meanderJobs(town), ...resortAlertsJobs(town)];
 }
 
 export function startScheduler(db, towns, { log = console, afterRun = null } = {}) {
