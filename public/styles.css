@@ -527,8 +527,8 @@ a.prefs-btn { text-decoration: none; }
 .side-title { display: none; }
 @media (min-width: 1100px) {
   main {
-    max-width: 1640px; padding: 20px 32px 8px;
-    display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 30%); column-gap: 32px;
+    max-width: 1400px; padding: 20px 32px 8px;
+    display: grid; grid-template-columns: minmax(0, 1fr) 380px; column-gap: 40px;
     grid-template-areas: "alerts alerts" "tiles tiles" "head push" "feed push" "feed res";
     grid-template-rows: auto auto auto auto 1fr;
     align-items: start;
@@ -537,6 +537,9 @@ a.prefs-btn { text-decoration: none; }
   .tiles { grid-area: tiles; gap: 14px; }
   .tile { min-height: 180px; padding: 14px 16px; }
   .tile-body { font-size: 15px; }
+  .tile-src { left: 16px; }
+  .tile .stats { max-width: 260px; }
+  .feed-head .tabs { margin-right: 0; }
   .feed-wrap { display: contents; }
   .feed-head { grid-area: head; margin: 22px 0 6px; }
   .tab#tab-resources { display: none; }
@@ -552,6 +555,6 @@ a.prefs-btn { text-decoration: none; }
   .push:not([hidden]) ~ .feed-wrap .side-title { margin-top: 0; }
   html[data-hide~="push"] .push ~ .feed-wrap .side-title { margin-top: 22px; }
   .res-subtabs { flex-wrap: wrap; overflow: visible; }
-  .foot { max-width: 1640px; padding: 0 32px; }
+  .foot { max-width: 1400px; padding: 0 32px; }
   .foot .disclaimer, .foot .mission, .foot .fine { max-width: 1100px; }
 }
