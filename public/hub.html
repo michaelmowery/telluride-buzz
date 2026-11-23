@@ -21,8 +21,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/styles.css?v=17">
-  <script src="/theme.js?v=15"></script>
+  <link rel="stylesheet" href="/styles.css?v=33">
+  <script src="/theme.js?v=33"></script>
+  <script src="/towns.js?v=33" defer></script>
 </head>
 <body class="hub">
   <header class="top">
@@ -38,9 +39,9 @@
 
     <section aria-labelledby="hub-towns-title">
       <h2 class="hub-h2" id="hub-towns-title">Pick your town</h2>
-      <ul class="hub-towns">
+      <input type="search" class="town-search hub-search" data-town-search placeholder="Search towns or states" aria-label="Search towns" autocomplete="off" hidden>
       {{towns}}
-      </ul>
+      <p class="town-none" data-none hidden>No towns match. <a href="mailto:{{feedbackEmail}}?subject={{feedbackSubject}}">Suggest your town</a></p>
     </section>
 
     <section class="hub-how" aria-label="How it works">

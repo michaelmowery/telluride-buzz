@@ -5,7 +5,7 @@
 // from the same database the town pages use. Town sites stay on their own
 // addresses (telluride.buzz, durango.thetown.buzz); thetown.buzz/<town> redirects
 // there, per the subdomain-per-town decision (2026-11-21).
-import { logoSvg, townUrl } from './brand.js';
+import { groupByState, logoSvg, townSearchText, townUrl } from './brand.js';
 
 export const HUB_HOSTS = new Set(['thetown.buzz', 'www.thetown.buzz', 'thetown.localhost']);
 
@@ -38,7 +38,7 @@ function townCard(t, snap) {
   const live = snap.length
     ? `<ul class="hub-live">${snap.map((b) => `<li class="hub-live-${b.k}">${b.html}</li>`).join('')}</ul>`
     : '<p class="hub-live-none">Live data loading</p>';
-  return `<li>
+  return `<li data-q="${esc(townSearchText(t))}">
         <a class="hub-town" href="${esc(townUrl(t))}">
           <span class="hub-town-logo">${logoSvg(t, { cls: 'logo', width: 150, height: 66 })}</span>
           <span class="hub-town-body">
@@ -56,7 +56,13 @@ export function renderHub(text, towns, snapFor) {
   const v = {
     logo: hubLogo({ cls: 'logo', width: 132, height: 58 }),
     townCount: String(list.length),
-    towns: list.map((t) => townCard(t, snapFor(t))).join('\n      '),
+    // Grouped by state (A-Z, towns A-Z in each); towns.js filters them with the search box.
+    towns: groupByState(list).map((g) => `<section class="hub-state" data-group>
+      <h3 class="hub-state-h">${esc(g.state)}</h3>
+      <ul class="hub-towns">
+      ${g.towns.map((t) => townCard(t, snapFor(t))).join('\n      ')}
+      </ul>
+      </section>`).join('\n      '),
     feedbackEmail: esc(list.find((t) => t.brand?.feedbackEmail)?.brand.feedbackEmail || 'telluridebuzz@gmail.com'),
     feedbackSubject: encodeURIComponent('Buzz for my town'),
   };

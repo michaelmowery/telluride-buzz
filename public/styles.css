@@ -67,6 +67,16 @@ button { font: inherit; color: inherit; }
 .town-menu[hidden] { display: none; }
 .town-menu-title { margin: 4px 8px 8px; font: 600 12px var(--sans, inherit); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
 .town-menu ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.town-menu .town-groups { max-height: min(60vh, 520px); overflow-y: auto; overscroll-behavior: contain; gap: 6px; }
+.town-state, .hub-state-h { margin: 6px 8px 2px; font: 600 11.5px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.town-search { display: block; width: calc(100% - 8px); margin: 0 4px 8px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--cream); color: var(--ink); font: 15px var(--sans); }
+.town-search:focus { outline: 2px solid var(--amber); outline-offset: 1px; }
+.town-search[hidden], [data-q][hidden], [data-group][hidden] { display: none !important; }
+.town-none { margin: 6px 8px; font-size: 14px; color: var(--ink-2); }
+.hub-search { width: 100%; margin: 0 0 14px; }
+.hub-state { margin: 0 0 18px; }
+.hub-state-h { margin: 0 0 8px 2px; font-size: 12.5px; }
 .town-opt { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 10px; text-decoration: none; }
 .town-opt:hover, .town-opt:focus-visible { background: var(--cream); outline: none; }
 .town-opt[aria-current] { background: var(--cream); }
