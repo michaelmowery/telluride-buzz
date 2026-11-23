@@ -8,7 +8,7 @@
 import crypto from 'node:crypto';
 import { adapterCatalog, itemSourcesOf, testSource } from './adapters.js';
 import { exportTown, loadTowns, normalizeSource, normalizeTown, starterSources } from './towns.js';
-import { sourceHealth, townColor } from './health.js';
+import { sourceHealth, townColor, FEED_NAMES } from './health.js';
 
 const COOKIE = 'buzz_admin';
 const SESSION_DAYS = 14;
@@ -101,7 +101,7 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
       case 'GET /towns':
         return ok({ towns: towns() });
       case 'GET /health':
-        return ok({ towns: healthBoard(), now: Date.now() });
+        return ok({ towns: healthBoard(), feeds: FEED_NAMES, now: Date.now() });
       case 'GET /export': {
         const t = findTown(url.searchParams.get('town'));
         if (!t) return bad('No such town', 404);

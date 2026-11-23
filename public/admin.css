@@ -87,3 +87,12 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: .85em; background
 }
 .inline-help { margin-left: .5rem; }
 .form-actions { margin-top: 1rem; }
+
+/* Filter bar on the health board and town pages. */
+.filters { display: flex; flex-wrap: wrap; gap: .5rem .75rem; align-items: flex-end; padding: .75rem 1rem; }
+.filters .filter { margin: 0; min-width: 9rem; flex: 0 1 auto; font-size: .8rem; }
+.filters .filter.grow { flex: 1 1 12rem; }
+.filters select, .filters input { padding: .4rem .5rem; }
+.filters > button { margin-bottom: .1rem; }
+.card .filters { border: 0; padding: 0 0 .5rem; margin: 0; background: none; }
+@media (max-width: 640px) { .filters .filter { flex: 1 1 45%; min-width: 0; } }
