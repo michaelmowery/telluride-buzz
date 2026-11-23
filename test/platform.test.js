@@ -298,8 +298,21 @@ test('town lookup: Nominatim results become town suggestions with state, slug an
   assert.equal(m.find((x) => x.state === 'ID').timezone, 'America/Los_Angeles', 'north Idaho is Pacific');
   assert.equal(m.find((x) => x.state === 'ID').id, 'coeur-d-alene');
   assert.equal(guessTimezone('AZ', 34, -111), 'America/Phoenix');
-  let asked = '';
-  const got = await geocodeTown('Ouray', 'CO', { fetchJsonImpl: async (url) => { asked = url; return sample; } });
-  assert.match(asked, /nominatim\.openstreetmap\.org\/search.*countrycodes=us.*q=Ouray%2C%20CO/);
+  // Open-Meteo answers first; "Fort Collins, CO" is split into name and state.
+  const meteo = { results: [
+    { name: 'Fort Collins', latitude: 40.5853, longitude: -105.0844, feature_code: 'PPLA2', country_code: 'US', admin1: 'Colorado', admin2: 'Larimer', timezone: 'America/Denver', population: 170000 },
+    { name: 'Fort Collins', latitude: 30, longitude: -90, feature_code: 'PPL', country_code: 'US', admin1: 'Louisiana', timezone: 'America/Chicago', population: 10 },
+  ] };
+  const asked = [];
+  let got = await geocodeTown('Fort Collins, CO', '', { fetchJsonImpl: async (url) => { asked.push(url); return meteo; } });
+  assert.equal(asked.length, 1);
+  assert.match(asked[0], /geocoding-api\.open-meteo\.com\/v1\/search.*countryCode=US.*name=Fort%20Collins/);
+  assert.deepEqual([got.length, got[0].name, got[0].state, got[0].id, got[0].lat, got[0].timezone], [1, 'Fort Collins', 'CO', 'fort-collins', 40.5853, 'America/Denver']);
+  // Open-Meteo down: Nominatim answers.
+  asked.length = 0;
+  got = await geocodeTown('Ouray', 'CO', { fetchJsonImpl: async (url) => { asked.push(url); if (/open-meteo/.test(url)) throw new Error('HTTP 503'); return sample; } });
+  assert.match(asked[1], /nominatim\.openstreetmap\.org\/search.*countrycodes=us.*q=Ouray%2C%20CO/);
   assert.equal(got[0].name, 'Ouray');
+  // Both down: one error naming both.
+  await assert.rejects(geocodeTown('Ouray', 'CO', { fetchJsonImpl: async () => { throw new Error('nope'); } }), /nope/);
 });
