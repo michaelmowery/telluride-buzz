@@ -753,11 +753,19 @@ async function allResourcesPage() {
   // import box below, preview, then import. No API call: copy and paste only.
   function claudeCard() {
     const box = h('div', { hidden: true });
+    // Its own town and category pickers, starting from the page filter (or the town
+    // with the most resources), so it works without touching the filters above.
+    const count = (id) => d.resources.filter((r) => r.townId === id).length;
+    const startTown = f.town || [...d.towns].sort((a, b) => count(b.id) - count(a.id))[0]?.id || '';
+    const townSel = h('select', { name: 'claude-town' }, ...d.towns.map((t) => h('option', { value: t.id, selected: t.id === startTown }, `${townName.get(t.id)} (${count(t.id)})`)));
+    const catSel = h('select', { name: 'claude-cat' }, h('option', { value: '' }, 'All categories'), ...d.categories.map((c) => h('option', { value: c.id, selected: c.id === f.cat }, c.label)));
+    const refresh = () => { if (!box.hidden) { box.hidden = true; btn.click(); } };
+    townSel.addEventListener('change', refresh);
+    catSel.addEventListener('change', refresh);
     const btn = h('button', { type: 'button', onclick: () => {
       if (!box.hidden) { box.hidden = true; btn.textContent = 'Update with Claude'; return; }
-      if (!f.town) { err.textContent = 'Pick a town first, so the prompt is about one town.'; return; }
       err.textContent = '';
-      const prompt = claudePrompt(f.town, f.cat);
+      const prompt = claudePrompt(townSel.value, catSel.value);
       const ta = h('textarea', { rows: 14, readonly: true, class: 'mono' }, prompt);
       const copied = h('span', { class: 'ok-msg small', role: 'status' });
       box.replaceChildren(
@@ -773,8 +781,9 @@ async function allResourcesPage() {
       btn.textContent = 'Hide prompt';
     } }, 'Update with Claude');
     return h('div', { class: 'card' },
-      h('div', { class: 'row spread' }, h('h2', {}, 'Update with Claude'), btn),
-      h('p', { class: 'muted small' }, 'Builds a research prompt for the town (and category) picked above, with the current entries included. Claude checks them against official sources, fixes and adds entries, and answers in the import format.'),
+      h('h2', {}, 'Update with Claude'),
+      h('p', { class: 'muted small' }, 'Pick a town and, if you like, one category. You get a research prompt with the current entries included. Claude checks them against official sources, fixes and adds entries, and answers in the import format.'),
+      h('div', { class: 'row claude-pick' }, h('label', { class: 'filter' }, 'Town', townSel), h('label', { class: 'filter' }, 'Category', catSel), btn),
       box);
   }
 
@@ -854,7 +863,7 @@ ${csv}
       h('span', {},
         f.town ? h('a', { class: 'button', href: `#new-resource/${f.town}/${f.cat || 'emergency'}` }, 'Add resource') : null, ' ',
         h('a', { class: 'button secondary', href: `/api/admin/resources/export${f.town ? `?town=${encodeURIComponent(f.town)}` : ''}` }, f.town ? 'Export CSV' : 'Export all as CSV'))),
-    h('p', { class: 'muted' }, `Phone numbers, offices and links shown on each town's Resources tab. Entries not checked in ${d.staleDays} days show in red.`, f.town ? null : ' Pick a town to add a resource.'),
+    h('p', { class: 'muted' }, `Phone numbers, offices and links shown on each town's Resources tab. Entries not checked in ${d.staleDays} days show in red.`, f.town ? null : ' Pick a town in the filter to add a resource.'),
     bar, err, claudeCard(), results,
     h('div', { class: 'card' }, h('h2', {}, 'Import from a spreadsheet'),
       h('p', { class: 'muted small' }, 'Export a CSV, edit it in Excel, Numbers or Google Sheets, then import it here. Rows with an id update that resource; rows without one are added. The town column says which town each row goes to', f.town ? `; blank means ${townName.get(f.town)}.` : '.', ' Category can be the id (medical) or the name (Medical). Nothing changes until you press Import.'),
