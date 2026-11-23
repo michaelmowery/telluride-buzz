@@ -68,16 +68,17 @@ $('#logout').addEventListener('click', async () => { await api('/logout', {}).ca
 let timer = null;
 async function route() {
   clearInterval(timer);
-  const [path, query = ''] = (location.hash.slice(1) || 'health').split('?');
+  const [path, query = ''] = (location.hash.slice(1) || 'feeds').split('?');
   const [page, a, b] = path.split('/').map(decodeURIComponent);
   try {
     await api('/me');
   } catch { return; }
   $('#login').hidden = true;
   $('#nav').hidden = false;
-  document.querySelectorAll('[data-nav]').forEach((n) => n.toggleAttribute('aria-current', n.dataset.nav === (page === 'health' ? 'health' : /resource/.test(page) ? 'resources' : 'towns')));
+  document.querySelectorAll('[data-nav]').forEach((n) => n.toggleAttribute('aria-current', n.dataset.nav === (page === 'feeds' || page === 'health' ? 'feeds' : /resource/.test(page) ? 'resources' : 'towns')));
   try {
-    if (page === 'health') { readFilters(query); await healthPage(); timer = setInterval(() => healthPage(true).catch(() => {}), 30e3); }
+    if (page === 'health') { location.replace(`#feeds${query ? `?${query}` : ''}`); return; } // old bookmarks
+    if (page === 'feeds') { readFilters(query); await healthPage(); timer = setInterval(() => healthPage(true).catch(() => {}), 30e3); }
     else if (page === 'towns') await townsPage();
     else if (page === 'new-town') await townPage(null);
     else if (page === 'town') await townPage(a);
@@ -87,7 +88,7 @@ async function route() {
     else if (page === 'resources') await resourcesPage(a);
     else if (page === 'resource') await resourcePage(a, b);
     else if (page === 'new-resource') await resourcePage(a, null, b);
-    else location.hash = 'health';
+    else location.hash = 'feeds';
   } catch (err) {
     if (err.message !== 'Sign in first') view.replaceChildren(h('div', { class: 'card' }, h('p', { class: 'error' }, err.message)));
   }
@@ -96,7 +97,7 @@ async function route() {
 window.addEventListener('hashchange', route);
 
 // ---------- filters ----------
-// Health board filters live in the address (#health?town=durango&feed=roads&status=problems)
+// Health board filters live in the address (#feeds?town=durango&feed=roads&status=problems)
 // so a filtered view can be bookmarked, and the last one is remembered on this device.
 const FILTER_KEYS = ['town', 'feed', 'status', 'q'];
 const STATUS_FILTERS = [['', 'Any status'], ['problems', 'Failing or needs a look'], ['red', 'Failing'], ['amber', 'Needs a look'], ['green', 'OK'], ['paused', 'Paused']];
@@ -120,7 +121,7 @@ function saveFilters() {
   const p = new URLSearchParams();
   for (const k of FILTER_KEYS) if (filters[k]) p.set(k, filters[k]);
   const qs = p.toString();
-  history.replaceState(null, '', `#health${qs ? `?${qs}` : ''}`); // no hashchange, so no re-route
+  history.replaceState(null, '', `#feeds${qs ? `?${qs}` : ''}`); // no hashchange, so no re-route
 }
 
 function matches(s, f, townName = '') {
@@ -171,7 +172,7 @@ async function healthPage(refresh = false) {
     const towns = healthData.towns.map((t) => ({ id: t.id, name: `${t.name}${t.state ? `, ${t.state}` : ''}` }));
     if (filters.town && !towns.some((t) => t.id === filters.town)) filters.town = '';
     view.replaceChildren(
-      h('div', { class: 'row spread' }, h('h1', {}, 'Source health'), h('span', { class: 'muted small', id: 'health-updated' })),
+      h('div', { class: 'row spread' }, h('h1', {}, 'Feeds'), h('span', { class: 'muted small', id: 'health-updated' })),
       filterBar(filters, { towns, feeds: feedList(all, healthData.feeds || {}), feedNames: healthData.feeds || {} }, () => { saveFilters(); renderHealth(); }),
       h('div', { id: 'health-results' }),
     );
