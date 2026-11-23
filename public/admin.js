@@ -320,8 +320,35 @@ function alertBox(msg) {
 }
 
 // ---------- towns ----------
+// Header message fields (text, style, last day), used by a town's Settings and the All towns page.
+const NOTICE_LEVELS = [['info', 'Note (blue dot)'], ['warn', 'Heads up (amber dot)'], ['urgent', 'Alert (red)']];
+function noticeFields(n, help) {
+  return h('div', {},
+    h('p', { class: 'muted small' }, help),
+    field('Message', h('input', { name: 'noticeText', maxlength: 280, value: n?.text || '', placeholder: 'Blank for none. Like: Town Hall is closed Friday for the holiday.' })),
+    h('div', { class: 'grid2' },
+      field('Style', h('select', { name: 'noticeLevel' }, ...NOTICE_LEVELS.map(([v, l]) => h('option', { value: v, selected: (n?.level || 'info') === v }, l)))),
+      field('Last day shown', h('input', { name: 'noticeUntil', type: 'date', value: n?.until || '' }), 'Optional. Blank keeps it up until you clear it.')));
+}
+
+function allTownsNotice(n) {
+  const msg = h('span', { class: 'ok-msg small', role: 'status' });
+  const f = h('form', {}, noticeFields(n, 'Shown on every town\'s pages, at the top beside the town picker, ahead of each town\'s own message.'),
+    h('div', { class: 'row' }, h('button', { type: 'submit' }, 'Save message'), msg));
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const v = Object.fromEntries(new FormData(f));
+    msg.textContent = '';
+    try {
+      const r = await api('/notice', { text: v.noticeText, level: v.noticeLevel, until: v.noticeUntil });
+      msg.textContent = r.notice ? 'Saved. It shows on every town now.' : 'Cleared.';
+    } catch (err) { msg.textContent = err.message; }
+  });
+  return h('div', { class: 'card' }, h('h2', {}, 'Message for every town'), f);
+}
+
 async function townsPage() {
-  const [{ towns }, { towns: health }] = await Promise.all([api('/towns'), api('/health')]);
+  const [{ towns }, { towns: health }, { notice }] = await Promise.all([api('/towns'), api('/health'), api('/notice')]);
   const color = Object.fromEntries(health.map((t) => [t.id, t.color]));
   view.replaceChildren(
     h('div', { class: 'row spread' }, h('h1', {}, 'Towns'), h('a', { class: 'button', href: '#new-town' }, 'Add a town')),
@@ -330,6 +357,7 @@ async function townsPage() {
       h('span', { class: 'grow' }, h('a', { href: `#town/${t.id}` }, h('strong', {}, `${t.name}${t.state ? `, ${t.state}` : ''}`)),
         h('div', { class: 'muted small' }, `${t.sources.length} sources · ${(t.hostnames || [])[0] || ''}`)),
       h('span', { class: `pill ${t.status}` }, t.status))))),
+    allTownsNotice(notice),
   );
 }
 
@@ -371,6 +399,9 @@ async function townPage(id) {
         h('option', { value: 'live', selected: t?.status === 'live' }, 'Live: listed everywhere'))),
     ),
     field('"Not affiliated with" line', h('input', { name: 'notAffiliated', value: b.notAffiliated || '', placeholder: 'the town, the county, CDOT or the National Weather Service' }), 'About page. Leave blank for a general line.'),
+    !t ? null : h('fieldset', { class: 'sponsor-box' }, h('legend', {}, 'Header message'),
+      noticeFields(b.notice, 'This town only, shown at the top of every page beside the town picker. A message for every town is on the All towns page.'),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', name: 'preview', checked: b.preview !== false }), ' Show the "Preview: early testing" note')),
     h('button', { type: 'submit' }, t ? 'Save town' : 'Create town'),
     h('p', { class: 'error', id: 'town-error', role: 'alert' }),
   );
@@ -381,7 +412,8 @@ async function townPage(id) {
       id: v.id, name: v.name, state: v.state, timezone: v.timezone, status: v.status,
       location: { lat: v.lat, lon: v.lon },
       hostnames: v.hostnames.split(/\s+/).filter(Boolean),
-      brand: { siteName: v.siteName, logo: v.logo, feedbackEmail: v.feedbackEmail, notAffiliated: v.notAffiliated },
+      brand: { siteName: v.siteName, logo: v.logo, feedbackEmail: v.feedbackEmail, notAffiliated: v.notAffiliated,
+        ...(t ? { notice: { text: v.noticeText, level: v.noticeLevel, until: v.noticeUntil }, preview: v.preview === 'on' } : {}) },
     };
     if (t && t.hostnames?.join('\n') !== v.hostnames.trim()) town.url = '';
     try {

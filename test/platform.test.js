@@ -351,3 +351,40 @@ test('admin: Create town with Claude\'s answer saves its sources and starter res
   assert.equal(fc.resources.errors.length, 1);
   assert.deepEqual(db.listResources('fortcollins').map((x) => x.name).sort(), ['City Hall', 'Emergency']);
 });
+
+test('header messages: every-town message, town message and the preview note', async () => {
+  const { normalizeNotice, noticesFor, renderNotices } = await import('../src/notice.js');
+  assert.deepEqual(normalizeNotice({ text: '  ', level: 'warn' }), { notice: null });
+  assert.deepEqual(normalizeNotice({ text: 'Town Hall closed Friday', level: 'nope', until: '2026-11-27' }), { notice: { text: 'Town Hall closed Friday', level: 'info', until: '2026-11-27' } });
+  assert.match(normalizeNotice({ text: 'x'.repeat(300) }).error, /280/);
+  assert.match(normalizeNotice({ text: 'x', until: 'Friday' }).error, /date/);
+  const town = { id: 'durango', name: 'Durango', timezone: 'America/Denver', brand: { siteName: 'Durango Buzz', notice: { text: 'Main Ave closed <Sat>', level: 'warn', until: '2026-11-28' } } };
+  const now = Date.parse('2026-11-23T20:00:00Z');
+  let list = noticesFor(town, { text: 'Snowstorm tonight', level: 'urgent' }, now);
+  assert.deepEqual(list.map((n) => n.level), ['urgent', 'warn', 'preview']);
+  assert.match(list[2].text, /Durango Buzz is in early testing/);
+  list = noticesFor({ ...town, brand: { ...town.brand, preview: false } }, { text: 'Old', until: '2026-11-01' }, now);
+  assert.deepEqual(list.map((n) => n.level), ['warn']); // expired every-town message, preview off
+  const html = renderNotices(list);
+  assert.match(html, /class="note note-warn"/);
+  assert.match(html, /Main Ave closed &lt;Sat&gt;/);
+  assert.equal(renderNotices([]), '');
+
+  const db = openDb(':memory:');
+  importConfigs(db, configs);
+  const admin = createAdmin({ db, password: 'correct horse battery', log: quiet });
+  const login = fakeReq('POST', '/api/admin/login', { body: { password: 'correct horse battery' } });
+  const cookie = (await admin.handle(login.req, login.url, login.read)).headers['Set-Cookie'].split(';')[0];
+  const call = async (method, p, body) => { const r = fakeReq(method, p, { cookie, body }); return admin.handle(r.req, r.url, r.read); };
+  let r = await call('POST', '/api/admin/notice', { text: 'Snowstorm tonight', level: 'urgent' });
+  assert.equal(r.status, 200);
+  assert.equal((await call('GET', '/api/admin/notice')).body.notice.text, 'Snowstorm tonight');
+  r = await call('POST', '/api/admin/notice', { text: '' });
+  assert.equal(r.body.notice, null);
+  const id = (await call('GET', '/api/admin/towns')).body.towns[0].id;
+  r = await call('POST', '/api/admin/town', { town: { id, brand: { notice: { text: 'Road work', level: 'warn' }, preview: false } } });
+  assert.equal(r.status, 200, r.body.error);
+  assert.deepEqual([r.body.town.brand.notice.text, r.body.town.brand.preview], ['Road work', false]);
+  r = await call('POST', '/api/admin/town', { town: { id, brand: { notice: { text: '' }, preview: true } } });
+  assert.deepEqual([r.body.town.brand.notice, r.body.town.brand.preview], [undefined, undefined]);
+});

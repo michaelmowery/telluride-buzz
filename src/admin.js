@@ -11,6 +11,7 @@ import { exportTown, loadTowns, normalizeSource, normalizeTown, starterSources }
 import { sourceHealth, townColor, FEED_NAMES } from './health.js';
 import { geocodeTown } from './geocode.js';
 import { planClaudeSources } from './claude-town.js';
+import { ALL_TOWNS_KEY, normalizeNotice } from './notice.js';
 import { normalizeResource, planCsvImport, resourcesToCsv, RESOURCE_CATEGORIES, STALE_DAYS, sponsorState, townDay } from './resources.js';
 import { townUrl } from './brand.js';
 
@@ -132,6 +133,11 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
           return bad(`The map lookup didn't answer (${e.message}). Try again, or use Edit the other fields and fill the point in by hand.`, 502);
         }
       }
+      case 'GET /notice': {
+        let notice = null;
+        try { notice = JSON.parse(db.getMeta(ALL_TOWNS_KEY) || 'null'); } catch { /* none */ }
+        return ok({ notice });
+      }
       case 'GET /adapters':
         return ok({ adapters: adapterCatalog() });
       case 'GET /towns':
@@ -194,6 +200,14 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
         }
         changed(`${body.create ? 'added' : 'saved'} town ${town.id} (${town.status})`);
         return ok({ town: findTown(town.id), fromClaude });
+      }
+      case 'POST /notice': {
+        // The header message for every town (a town's own is in its Settings).
+        const { notice, error } = normalizeNotice(body);
+        if (error) return bad(error);
+        db.setMeta(ALL_TOWNS_KEY, JSON.stringify(notice));
+        changed(notice ? 'set the message for every town' : 'cleared the message for every town');
+        return ok({ notice });
       }
       case 'POST /town/delete': {
         const t = all.find((x) => x.id === body.town);

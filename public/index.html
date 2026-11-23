@@ -15,9 +15,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/styles.css?v=29">
-  <script src="/theme.js?v=29"></script>
-  <script src="/towns.js?v=29" defer></script>
+  <link rel="stylesheet" href="/styles.css?v=30">
+  <script src="/theme.js?v=30"></script>
+  <script src="/towns.js?v=30" defer></script>
 </head>
 <body>
   <header class="top">
@@ -28,6 +28,7 @@
       </a>
       {{townMenu}}
     </div>
+    {{notices}}
     <div class="top-right">
       <div class="status" id="status" aria-live="polite"><span class="pulse"></span><span id="status-text">Loading…</span></div>
       <a class="prefs-btn" href="#essentials" aria-label="Essentials: emergency numbers and local services" title="Essentials"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg></a>
@@ -35,7 +36,6 @@
     </div>
   </header>
 
-  <div class="preview" role="note"><strong>Preview:</strong> {{site}} is in early testing. Information may be wrong or out of date, so check the original source before you rely on it.</div>
 
   <main id="app">
     <section id="alerts" class="alerts" aria-label="Active alerts"></section>
@@ -135,6 +135,6 @@
     <p class="fine">Every post links to its source. <a href="#essentials">Essentials</a> · <a href="/about">About &amp; sources</a> · <a href="#" id="prefs-link">Preferences</a> · Not for emergencies: call 911.</p>
   </footer>
 
-  <script src="/app.js?v=29" type="module"></script>
+  <script src="/app.js?v=30" type="module"></script>
 </body>
 </html>

@@ -75,3 +75,13 @@
     fromHash();
   }
 })();
+
+// Header messages: one open at a time, and a tap elsewhere (or Escape) closes it.
+(() => {
+  const notes = () => document.querySelectorAll('.note[open]');
+  document.addEventListener('toggle', (e) => {
+    if (e.target.matches?.('.note') && e.target.open) notes().forEach((n) => { if (n !== e.target) n.open = false; });
+  }, true);
+  document.addEventListener('click', (e) => { if (!e.target.closest('.note')) notes().forEach((n) => { n.open = false; }); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') notes().forEach((n) => { n.open = false; }); });
+})();

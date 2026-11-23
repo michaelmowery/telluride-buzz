@@ -3,6 +3,7 @@
 // admin can export a town back to JSON for safekeeping).
 import { ADAPTERS, newKey, validateSource } from './adapters.js';
 import { LOGO_STYLES } from './brand.js';
+import { normalizeNotice } from './notice.js';
 
 const SOURCE_BLOCKS = ['nws', 'cdot', 'lifts', 'resortAlerts', 'meander', 'feeds'];
 
@@ -129,6 +130,12 @@ export function normalizeTown(input, others = []) {
   if (t.brand.feedbackEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t.brand.feedbackEmail)) return { error: 'Feedback email is not an email address.' };
   if (!t.brand.feedbackEmail) delete t.brand.feedbackEmail;
   if (!t.brand.notAffiliated) delete t.brand.notAffiliated;
+  if (t.brand.notice !== undefined) {
+    const { notice, error } = normalizeNotice(t.brand.notice);
+    if (error) return { error: `Site message: ${error}` };
+    if (notice) t.brand.notice = notice; else delete t.brand.notice;
+  }
+  if (t.brand.preview === false || t.brand.preview === 'false') t.brand.preview = false; else delete t.brand.preview;
   if (!Array.isArray(t.brand.aboutSources) || !t.brand.aboutSources.length) delete t.brand.aboutSources;
   t.status = t.status === 'live' ? 'live' : 'draft';
   if (t.default !== true) delete t.default;
