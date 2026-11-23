@@ -281,9 +281,7 @@ function renderHealth() {
       filtered ? h('span', { class: 'muted' }, `Showing ${shown.length} of ${total} sources`) : null),
     h('p', { class: 'muted small' }, 'Red means a source has failed for over an hour. Amber means failing for under an hour, overdue, or waiting for its first run.'),
     ...visible.map((t) => h('div', { class: 'card' },
-      h('div', { class: 'town-head' }, dot(t.color), h('h3', {}, h('a', { href: `#town/${t.id}` }, `${t.name}${t.state ? `, ${t.state}` : ''}`)),
-        h('span', { class: `pill ${t.status}` }, t.status), h('a', { class: 'small', href: t.url, target: '_blank', rel: 'noopener' }, t.url.replace(/^https?:\/\//, ''))),
-      t.shown.length ? sourceTable(t, t.shown, true) : h('p', { class: 'muted' }, t.sources.length ? 'No sources match the filters.' : 'No sources yet.'))),
+      t.shown.length ? sourceTable(t, t.shown) : h('p', { class: 'muted' }, t.sources.length ? 'No sources match the filters.' : 'No sources yet. Add a source above.'))),
     visible.length ? null : h('div', { class: 'card' }, h('p', { class: 'muted' }, 'No sources match the filters.')),
   ].filter(Boolean));
 }
@@ -393,23 +391,13 @@ async function townPage(id) {
     } catch (err) { $('#town-error').textContent = err.message; }
   });
 
-  const kids = [h('p', {}, h('a', { href: '#towns' }, '← Towns')),
-    h('div', { class: 'town-head' }, health ? dot(health.color) : null, h(t ? 'h2' : 'h1', {}, t ? 'Town settings' : 'Add a town'), t ? h('span', { class: `pill ${t.status}` }, t.status) : null)];
+  // Settings is only the town's own fields: its sources live on the Feeds tab and its
+  // listings on the Resources tab. A draft town also gets the going-live checklist.
+  const kids = t ? [] : [h('p', {}, h('a', { href: '#towns' }, '← All towns')), h('h1', {}, 'Add a town')];
   if (!t) kids.push(fillTownWithClaude(f));
   if (!t) kids.push(h('p', { class: 'muted' }, 'A new town starts as a draft with National Weather Service alerts and forecast already added (they only need the map point). Then add its roads, resort, town and news sources.'));
-  if (t) {
-    kids.push(
-      h('div', { class: 'card' },
-        h('div', { class: 'row spread' }, h('h2', {}, 'Sources'), h('a', { class: 'button', href: `#new-source/${t.id}` }, 'Add a source')),
-        health?.sources.length ? townSources(t, health.sources) : h('p', { class: 'muted' }, 'No sources yet.')),
-      h('div', { class: 'card' },
-        h('div', { class: 'row spread' }, h('h2', {}, 'Resources'), h('a', { class: 'button', href: `#resources/${t.id}` }, 'Edit resources')),
-        h('p', { class: 'muted' }, 'Emergency numbers, medical, town offices, transit, utilities and more, shown at ',
-          h('a', { href: `${siteOf(t)}/resources`, target: '_blank', rel: 'noopener' }, `${siteOf(t).replace(/^https?:\/\//, '')}/resources`), '.')),
-      h('div', { class: 'card' }, h('h2', {}, 'Going live'), goLiveSteps(t, health)),
-    );
-  }
-  kids.push(h('div', { class: 'card' }, h('h2', {}, t ? 'Town settings' : 'Town details'), f));
+  if (t && t.status === 'draft') kids.push(h('div', { class: 'card' }, h('h2', {}, 'Going live'), goLiveSteps(t, health)));
+  kids.push(h('div', { class: 'card' }, h('h2', {}, t ? 'Settings' : 'Town details'), f));
   if (t) {
     kids.push(h('div', { class: 'card' }, h('h2', {}, 'Backup and removal'),
       h('p', {}, h('a', { class: 'button secondary', href: `/api/admin/export?town=${encodeURIComponent(t.id)}` }, 'Download town as JSON'),
@@ -425,22 +413,7 @@ async function townPage(id) {
   view.replaceChildren(...kids);
 }
 
-// The town page's sources, with feed / status / search filters (kept per town for this visit).
-const townFilters = {};
 let feedNamesCache = null;
-function townSources(t, sources) {
-  const f = townFilters[t.id] ||= blankFilters();
-  const box = h('div');
-  const names = feedNamesCache || {};
-  const render = () => {
-    const rows = sources.filter((s) => matches(s, f));
-    box.replaceChildren(...[
-      isFiltered(f) ? h('p', { class: 'muted small' }, `Showing ${rows.length} of ${sources.length} sources`) : null,
-      rows.length ? sourceTable(t, rows) : h('p', { class: 'muted' }, 'No sources match the filters.')].filter(Boolean));
-  };
-  render();
-  return h('div', {}, sources.length > 3 ? filterBar(f, { towns: null, feeds: feedList(sources, names), feedNames: names }, render) : null, box);
-}
 
 function goLiveSteps(t, health) {
   const host = (t.hostnames || [])[0] || '';
@@ -542,7 +515,7 @@ async function sourcePage(townId, key) {
 
   async function remove() {
     if (!confirm(`Delete "${s.label}" from ${t.name}? Its posts disappear from the feed.`)) return;
-    try { await api('/source/delete', { town: t.id, key: s.key }); location.hash = `town/${t.id}`; } catch (e2) { err.textContent = e2.message; }
+    try { await api('/source/delete', { town: t.id, key: s.key }); location.hash = `feeds?town=${encodeURIComponent(t.id)}`; } catch (e2) { err.textContent = e2.message; }
   }
 
   f.addEventListener('submit', async (e) => {
@@ -550,12 +523,12 @@ async function sourcePage(townId, key) {
     err.textContent = '';
     try {
       await api('/source', { create: !s, town: t.id, source: collect() });
-      location.hash = `town/${t.id}`;
+      location.hash = `feeds?town=${encodeURIComponent(t.id)}`;
     } catch (e2) { err.textContent = e2.message; }
   });
 
   view.replaceChildren(...[
-    h('p', {}, h('a', { href: `#town/${t.id}` }, `← ${t.name}`)),
+    h('p', {}, h('a', { href: `#feeds?town=${encodeURIComponent(t.id)}` }, '← Feeds')),
     h('div', { class: 'town-head' }, health ? dot(health.color) : null, h('h1', {}, s ? s.label : `Add a source to ${t.name}`)),
     health?.error ? h('p', { class: 'error' }, `${health.note}: ${health.error}`) : (health ? h('p', { class: 'muted' }, `${health.note}. Last success ${ago(health.lastOk)}.`) : null),
     h('div', { class: 'card' }, f),
