@@ -443,6 +443,17 @@ test('roads: CDOT highways picked from the map point; tiles and disclaimer follo
   assert.equal(r.status, 200, r.body.error);
   assert.equal(r.body.roads, null);
   assert.equal(db.listSources('shiprock').some((s) => s.adapter === 'cdot'), false);
+
+  // Route editor: the highways CDOT lists near the town, with distances, to add.
+  let nr = await call('POST', '/api/admin/source/nearby-routes', { town: 'fortcollins', adapter: 'cdot' });
+  assert.deepEqual(nr.body.routes.map((x) => x.label), ['US-287', 'CO-14', 'I-25', 'CO-1']);
+  assert.ok(nr.body.routes[0].km < 1 && nr.body.routes[2].km > 5);
+  nr = await call('POST', '/api/admin/source/nearby-routes', { town: 'shiprock', adapter: 'cdot' });
+  assert.match(nr.body.error, /Colorado/);
+  nr = await call('POST', '/api/admin/source/nearby-routes', { town: 'fortcollins', adapter: 'rss' });
+  assert.match(nr.body.error, /no route list/);
+  nr = await call('GET', '/api/admin/adapters');
+  assert.equal(nr.body.adapters.find((a) => a.type === 'cdot').nearbyRoutes, true);
   assert.equal(r.body.town.timezone, 'America/Denver');
   r = await call('POST', '/api/admin/source/cdot-auto', { town: 'shiprock' });
   assert.match(r.body.error, /Colorado/);

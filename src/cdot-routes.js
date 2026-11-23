@@ -50,7 +50,7 @@ export function distanceKm(geometry, lat, lon) {
  * The highways near a point, closest first (interstates before US before state
  * routes when equally close), as CDOT source routes: [{ match: ['25'], label: 'I-25' }].
  */
-export function routesNear(features, { lat, lon }, { radiusKm = 15, max = 4 } = {}) {
+export function routesNear(features, { lat, lon }, { radiusKm = 15, max = 4, withKm = false } = {}) {
   const near = new Map(); // label -> { route, km }
   for (const f of features) {
     const r = routeLabel(nameOf(f));
@@ -63,14 +63,11 @@ export function routesNear(features, { lat, lon }, { radiusKm = 15, max = 4 } = 
   return [...near.values()]
     .sort((a, b) => Math.round(a.km) - Math.round(b.km) || a.r.rank - b.r.rank || a.km - b.km)
     .slice(0, max)
-    .map(({ r }) => ({ match: [r.num], label: r.label }));
+    .map(({ r, km }) => ({ match: [r.num], label: r.label, ...(withKm ? { km: Math.round(km * 10) / 10 } : {}) }));
 }
 
-/**
- * A ready-to-save CDOT source for a Colorado town, or { error } saying why not.
- * deps.json fetches (tests pass a fake); deps.cdotKey overrides CDOT_API_KEY.
- */
-export async function suggestCdotSource(town, deps = {}) {
+// Everything CDOT lists statewide (conditions, work zones, incidents), or { error }.
+async function cdotFeatures(town, deps) {
   if (String(town.state || '').toUpperCase() !== 'CO') return { error: 'CDOT roads are for Colorado towns.' };
   const apiKey = deps.cdotKey !== undefined ? deps.cdotKey : process.env.CDOT_API_KEY;
   if (!apiKey) return { error: 'The server has no CDOT API key.' };
@@ -83,6 +80,28 @@ export async function suggestCdotSource(town, deps = {}) {
     try { feats.push(...featuresOf(await get(`${BASE}/${ep}?apiKey=${encodeURIComponent(apiKey)}`, { timeoutMs: 12000 }))); } catch (e) { errs.push(`${ep}: ${e.message}`); }
   }
   if (!feats.length && errs.length) return { error: `Couldn't reach CDOT (${errs[0]}).` };
+  return { feats, point: { lat, lon } };
+}
+
+/**
+ * Highways CDOT lists within radiusKm of the town, closest first, with distance:
+ * { routes: [{ label: 'US-550', match: ['550'], km: 0.4 }] } or { error }.
+ * The admin's route editor offers these to add.
+ */
+export async function nearbyCdotRoutes(town, deps = {}, { radiusKm = 50, max = 12 } = {}) {
+  const { feats, point, error } = await cdotFeatures(town, deps);
+  if (error) return { error };
+  return { routes: routesNear(feats, point, { radiusKm, max, withKm: true }) };
+}
+
+/**
+ * A ready-to-save CDOT source for a Colorado town, or { error } saying why not.
+ * deps.json fetches (tests pass a fake); deps.cdotKey overrides CDOT_API_KEY.
+ */
+export async function suggestCdotSource(town, deps = {}) {
+  const { feats, point, error } = await cdotFeatures(town, deps);
+  if (error) return { error };
+  const { lat, lon } = point;
   let routes = routesNear(feats, { lat, lon });
   if (!routes.length) routes = routesNear(feats, { lat, lon }, { radiusKm: 35, max: 3 });
   if (!routes.length) return { error: 'CDOT lists no state highways near this map point.' };

@@ -10,6 +10,7 @@ import { sharedJson, sharedText } from './http.js';
 import { feedJobs } from './sources/feeds.js';
 import { nwsJobs } from './sources/nws.js';
 import { cdotJobs } from './sources/cdot.js';
+import { nearbyCdotRoutes } from './cdot-routes.js';
 import { liftsJobs } from './sources/lifts.js';
 import { resortAlertsJobs } from './sources/resort-alerts.js';
 import { meanderJobs } from './sources/meander.js';
@@ -115,13 +116,15 @@ export const ADAPTERS = {
     single: true,
     tile: 'roads',
     fields: [
-      { key: 'routes', label: 'Routes', type: 'json', required: true,
+      { key: 'routes', label: 'Routes', type: 'json', editor: 'routes', required: true,
         placeholder: '[{ "match": ["550"], "label": "US-550", "note": "Ouray to Red Mountain Pass" }]',
         help: 'The highways on the Roads tile, in order. "match" is the route number as CDOT writes it.' },
       { key: 'keyPlaces', label: 'Key places', type: 'list', help: 'Place names (passes, towns) that mark a nearby incident when the route number is missing. One per line.' },
     ],
     keyFor: () => 'cdot',
     itemSources: () => ['cdot-incidents', 'cdot-wzdx'],
+    // Highways near the town that the route editor offers to add (any state DOT can do the same).
+    nearbyRoutes: (town, deps) => nearbyCdotRoutes(town, deps),
     validate(settings) {
       if (!Array.isArray(settings.routes) || !settings.routes.length) return 'Add at least one route.';
       for (const r of settings.routes) if (!r?.label || !Array.isArray(r.match) || !r.match.length) return 'Each route needs a "label" and a "match" list.';
@@ -288,5 +291,13 @@ export async function testSource(town, source, deps = {}) {
 export function adapterCatalog() {
   return Object.entries(ADAPTERS).map(([type, a]) => ({
     type, name: a.name, description: a.description, defaultEvery: a.defaultEvery, single: !!a.single, tile: a.tile || null, fields: a.fields,
+    nearbyRoutes: !!a.nearbyRoutes,
   }));
+}
+
+/** Routes this adapter's data lists near the town: { routes: [{ label, match, km }] } or { error }. */
+export async function nearbyRoutes(type, town, deps = {}) {
+  const a = ADAPTERS[type];
+  if (!a?.nearbyRoutes) return { error: 'This source type has no route list.' };
+  return a.nearbyRoutes(town, deps);
 }

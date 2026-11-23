@@ -6,7 +6,7 @@
 // signed with the password, so it survives deploys and changing the password signs
 // everyone out. CSRF: the cookie is SameSite=Strict and every change is a JSON POST.
 import crypto from 'node:crypto';
-import { adapterCatalog, itemSourcesOf, testSource } from './adapters.js';
+import { adapterCatalog, itemSourcesOf, nearbyRoutes, testSource } from './adapters.js';
 import { exportTown, loadTowns, normalizeSource, normalizeTown, starterSources } from './towns.js';
 import { sourceHealth, townColor, FEED_NAMES } from './health.js';
 import { geocodeTown } from './geocode.js';
@@ -259,6 +259,13 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
         if (roads.error) return bad(`Couldn't add roads: ${roads.error}`);
         changed(`added CDOT roads to ${t.id}`);
         return ok({ roads });
+      }
+      case 'POST /source/nearby-routes': {
+        const t = all.find((x) => x.id === body.town);
+        if (!t) return bad('No such town', 404);
+        const r = await (deps.nearbyRoutes || nearbyRoutes)(String(body.adapter || ''), t, deps);
+        if (r.error) return bad(r.error);
+        return ok({ routes: r.routes });
       }
       case 'POST /source/test': {
         const t = all.find((x) => x.id === body.town);
