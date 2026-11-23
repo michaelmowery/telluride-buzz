@@ -9,7 +9,7 @@
 //   town's highways, the resort's page format), so they're listed to set up by hand.
 import { normalizeSource } from './towns.js';
 
-const NEEDS_CHECK = /\b(check|verify|unconfirmed|not confirmed|no (rss|feed|ical)|stale|may not|might|unsure|unclear|scrape|if available|look for)\b/i;
+const NEEDS_CHECK = /\b(check|checking|verify|unconfirmed|not confirmed|no (rss|feed|ical)|stale|may not|might|unsure|not sure|unclear|scrape|if available|look for)\b/i;
 const BY_HAND = { 'snow-report': 'Add a Lifts & Snow source for the resort.', 'resort-alerts': 'Add a resort alerts source for the resort.' };
 
 export function categoryGuess(x) {
@@ -21,21 +21,25 @@ export function categoryGuess(x) {
 }
 
 /**
- * @returns {{ sources: object[], skipped: {label, url, type, reason}[] }}
- *   sources are normalized and ready for db.saveSource; skipped need a person.
+ * @returns {{ sources: object[], picks: number[], skipped: {label, url, type, reason, index}[] }}
+ *   sources are normalized and ready for db.saveSource; picks[i] is the position in
+ *   `suggested` that sources[i] came from; skipped need a person.
  */
 export function planClaudeSources(suggested, town, existing = []) {
   const sources = [];
+  const picks = [];
   const skipped = [];
   const seen = new Set(existing.flatMap((s) => [].concat(s.settings?.url || [])).map((u) => String(u).toLowerCase()));
-  for (const x of (Array.isArray(suggested) ? suggested : []).slice(0, 40)) {
+  const list = (Array.isArray(suggested) ? suggested : []).slice(0, 40);
+  for (let index = 0; index < list.length; index++) {
+    const x = list[index];
     if (!x || typeof x !== 'object') continue;
     const label = String(x.label || '').trim().slice(0, 80) || 'Source';
     const url = String(x.url || '').trim();
     const type = String(x.type || 'other').trim().toLowerCase();
     const why = String(x.why || '').trim().slice(0, 240);
-    const skip = (reason) => skipped.push({ label, url, type, reason });
-    if (type === 'cdot' || /\b(dot|roads?|cotrip|nmroads|511)\b/i.test(type)) { skip(town.state === 'CO' ? 'Roads come from CDOT automatically (or Add CDOT roads on Feeds).' : town.state === 'NM' ? 'Roads come from NMRoads automatically (or Add NMRoads roads on Feeds).' : 'No roads feed for this state yet.'); continue; }
+    const skip = (reason) => skipped.push({ label, url, type, reason, index });
+    if (type === 'cdot' || /\b(dot|roads?|cotrip|nmroads|511)\b/i.test(type) || /\b(cotrip\.org|nmroads\.com|511\w*\.(org|com|gov))\b/i.test(url)) { skip(town.state === 'CO' ? 'Roads come from CDOT automatically (or Add CDOT roads on Feeds).' : town.state === 'NM' ? 'Roads come from NMRoads automatically (or Add NMRoads roads on Feeds).' : 'No roads feed for this state yet.'); continue; }
     if (BY_HAND[type]) { skip(BY_HAND[type]); continue; }
     if (!/^(https?|webcal):\/\/\S+$/i.test(url)) { skip('No usable web address.'); continue; }
     if (seen.has(url.toLowerCase())) { skip('Already added.'); continue; }
@@ -50,6 +54,7 @@ export function planClaudeSources(suggested, town, existing = []) {
     if (error) { skip(error); continue; }
     seen.add(url.toLowerCase());
     sources.push(source);
+    picks.push(index);
   }
-  return { sources, skipped };
+  return { sources, picks, skipped };
 }

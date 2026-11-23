@@ -444,6 +444,23 @@ test('roads: CDOT highways picked from the map point; tiles and disclaimer follo
   assert.match(r.body.roads.error, /NMRoads lists no highway/); // this fake feed has no NM events
   assert.equal(db.listSources('shiprock').some((s) => s.adapter === 'cdot'), false);
 
+  // Feeds tab, Find feeds with Claude: preview, then add the ticked ones; duplicates skipped.
+  const fromClaude = [
+    { label: 'Navajo Times', type: 'rss', url: 'https://navajotimes.com/feed/', why: 'Local news' },
+    { label: 'Shiprock events', type: 'ical', url: 'https://example.org/shiprock.ics', why: 'Community calendar, needs checking' },
+    { label: 'San Juan County news', type: 'other', url: 'https://www.sjcounty.net/news', why: 'County news page' },
+    { label: 'NMRoads', type: 'other', url: 'https://nmroads.com', why: 'Roads' },
+  ];
+  let fc2 = await call('POST', '/api/admin/source/from-claude', { town: 'shiprock', suggestedSources: fromClaude });
+  assert.deepEqual(fc2.body.sources.map((x) => [x.index, x.adapter, x.enabled]), [[0, 'rss', true], [1, 'ical', false], [2, 'rss', false]]);
+  assert.equal(fc2.body.skipped[0].index, 3);
+  assert.equal(db.listSources('shiprock').length, 2); // preview saves nothing (NWS only)
+  fc2 = await call('POST', '/api/admin/source/from-claude', { town: 'shiprock', suggestedSources: fromClaude, pick: [0, 2] });
+  assert.deepEqual(fc2.body.added.map((x) => [x.label, x.enabled]), [['Navajo Times', true], ['San Juan County news', false]]);
+  fc2 = await call('POST', '/api/admin/source/from-claude', { town: 'shiprock', suggestedSources: fromClaude });
+  assert.deepEqual(fc2.body.sources.map((x) => x.index), [1]);
+  assert.match(fc2.body.skipped.find((x) => x.index === 0).reason, /Already added/);
+
   // Route editor: the highways CDOT lists near the town, with distances, to add.
   let nr = await call('POST', '/api/admin/source/nearby-routes', { town: 'fortcollins', adapter: 'cdot' });
   assert.deepEqual(nr.body.routes.map((x) => x.label), ['US-287', 'CO-14', 'I-25', 'CO-1']);
