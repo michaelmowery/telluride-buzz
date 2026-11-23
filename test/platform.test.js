@@ -388,3 +388,16 @@ test('header messages: every-town message, town message and the preview note', a
   r = await call('POST', '/api/admin/town', { town: { id, brand: { notice: { text: '' }, preview: true } } });
   assert.deepEqual([r.body.town.brand.notice, r.body.town.brand.preview], [undefined, undefined]);
 });
+
+test('logo: long town names wrap to two lines or shrink so they never run off the edge', async () => {
+  const { logoSvg } = await import('../src/brand.js');
+  const names = (svg) => [...svg.matchAll(/<text[^>]*class="logo-name"[^>]*>([^<]*)</g)].map((m) => m[1]);
+  assert.deepEqual(names(logoSvg({ name: 'Telluride', brand: {} })), ['telluride']);
+  assert.doesNotMatch(logoSvg({ name: 'Telluride', brand: {} }), /scale\(/);
+  assert.deepEqual(names(logoSvg({ name: 'Fort Collins', brand: {} })), ['fort', 'collins']);
+  assert.deepEqual(names(logoSvg({ name: 'Steamboat Springs', brand: {} })), ['steamboat', 'springs']);
+  assert.deepEqual(names(logoSvg({ name: 'Mt. Crested Butte', brand: {} })), ['mt. crested', 'butte']);
+  const breck = logoSvg({ name: 'Breckenridge', brand: {} });
+  assert.deepEqual(names(breck), ['breckenridge']);
+  assert.ok(Number(breck.match(/scale\(([\d.]+)\)/)[1]) < 0.7);
+});

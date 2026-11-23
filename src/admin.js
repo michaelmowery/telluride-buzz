@@ -182,6 +182,8 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
         const merged = existing ? { ...existing, ...body.town, brand: { ...existing.brand, ...body.town.brand } } : body.town;
         const { town, error } = normalizeTown(merged, all);
         if (error) return bad(error);
+        // The state shows after the name in the town picker and on thetown.buzz.
+        if (!/^[A-Z]{2}$/.test(town.state || '')) return bad('Add the two-letter state (like CO).');
         db.saveTown(town, town.status);
         if (body.create) for (const s of starterSources(town)) db.saveSource(town.id, s);
         // Add a town with Claude: its suggested sources and starter resources come along.

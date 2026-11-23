@@ -374,7 +374,7 @@ async function townPage(id) {
   const f = h('form', { id: 'town-form' },
     h('div', { class: 'grid2' },
       field('Town name', h('input', { name: 'name', required: true, value: t?.name || '', placeholder: 'Town name' })),
-      field('State', h('input', { name: 'state', value: t?.state || '', placeholder: 'CO', maxlength: 2 })),
+      field('State', h('input', { name: 'state', required: true, value: t?.state || '', placeholder: 'CO', maxlength: 2, pattern: '[A-Za-z]{2}' })),
       field('Address name', h('input', { name: 'id', required: true, value: t?.id || '', placeholder: 'townname', pattern: '[a-z][a-z0-9\\-]{1,39}', readonly: !!t }),
         t ? 'Fixed once the town exists.' : 'Becomes [address name].thetown.buzz. Lowercase letters, numbers, dashes.'),
       field('Site name', h('input', { name: 'siteName', value: b.siteName || '', placeholder: '[Town] Buzz' }), 'Used in sentences and the browser tab.'),

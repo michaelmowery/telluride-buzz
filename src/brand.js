@@ -28,8 +28,36 @@ export const LOGO_STYLES = {
 };
 let clipN = 0;
 
+// Rough Roboto Slab Bold widths (in em) for sizing the town name to fit its space.
+// Measured in Chromium: most letters 0.6, i/l/r/t/f/j 0.33, m/w 0.93.
+const NARROW = new Set([...'fijlrt.,\'-']);
+const WIDE = new Set([...'mw']);
+export const nameWidth = (s, px = 70) => [...String(s)].reduce((w, c) => w + (c === ' ' ? 0.26 : NARROW.has(c) ? 0.33 : WIDE.has(c) ? 0.93 : 0.6), 0) * px;
+const NAME_ROOM = 284; // from the left edge of the logo (x 30) to the name's right end (x 318), less a little
+
+/**
+ * The town name, right-aligned against the circle. A name too long for one line at
+ * full size goes on two lines (at a space) or is scaled down to fit, so "Fort Collins"
+ * or "Steamboat Springs" never runs off the left edge. Scaling is a transform: the
+ * page's CSS sets the font size and the CSP allows no inline styles.
+ */
+function nameText(word, y) {
+  const fit = (w, max) => Math.min(max, NAME_ROOM / w);
+  const one = nameWidth(word);
+  if (one <= NAME_ROOM) return `<text x="318" y="${y}" text-anchor="end" class="logo-name">${esc(word)}</text>`;
+  const at = word.indexOf(' ', Math.floor(word.length / 2) - 3) > 0 ? word.indexOf(' ', Math.floor(word.length / 2) - 3) : word.lastIndexOf(' ');
+  if (at > 0) {
+    const lines = [word.slice(0, at), word.slice(at + 1)];
+    const k = +fit(Math.max(...lines.map((l) => nameWidth(l))), 0.86).toFixed(3);
+    const lead = Math.round(70 * k * 0.92);
+    return lines.map((l, i) => `<text transform="translate(318 ${y + 4 - (1 - i) * lead}) scale(${k})" text-anchor="end" class="logo-name">${esc(l)}</text>`).join('');
+  }
+  const k = +fit(one, 1).toFixed(3);
+  return `<text transform="translate(318 ${y - Math.round((1 - k) * 25)}) scale(${k})" text-anchor="end" class="logo-name">${esc(word)}</text>`;
+}
+
 export function logoSvg(town, { cls = 'logo', width = 110, height = 48 } = {}) {
-  const word = esc(town.brand?.logoWord || town.name.toLowerCase());
+  const word = String(town.brand?.logoWord || town.name.toLowerCase()).trim();
   const style = LOGO_STYLES[town.brand?.logo] ? town.brand.logo : 'thetown';
   const dy = style === 'ridge' ? -12 : 0;
   const inner = style === 'own'
@@ -56,7 +84,7 @@ export function logoSvg(town, { cls = 'logo', width = 110, height = 48 } = {}) {
         <g class="logo-rail"><line x1="50" y1="186" x2="320" y2="186"/>${ties}</g>`;
   }
   return `<svg class="${cls}${style === 'rock' ? ' logo-rock' : ''}" viewBox="30 14 504 220" width="${width}" height="${height}" aria-hidden="true">
-        <text x="318" y="${nameY}" text-anchor="end" class="logo-name">${word}</text>
+        ${nameText(word, nameY)}
         <circle cx="400" cy="150" r="78" class="logo-dot"/>${accent}${inner}${WAVES}
       </svg>`;
 }
