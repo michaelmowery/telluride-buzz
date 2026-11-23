@@ -290,9 +290,10 @@ const unformula = (v) => String(v ?? '').replace(/^'(?=[=+\-@])/, '');
 /**
  * Turn CSV text into a plan: rows to add and rows to update, plus per-row errors.
  * Rows with an id that exists in that town update it; other rows are added.
- * A blank town cell uses defaultTown. Nothing is written here.
+ * A blank town cell uses defaultTown; forceTown puts every row in that town (a new
+ * town's starter list, whatever its town column says). Nothing is written here.
  */
-export function planCsvImport(text, { towns, existing, defaultTown = '', onlyTown = '' }) {
+export function planCsvImport(text, { towns, existing, defaultTown = '', onlyTown = '', forceTown = '' }) {
   const rows = parseCsv(text);
   if (!rows.length) return { error: 'The file is empty.' };
   const head = rows[0].map((h) => h.trim().toLowerCase());
@@ -306,7 +307,8 @@ export function planCsvImport(text, { towns, existing, defaultTown = '', onlyTow
   rows.slice(1).forEach((cells, i) => {
     const line = i + 2;
     const v = Object.fromEntries(head.map((h, j) => [h, unformula(cells[j]).trim()]));
-    const town = v.town || defaultTown;
+    const town = forceTown || v.town || defaultTown;
+    if (forceTown) v.id = ''; // a new town has nothing to update
     if (!townIds.has(town)) { errors.push({ line, name: v.name, error: town ? `No town "${town}".` : 'Add a town column or pick a town.' }); return; }
     if (onlyTown && town !== onlyTown) { errors.push({ line, name: v.name, error: `This row is for "${town}". Switch to that town to import it.` }); return; }
     const id = v.id ? Number(v.id) : null;

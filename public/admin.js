@@ -385,7 +385,8 @@ async function townPage(id) {
     };
     if (t && t.hostnames?.join('\n') !== v.hostnames.trim()) town.url = '';
     try {
-      const r = await api('/town', { create: !t, town });
+      const r = await api('/town', { create: !t, town, ...(!t && f._claude ? { fromClaude: f._claude } : {}) });
+      if (r.fromClaude) { showCreated(r.town, r.fromClaude); return; }
       location.hash = `town/${r.town.id}`;
       if (t) route();
     } catch (err) { $('#town-error').textContent = err.message; }
@@ -642,6 +643,42 @@ function townLookup(form) {
   return { button: h('span', { class: 'lookup' }, btn, maps), out };
 }
 
+// After Create town with Claude's answer: what was saved, and what still needs a person.
+function showCreated(town, fc) {
+  const feeds = `#feeds?town=${encodeURIComponent(town.id)}`;
+  const running = fc.sources.filter((s) => s.enabled);
+  const paused = fc.sources.filter((s) => !s.enabled);
+  const res = fc.resources;
+  const link = (u) => (/^https?:\/\//.test(u) ? h('a', { href: u, target: '_blank', rel: 'noopener noreferrer' }, u) : u);
+  const list = (items, row) => h('ul', {}, ...items.map((x) => h('li', {}, ...row(x))));
+  window.scrollTo(0, 0);
+  view.replaceChildren(
+    h('p', {}, h('a', { href: '#towns' }, '← All towns')),
+    h('h1', {}, `${town.name} is created (draft)`),
+    h('div', { class: 'card' },
+      h('h2', {}, 'What was added'),
+      h('ul', {},
+        h('li', {}, 'National Weather Service alerts and forecast.'),
+        h('li', {}, `${running.length} feed${running.length === 1 ? '' : 's'} running now.`),
+        paused.length ? h('li', {}, `${paused.length} source${paused.length === 1 ? '' : 's'} saved paused, to check.`) : null,
+        res ? h('li', {}, `${res.added} resource${res.added === 1 ? '' : 's'} added${res.errors.length ? `, ${res.errors.length} row${res.errors.length === 1 ? '' : 's'} skipped` : ''}.`) : null),
+      h('p', { class: 'row' },
+        h('a', { class: 'button', href: feeds }, 'Go to Feeds'), ' ',
+        h('a', { class: 'button secondary', href: `#all-resources?town=${encodeURIComponent(town.id)}` }, 'Resources'), ' ',
+        h('a', { class: 'button secondary', href: `#town/${encodeURIComponent(town.id)}` }, 'Settings and going live'))),
+    running.length ? h('div', { class: 'card' }, h('h2', {}, 'Running now'),
+      h('p', { class: 'muted small' }, 'Watch these turn green on the Feeds tab in a few minutes. A red one needs a better address.'),
+      list(running, (s) => [h('strong', {}, s.label), ': ', link([].concat(s.url)[0])])) : null,
+    paused.length || fc.skipped.length ? h('div', { class: 'card' }, h('h2', {}, 'Needs checking'),
+      paused.length ? h('p', { class: 'muted small' }, 'Saved paused. On Feeds, open each one with Edit, find its RSS or iCal address, press Test, then resume it (or delete it).') : null,
+      paused.length ? list(paused, (s) => [h('strong', {}, s.label), ': ', link([].concat(s.url)[0]), s.about ? h('div', { class: 'muted small' }, s.about) : null]) : null,
+      fc.skipped.length ? h('p', { class: 'muted small' }, 'Not saved. Set these up by hand with Add a source:') : null,
+      fc.skipped.length ? list(fc.skipped, (x) => [h('strong', {}, x.label), x.type ? ` (${x.type})` : '', ': ', x.url ? link(x.url) : '', h('div', { class: 'muted small' }, x.reason)]) : null) : null,
+    res && res.errors.length ? h('div', { class: 'card' }, h('h2', {}, 'Resource rows skipped'),
+      list(res.errors, (e) => [e.line ? `Line ${e.line}` : '', e.name ? ` (${e.name})` : '', `: ${e.error}`])) : null,
+  );
+}
+
 function fillTownWithClaude(form) {
   const err = h('p', { class: 'error', role: 'alert' });
   const out = h('div');
@@ -692,12 +729,14 @@ id,town,category,name,phone,phone2,website,address,hours,note,emergency,hidden,c
     const srcs = Array.isArray(j.suggestedSources) ? j.suggestedSources.filter((x) => x && x.url) : [];
     const csv = typeof j.resourcesCsv === 'string' ? j.resourcesCsv.trim() : '';
     const csvCopied = h('span', { class: 'ok-msg small', role: 'status' });
+    // Create town saves these too (see the town form's submit).
+    form._claude = { suggestedSources: srcs, resourcesCsv: csv };
     out.replaceChildren(...[
-      h('p', { class: 'ok-msg' }, 'Filled in the form below. Check each field (especially the map point), then Create town.'),
-      srcs.length ? h('details', { open: true }, h('summary', {}, `Suggested sources (${srcs.length}): add these after creating the town, using Add a source and Test`),
+      h('p', { class: 'ok-msg' }, `Filled in the form above. Check each field (especially the map point), then press Create town. It also saves ${[srcs.length ? `the ${srcs.length} suggested sources` : '', csv ? 'the starter resources' : ''].filter(Boolean).join(' and ') || 'the town'}.`),
+      srcs.length ? h('details', { open: true }, h('summary', {}, `Suggested sources (${srcs.length}): saved with the town. Feeds run right away; anything that needs checking is saved paused`),
         h('ul', {}, ...srcs.map((x) => h('li', {}, h('strong', {}, x.label || 'Source'), x.type ? ` (${x.type})` : '', ': ',
           /^https?:\/\//.test(x.url) ? h('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer' }, x.url) : x.url, x.why ? h('div', { class: 'muted small' }, x.why) : null)))) : null,
-      csv ? h('details', {}, h('summary', {}, `Starter resources (${csv.split('\n').length - 1} rows): after creating the town, paste into Resources, Import`),
+      csv ? h('details', {}, h('summary', {}, `Starter resources (${csv.split('\n').length - 1} rows): saved with the town. Rows with a problem are skipped and listed`),
         h('textarea', { rows: 8, readonly: true }, csv),
         h('div', { class: 'row' }, h('button', { type: 'button', class: 'secondary', onclick: async () => {
           try { await navigator.clipboard.writeText(csv); csvCopied.textContent = 'Copied.'; } catch { csvCopied.textContent = 'Select the text and copy it.'; }
