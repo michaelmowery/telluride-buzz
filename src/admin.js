@@ -9,11 +9,13 @@ import crypto from 'node:crypto';
 import { adapterCatalog, itemSourcesOf, testSource } from './adapters.js';
 import { exportTown, loadTowns, normalizeSource, normalizeTown, starterSources } from './towns.js';
 import { sourceHealth, townColor, FEED_NAMES } from './health.js';
+import { normalizeResource, RESOURCE_CATEGORIES, STALE_DAYS } from './resources.js';
+import { townUrl } from './brand.js';
 
 const COOKIE = 'buzz_admin';
 const SESSION_DAYS = 14;
 
-export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChange = () => {}, runNow = () => false, deps = {}, log = console } = {}) {
+export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChange = () => {}, onResources = () => {}, runNow = () => false, deps = {}, log = console } = {}) {
   const enabled = typeof password === 'string' && password.length >= 10;
   if (password && !enabled) log.warn?.('ADMIN_PASSWORD is shorter than 10 characters, so the admin is off');
   const key = enabled ? crypto.createHash('sha256').update(`buzz-admin:${password}`).digest() : null;
@@ -102,6 +104,11 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
         return ok({ towns: towns() });
       case 'GET /health':
         return ok({ towns: healthBoard(), feeds: FEED_NAMES, now: Date.now() });
+      case 'GET /resources': {
+        const t = findTown(url.searchParams.get('town'));
+        if (!t) return bad('No such town', 404);
+        return ok({ town: { id: t.id, name: t.name, state: t.state || '', url: townUrl(t) }, categories: RESOURCE_CATEGORIES, staleDays: STALE_DAYS, resources: db.listResources(t.id) });
+      }
       case 'GET /export': {
         const t = findTown(url.searchParams.get('town'));
         if (!t) return bad('No such town', 404);
@@ -179,6 +186,46 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
         const s = t?.sources.find((x) => x.key === body.key);
         if (!s) return bad('No such source', 404);
         if (!runNow(t.id, s.key)) return bad('That source is paused or not running.');
+        return ok();
+      }
+      case 'POST /resource': {
+        const t = all.find((x) => x.id === body.town);
+        if (!t) return bad('No such town', 404);
+        const { resource, error } = normalizeResource(body.resource);
+        if (error) return bad(error);
+        if (resource.id && !db.listResources(t.id).some((r) => r.id === resource.id)) return bad('No such resource', 404);
+        if (!resource.id && !body.resource?.sort) {
+          // New entries go to the end of their category.
+          resource.sort = Math.max(0, ...db.listResources(t.id).map((r) => r.sort)) + 10;
+        }
+        if (body.checked) resource.checkedAt = Date.now();
+        const id = db.saveResource(t.id, resource);
+        log.info?.(`admin: ${resource.id ? 'saved' : 'added'} resource ${t.id}/${id}`);
+        onResources(t.id);
+        return ok({ resource: db.listResources(t.id).find((r) => r.id === id) });
+      }
+      case 'POST /resource/delete': {
+        const t = all.find((x) => x.id === body.town);
+        if (!t || !db.deleteResource(t.id, Number(body.id))) return bad('No such resource', 404);
+        log.info?.(`admin: deleted resource ${t.id}/${body.id}`);
+        onResources(t.id);
+        return ok();
+      }
+      case 'POST /resource/order': {
+        const t = all.find((x) => x.id === body.town);
+        if (!t) return bad('No such town', 404);
+        const have = new Set(db.listResources(t.id).map((r) => r.id));
+        const ids = (Array.isArray(body.ids) ? body.ids : []).map(Number).filter((id) => have.has(id));
+        db.sortResources(t.id, ids);
+        onResources(t.id);
+        return ok();
+      }
+      case 'POST /resource/checked': {
+        const t = all.find((x) => x.id === body.town);
+        if (!t) return bad('No such town', 404);
+        const ids = Array.isArray(body.ids) ? body.ids.map(Number) : db.listResources(t.id).map((r) => r.id);
+        db.markResourcesChecked(t.id, ids);
+        onResources(t.id);
         return ok();
       }
       default:

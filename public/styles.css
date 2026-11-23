@@ -473,3 +473,29 @@ html[data-hide~="weather"][data-hide~="roads"][data-hide~="lifts"][data-hide~="e
 .panel-body h3.p-mountain:first-child { margin-top: 2px; }
 .panel-body h3.p-mountain .muted { font: 400 13px var(--sans); }
 .panel-body h4 { font: 700 13px var(--slab); text-transform: uppercase; letter-spacing: .8px; color: var(--ink-2); margin: 14px 0 8px; }
+
+/* ---------- resources ---------- */
+a.prefs-btn { text-decoration: none; }
+.resources .res-list { list-style: none; margin: 0; padding: 0; }
+.res { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin: 0 0 10px; box-shadow: var(--shadow); }
+.res p { margin: 0 0 4px; }
+.res-name { font-weight: 600; }
+.res-note { font-size: 14px; }
+.res-meta { font-size: 13px; color: var(--ink-2); }
+.res-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px !important; }
+.res-btn { display: inline-block; padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--ink); text-decoration: none; background: var(--cream); min-height: 20px; }
+.res-btn:hover { border-color: var(--forest-2); }
+.res-call { background: var(--forest); border-color: var(--forest); color: #f6efe2; }
+.res-call::before { content: "☎ "; }
+.res-emergency { background: var(--rust-soft); border-radius: var(--radius); padding: 12px 12px 2px; margin: 16px 0; }
+.res-emergency h2 { margin: 0 0 10px !important; color: var(--rust); }
+.res-emergency .res-call { background: var(--rust); border-color: var(--rust); }
+.res-jump { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; margin: 6px 0 14px; }
+.res-cat { border-top: 1px solid var(--line); }
+.res-cat summary { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px 0; list-style: none; }
+.res-cat summary::-webkit-details-marker { display: none; }
+.res-cat summary::before { content: "▸"; color: var(--ink-2); transition: transform .15s; }
+.res-cat[open] summary::before { transform: rotate(90deg); }
+.res-cat summary h2 { margin: 0 !important; font-size: 17px !important; }
+.res-count { font-size: 12px; color: var(--ink-2); background: var(--paper); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+.resources .small { font-size: 12.5px; }

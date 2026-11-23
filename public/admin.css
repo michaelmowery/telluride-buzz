@@ -96,3 +96,5 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: .85em; background
 .filters > button { margin-bottom: .1rem; }
 .card .filters { border: 0; padding: 0 0 .5rem; margin: 0; background: none; }
 @media (max-width: 640px) { .filters .filter { flex: 1 1 45%; min-width: 0; } }
+span.err { color: var(--red); }
+.pill { margin-left: .4rem; }

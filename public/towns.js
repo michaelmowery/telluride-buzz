@@ -13,3 +13,13 @@
   document.addEventListener('click', (e) => { if (!menu.hidden && !menu.contains(e.target) && !brand.contains(e.target)) set(false); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !menu.hidden) { set(false); brand.focus(); } });
 })();
+
+// Resources page: a jump link (#medical) opens that collapsed section.
+(() => {
+  const open = () => {
+    const el = location.hash.length > 1 && document.getElementById(location.hash.slice(1));
+    if (el && el.tagName === 'DETAILS') el.open = true;
+  };
+  window.addEventListener('hashchange', open);
+  document.addEventListener('DOMContentLoaded', open);
+})();

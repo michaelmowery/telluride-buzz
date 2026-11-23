@@ -83,6 +83,9 @@ async function route() {
     else if (page === 'town') await townPage(a);
     else if (page === 'source') await sourcePage(a, b);
     else if (page === 'new-source') await sourcePage(a, null);
+    else if (page === 'resources') await resourcesPage(a);
+    else if (page === 'resource') await resourcePage(a, b);
+    else if (page === 'new-resource') await resourcePage(a, null, b);
     else location.hash = 'health';
   } catch (err) {
     if (err.message !== 'Sign in first') view.replaceChildren(h('div', { class: 'card' }, h('p', { class: 'error' }, err.message)));
@@ -313,6 +316,10 @@ async function townPage(id) {
       h('div', { class: 'card' },
         h('div', { class: 'row spread' }, h('h2', {}, 'Sources'), h('a', { class: 'button', href: `#new-source/${t.id}` }, 'Add a source')),
         health?.sources.length ? townSources(t, health.sources) : h('p', { class: 'muted' }, 'No sources yet.')),
+      h('div', { class: 'card' },
+        h('div', { class: 'row spread' }, h('h2', {}, 'Resources'), h('a', { class: 'button', href: `#resources/${t.id}` }, 'Edit resources')),
+        h('p', { class: 'muted' }, 'Emergency numbers, medical, town offices, transit, utilities and more, shown at ',
+          h('a', { href: `${siteOf(t)}/resources`, target: '_blank', rel: 'noopener' }, `${siteOf(t).replace(/^https?:\/\//, '')}/resources`), '.')),
       h('div', { class: 'card' }, h('h2', {}, 'Going live'), goLiveSteps(t, health)),
     );
   }
@@ -467,6 +474,107 @@ async function sourcePage(townId, key) {
     health?.error ? h('p', { class: 'error' }, `${health.note}: ${health.error}`) : (health ? h('p', { class: 'muted' }, `${health.note}. Last success ${ago(health.lastOk)}.`) : null),
     h('div', { class: 'card' }, f),
   ].filter(Boolean));
+}
+
+// ---------- resources ----------
+const siteOf = (t) => (t.url || `https://${t.hostnames?.[0] || `${t.id}.thetown.buzz`}`).replace(/\/$/, '');
+// Each town's /resources page: phone numbers, offices and links, kept by hand.
+const DAY = 86400e3;
+async function resourcesPage(townId) {
+  const d = await api(`/resources?town=${encodeURIComponent(townId)}`);
+  const t = d.town;
+  const stale = (r) => !r.checkedAt || Date.now() - r.checkedAt > d.staleDays * DAY;
+  const byCat = (c) => d.resources.filter((r) => r.category === c);
+  const err = h('p', { class: 'error', role: 'alert' });
+
+  async function move(r, dir) {
+    const list = byCat(r.category);
+    const i = list.indexOf(r);
+    const j = i + dir;
+    if (j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    // Keep every other category's order; only this category's ids swap places.
+    const ids = d.categories.flatMap((c) => (c.id === r.category ? list : byCat(c.id)).map((x) => x.id));
+    try { await api('/resource/order', { town: t.id, ids }); route(); } catch (e) { err.textContent = e.message; }
+  }
+
+  const row = (r, i, list) => h('tr', { class: r.hidden ? 'muted' : null },
+    h('td', {}, h('a', { href: `#resource/${t.id}/${r.id}` }, r.name),
+      r.emergency && r.category !== 'emergency' ? h('span', { class: 'pill live' }, 'emergency box') : null,
+      r.hidden ? h('span', { class: 'pill draft' }, 'hidden') : null,
+      h('div', { class: 'muted small' }, [r.phone, r.website && r.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')].filter(Boolean).join(' · '))),
+    h('td', { class: 'small hide-sm' }, stale(r) ? h('span', { class: 'err' }, r.checkedAt ? `Checked ${ago(r.checkedAt)}` : 'Never checked') : `Checked ${ago(r.checkedAt)}`),
+    h('td', { class: 'actions' },
+      h('button', { class: 'small secondary', title: 'Move up', 'aria-label': `Move ${r.name} up`, disabled: i === 0, onclick: () => move(r, -1) }, '↑'),
+      h('button', { class: 'small secondary', title: 'Move down', 'aria-label': `Move ${r.name} down`, disabled: i === list.length - 1, onclick: () => move(r, 1) }, '↓'),
+      h('button', { class: 'small secondary', onclick: async () => { try { await api('/resource/checked', { town: t.id, ids: [r.id] }); route(); } catch (e) { err.textContent = e.message; } } }, 'Still right')));
+
+  const staleCount = d.resources.filter(stale).length;
+  view.replaceChildren(
+    h('p', {}, h('a', { href: `#town/${t.id}` }, `← ${t.name}`)),
+    h('div', { class: 'row spread' }, h('h1', {}, `${t.name} resources`),
+      h('a', { class: 'button secondary', href: `${siteOf(t)}/resources`, target: '_blank', rel: 'noopener' }, 'View page')),
+    h('p', { class: 'muted' }, `${d.resources.length} entries. `,
+      staleCount ? `${staleCount} not checked in the last ${d.staleDays} days. ` : 'All checked recently. ',
+      'Entries in Emergency, or marked for the emergency box, show at the top of the page.'),
+    err,
+    ...d.categories.map((c) => {
+      const list = byCat(c.id);
+      return h('div', { class: 'card' },
+        h('div', { class: 'row spread' }, h('h2', {}, c.label), h('a', { class: 'button small', href: `#new-resource/${t.id}/${c.id}` }, 'Add')),
+        list.length ? h('div', { class: 'table-wrap' }, h('table', {}, h('tbody', {}, ...list.map(row)))) : h('p', { class: 'muted' }, 'Nothing here yet.'));
+    }),
+  );
+}
+
+async function resourcePage(townId, id, category = '') {
+  const d = await api(`/resources?town=${encodeURIComponent(townId)}`);
+  const t = d.town;
+  const r = id ? d.resources.find((x) => String(x.id) === String(id)) : null;
+  if (id && !r) throw new Error('That resource no longer exists.');
+  const v = r || { category: category || 'emergency' };
+  const err = h('p', { class: 'error', role: 'alert' });
+  const input = (name, attrs = {}) => h('input', { name, value: v[name] || '', ...attrs });
+  const f = h('form', {},
+    h('div', { class: 'grid2' },
+      field('Name', input('name', { required: true, maxlength: 120, placeholder: 'Telluride Regional Medical Center' })),
+      field('Category', h('select', { name: 'category' }, ...d.categories.map((c) => h('option', { value: c.id, selected: v.category === c.id }, c.label)))),
+      field('Phone', input('phone', { type: 'tel', maxlength: 40, placeholder: '970-728-3848' }), 'Tap-to-call on phones.'),
+      field('Second phone', input('phone2', { type: 'tel', maxlength: 40, placeholder: 'After-hours line' }), 'Optional. Explain it in the note.'),
+      field('Website', input('website', { maxlength: 300, placeholder: 'https://www.tellmed.org' })),
+      field('Address', input('address', { maxlength: 200, placeholder: '500 W Pacific Ave, Telluride, CO 81435' }), 'Shows a Map button.'),
+      field('Hours', input('hours', { maxlength: 200, placeholder: 'Daily 8 a.m. to 6 p.m.' })),
+    ),
+    field('Note', h('textarea', { name: 'note', rows: 2, maxlength: 400, placeholder: 'For the ER, call the main line and press 0.' }, v.note || '')),
+    h('label', { class: 'check' }, h('input', { type: 'checkbox', name: 'emergency', checked: !!v.emergency }), ' Also show in the Emergency box at the top'),
+    h('label', { class: 'check' }, h('input', { type: 'checkbox', name: 'hidden', checked: !!v.hidden }), ' Hide from the public page'),
+    h('label', { class: 'check' }, h('input', { type: 'checkbox', name: 'checked', checked: !r }), ' I checked this is right today'),
+    h('div', { class: 'row form-actions' },
+      h('button', { type: 'submit' }, r ? 'Save' : 'Add resource'),
+      r ? h('button', { type: 'button', class: 'danger', onclick: remove }, 'Delete') : null),
+    err,
+  );
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    err.textContent = '';
+    const fd = new FormData(f);
+    const resource = { id: r?.id, sort: r?.sort, emergency: fd.get('emergency') === 'on', hidden: fd.get('hidden') === 'on' };
+    for (const k of ['name', 'category', 'phone', 'phone2', 'website', 'address', 'hours', 'note']) resource[k] = fd.get(k);
+    try {
+      await api('/resource', { town: t.id, resource, checked: fd.get('checked') === 'on' });
+      location.hash = `resources/${t.id}`;
+    } catch (e2) { err.textContent = e2.message; }
+  });
+  async function remove() {
+    if (!confirm(`Delete "${r.name}" from ${t.name}'s resources?`)) return;
+    try { await api('/resource/delete', { town: t.id, id: r.id }); location.hash = `resources/${t.id}`; } catch (e2) { err.textContent = e2.message; }
+  }
+  view.replaceChildren(
+    h('p', {}, h('a', { href: `#resources/${t.id}` }, `← ${t.name} resources`)),
+    h('h1', {}, r ? r.name : `Add a resource to ${t.name}`),
+    r ? h('p', { class: 'muted' }, r.checkedAt ? `Last checked ${ago(r.checkedAt)}.` : 'Never checked.') : null,
+    h('div', { class: 'card' }, f),
+  );
 }
 
 route();
