@@ -350,7 +350,7 @@ async function townPage(id) {
       field('Address name', h('input', { name: 'id', required: true, value: t?.id || '', placeholder: 'townname', pattern: '[a-z][a-z0-9\\-]{1,39}', readonly: !!t }),
         t ? 'Fixed once the town exists.' : 'Becomes [address name].thetown.buzz. Lowercase letters, numbers, dashes.'),
       field('Site name', h('input', { name: 'siteName', value: b.siteName || '', placeholder: '[Town] Buzz' }), 'Used in sentences and the browser tab.'),
-      field('Latitude', h('input', { name: 'lat', required: true, inputmode: 'decimal', value: t?.location?.lat ?? '', placeholder: 'Filled by Look up' }), 'Right-click the town on Google Maps to copy its point.'),
+      field('Latitude', h('input', { name: 'lat', required: true, inputmode: 'decimal', value: t?.location?.lat ?? '', placeholder: 'Filled by Look up' })),
       field('Longitude', h('input', { name: 'lon', required: true, inputmode: 'decimal', value: t?.location?.lon ?? '', placeholder: 'Filled by Look up' })),
       field('Time zone', h('input', { name: 'timezone', value: t?.timezone || 'America/Denver', list: 'zones' })),
       field('Logo', h('select', { name: 'logo' },
