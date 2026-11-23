@@ -130,3 +130,8 @@ span.err { color: var(--red); }
 /* Add a town: fields filled automatically stay greyed out until "Edit the other fields". */
 .locked { background: transparent !important; opacity: .7; color: var(--muted) !important; border-style: dashed !important; cursor: default; }
 .lock-note { align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; margin-bottom: .75rem; }
+/* Town picker: grouped by state, with search (see townPicker in admin.js). */
+.town-menu .town-search { width: 100%; margin: 0 0 .5rem; }
+.town-groups { max-height: min(60vh, 520px); overflow-y: auto; overscroll-behavior: contain; }
+.town-state { margin: .5rem .5rem .2rem; font-size: .7rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.town-none { margin: .5rem; }

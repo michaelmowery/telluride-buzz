@@ -456,3 +456,16 @@ test('roads: CDOT highways picked from the map point; tiles and disclaimer follo
   assert.equal(renderTemplate(page, '.html', ship, towns), '<body class="no-roads no-lifts"></body>');
   assert.match(renderTemplate(page, '.html', fcol, towns), /Road data source:<\/strong> The data made available here/);
 });
+
+test('town picker and hub: grouped by state A-Z, towns A-Z, searchable', async () => {
+  const { groupByState, townMenu, townSearchText } = await import('../src/brand.js');
+  const t = (id, name, state) => ({ id, name, state, hostnames: [`${id}.thetown.buzz`], brand: {} });
+  const towns = [t('telluride', 'Telluride', 'CO'), t('shiprock', 'Shiprock', 'NM'), t('durango', 'Durango', 'CO'), t('moab', 'Moab', 'UT'), t('x', 'Nowhere', '')];
+  assert.deepEqual(groupByState(towns).map((g) => [g.state, g.towns.map((x) => x.name)]),
+    [['Colorado', ['Durango', 'Telluride']], ['New Mexico', ['Shiprock']], ['Utah', ['Moab']], ['Other', ['Nowhere']]]);
+  assert.equal(townSearchText(towns[1]), 'shiprock nm new mexico shiprock.thetown.buzz');
+  const html = townMenu(towns[0], towns);
+  assert.match(html, /data-town-search/);
+  assert.ok(html.indexOf('>Colorado<') < html.indexOf('>New Mexico<') && html.indexOf('>New Mexico<') < html.indexOf('>Utah<'));
+  assert.ok(html.indexOf('Durango, CO') < html.indexOf('Telluride, CO'));
+});

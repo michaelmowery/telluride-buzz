@@ -73,6 +73,13 @@ async function adminTowns(fresh = false) {
   if (!townsCache || fresh) townsCache = (await api('/towns')).towns;
   return townsCache;
 }
+const STATE_NAMES = { AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California', CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware',
+  DC: 'District of Columbia', FL: 'Florida', GA: 'Georgia', HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa', KS: 'Kansas',
+  KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland', MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi',
+  MO: 'Missouri', MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey', NM: 'New Mexico', NY: 'New York',
+  NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio', OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina',
+  SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont', VA: 'Virginia', WA: 'Washington', WV: 'West Virginia',
+  WI: 'Wisconsin', WY: 'Wyoming' };
 const townLabel = (t) => `${t.name}${t.state ? `, ${t.state}` : ''}`;
 async function currentTown(wanted) {
   const towns = await adminTowns();
@@ -86,14 +93,35 @@ const TOWN_TABS = [['feeds', 'Feeds', (id) => `#feeds?town=${encodeURIComponent(
   ['settings', 'Settings', (id) => `#town/${encodeURIComponent(id)}`]];
 
 function townPicker(towns, current, onPick) {
+  // Grouped by state (A-Z, towns A-Z in each), with a search box, like the site's picker.
+  const opt = (t) => h('a', {
+    href: '#', class: 'town-opt', role: 'menuitem', 'aria-current': t.id === current ? 'page' : null,
+    dataset: { q: [t.name, t.state, STATE_NAMES[t.state], ...(t.hostnames || [])].filter(Boolean).join(' ').toLowerCase() },
+    onclick: (e) => { e.preventDefault(); setMenu(false); if (t.id !== current) onPick(t.id); },
+  }, h('span', { class: 'town-txt' }, h('strong', {}, townLabel(t)),
+    h('small', {}, t.id === current ? 'Editing now' : (t.hostnames || [])[0] || '')),
+  h('span', { class: `pill ${t.status}` }, t.status));
+  const byState = new Map();
+  for (const t of [...towns].sort((a, b) => a.name.localeCompare(b.name))) {
+    const st = STATE_NAMES[t.state] || t.state || 'Other';
+    if (!byState.has(st)) byState.set(st, []);
+    byState.get(st).push(t);
+  }
+  const groups = [...byState].sort(([a], [b]) => (a === 'Other') - (b === 'Other') || a.localeCompare(b))
+    .map(([st, list]) => h('div', { class: 'town-group', dataset: { group: '' } }, h('p', { class: 'town-state' }, st), ...list.map(opt)));
+  const none = h('p', { class: 'muted small town-none', hidden: true }, 'No towns match.');
+  const search = h('input', { type: 'search', class: 'town-search', placeholder: 'Search towns or states', 'aria-label': 'Search towns', autocomplete: 'off',
+    oninput: () => {
+      const words = search.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      let any = false;
+      for (const a of menu.querySelectorAll('[data-q]')) { const ok = words.every((w) => a.dataset.q.includes(w)); a.hidden = !ok; any ||= ok; }
+      for (const g of groups) g.hidden = !g.querySelector('[data-q]:not([hidden])');
+      none.hidden = any;
+    },
+    onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); menu.querySelector('[data-q]:not([hidden])')?.click(); } } });
   const menu = h('div', { class: 'town-menu', id: 'town-menu', role: 'menu', hidden: true },
-    h('p', { class: 'town-menu-title' }, 'Choose a town'),
-    ...[...towns].sort((a, b) => a.name.localeCompare(b.name)).map((t) => h('a', {
-      href: '#', class: 'town-opt', role: 'menuitem', 'aria-current': t.id === current ? 'page' : null,
-      onclick: (e) => { e.preventDefault(); setMenu(false); if (t.id !== current) onPick(t.id); },
-    }, h('span', { class: 'town-txt' }, h('strong', {}, townLabel(t)),
-      h('small', {}, t.id === current ? 'Editing now' : (t.hostnames || [])[0] || '')),
-    h('span', { class: `pill ${t.status}` }, t.status))),
+    h('p', { class: 'town-menu-title' }, 'Choose a town'), search,
+    h('div', { class: 'town-groups' }, ...groups), none,
     h('a', { href: '#towns', class: 'town-all', onclick: () => setMenu(false) }, 'All towns · Add a town'));
   const picker = h('button', { type: 'button', class: 'town-picker', 'aria-haspopup': 'true', 'aria-expanded': 'false', 'aria-controls': 'town-menu',
     onclick: () => setMenu(menu.hidden) },
@@ -102,7 +130,7 @@ function townPicker(towns, current, onPick) {
   function setMenu(open) {
     menu.hidden = !open;
     picker.setAttribute('aria-expanded', String(open));
-    if (open) menu.querySelector('.town-opt:not([aria-current])')?.focus();
+    if (open) search.focus();
   }
   const close = (e) => {
     if (!document.body.contains(menu)) { document.removeEventListener('click', close); document.removeEventListener('keydown', close); return; }

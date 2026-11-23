@@ -59,7 +59,7 @@ export function townsFromNominatim(results) {
   return out.sort((x, y) => Number(y.place) - Number(x.place)).slice(0, 5);
 }
 
-const STATE_CODES = {
+export const STATE_CODES = {
   alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA', colorado: 'CO', connecticut: 'CT', delaware: 'DE',
   'district of columbia': 'DC', florida: 'FL', georgia: 'GA', hawaii: 'HI', idaho: 'ID', illinois: 'IL', indiana: 'IN', iowa: 'IA',
   kansas: 'KS', kentucky: 'KY', louisiana: 'LA', maine: 'ME', maryland: 'MD', massachusetts: 'MA', michigan: 'MI', minnesota: 'MN',
@@ -113,3 +113,7 @@ export async function geocodeTown(name, state = '', { fetchJsonImpl = fetchJson,
   if (errors.length === 2) throw new Error(errors.join('; '));
   return [];
 }
+
+const STATE_NAMES = Object.fromEntries(Object.entries(STATE_CODES).map(([n, c]) => [c, n.replace(/\b\w/g, (x) => x.toUpperCase()).replace(' Of ', ' of ')]));
+/** "CO" -> "Colorado" (blank or unknown codes come back as given). */
+export const stateName = (code) => STATE_NAMES[String(code || '').toUpperCase()] || String(code || '');

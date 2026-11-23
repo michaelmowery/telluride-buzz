@@ -7,7 +7,11 @@
   const set = (open) => {
     menu.hidden = !open;
     brand.setAttribute('aria-expanded', String(open));
-    if (open) menu.querySelector('a:not([aria-current])')?.focus({ preventScroll: true });
+    if (!open) return;
+    // With a mouse, typing goes straight into the search; on a phone, don't pop the keyboard.
+    const search = menu.querySelector('[data-town-search]');
+    if (search && !search.hidden && matchMedia('(pointer: fine)').matches) search.focus({ preventScroll: true });
+    else menu.querySelector('a:not([aria-current])')?.focus({ preventScroll: true });
   };
   brand.addEventListener('click', (e) => { e.preventDefault(); set(menu.hidden); });
   document.addEventListener('click', (e) => { if (!menu.hidden && !menu.contains(e.target) && !brand.contains(e.target)) set(false); });
@@ -84,4 +88,30 @@
   }, true);
   document.addEventListener('click', (e) => { if (!e.target.closest('.note')) notes().forEach((n) => { n.open = false; }); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') notes().forEach((n) => { n.open = false; }); });
+})();
+
+// Town search (header picker and thetown.buzz): filters [data-q] towns as you type,
+// hides a state heading with no towns left, and says when nothing matches.
+(() => {
+  for (const input of document.querySelectorAll('[data-town-search]')) {
+    const root = input.parentElement;
+    input.hidden = false;
+    input.addEventListener('input', () => {
+      const words = input.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      let any = false;
+      for (const el of root.querySelectorAll('[data-q]')) {
+        const ok = words.every((w) => el.dataset.q.includes(w));
+        el.hidden = !ok;
+        any ||= ok;
+      }
+      for (const g of root.querySelectorAll('[data-group]')) g.hidden = !g.querySelector('[data-q]:not([hidden])');
+      const none = root.querySelector('[data-none]');
+      if (none) none.hidden = any;
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      const first = root.querySelector('[data-q]:not([hidden]) a');
+      if (first) { e.preventDefault(); first.click(); }
+    });
+  }
 })();

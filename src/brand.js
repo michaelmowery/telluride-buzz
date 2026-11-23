@@ -9,6 +9,7 @@
 
 import { ADAPTERS } from './adapters.js';
 import { DEFAULT_DISCLAIMER } from './sources/cdot.js';
+import { stateName } from './geocode.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const jsStr = (s) => JSON.stringify(String(s ?? '')).slice(1, -1);
@@ -93,21 +94,43 @@ export function logoSvg(town, { cls = 'logo', width = 110, height = 48 } = {}) {
 /** Public address of a town: config `url`, else its first hostname. */
 export const townUrl = (t) => t.url || `https://${t.hostnames[0]}`;
 
+/** Towns grouped by state: [{ state: 'Colorado', towns }], states A-Z (no state last), towns A-Z in each. */
+export function groupByState(towns) {
+  const groups = new Map();
+  for (const t of towns) {
+    const name = stateName(t.state) || 'Other';
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name).push(t);
+  }
+  return [...groups].sort(([a], [b]) => (a === 'Other') - (b === 'Other') || a.localeCompare(b))
+    .map(([state, list]) => ({ state, towns: list.sort((x, y) => x.name.localeCompare(y.name)) }));
+}
+
+/** Words a town search matches: name, state code and state name, address. */
+export const townSearchText = (t) => [t.name, t.state, stateName(t.state), ...(t.hostnames || [])].filter(Boolean).join(' ').toLowerCase();
+
 /** Town picker opened from the header logo: every town, each in its own logo. */
 export function townMenu(town, towns) {
-  const rows = [...towns].sort((a, b) => a.name.localeCompare(b.name)).map((t) => {
+  const row = (t) => {
     const here = t.id === town.id;
     const host = townUrl(t).replace(/^https?:\/\//, '').replace(/\/$/, '');
-    return `<li><a class="town-opt" href="${here ? '/' : esc(townUrl(t))}"${here ? ' aria-current="page"' : ''}>
+    return `<li data-q="${esc(townSearchText(t))}"><a class="town-opt" href="${here ? '/' : esc(townUrl(t))}"${here ? ' aria-current="page"' : ''}>
           <span class="town-logo">${logoSvg(t, { cls: 'logo logo-sm', width: 92, height: 40 })}</span>
           <span class="town-txt"><strong>${esc(t.name)}${t.state ? `, ${esc(t.state)}` : ''}</strong><small>${here ? 'You are here' : esc(host)}</small></span>
         </a></li>`;
-  }).join('\n        ');
+  };
+  // Grouped by state, with a search box (shown by towns.js) that filters as you type.
+  const groups = groupByState(towns).map((g) => `<li class="town-group" data-group><p class="town-state">${esc(g.state)}</p>
+        <ul>
+        ${g.towns.map(row).join('\n        ')}
+        </ul></li>`).join('\n        ');
   return `<nav class="town-menu" id="town-menu" hidden aria-label="Choose a town">
       <p class="town-menu-title">Choose a town</p>
-      <ul>
-        ${rows}
+      <input type="search" class="town-search" data-town-search placeholder="Search towns or states" aria-label="Search towns" autocomplete="off" hidden>
+      <ul class="town-groups">
+        ${groups}
       </ul>
+      <p class="town-none" data-none hidden>No towns match.</p>
       <a class="town-all" href="https://thetown.buzz">See all towns at <strong>thetown.buzz</strong></a>
     </nav>`;
 }
