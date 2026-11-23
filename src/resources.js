@@ -92,7 +92,8 @@ function card(r, town) {
   return `<li class="res">
           <p class="res-name">${esc(r.name)}</p>
           ${r.note ? `<p class="res-note">${esc(r.note)}</p>` : ''}
-          ${r.address || r.hours ? `<p class="res-meta">${[r.address, r.hours].filter(Boolean).map(esc).join(' · ')}</p>` : ''}
+          ${r.hours ? `<p class="res-hours"><span aria-hidden="true">🕒</span> ${esc(r.hours)}</p>` : ''}
+          ${r.address ? `<p class="res-meta">${esc(r.address)}</p>` : ''}
           <p class="res-actions">${bits.join(' ')}</p>
         </li>`;
 }
@@ -112,12 +113,10 @@ export function renderResources(list, town) {
       </ul>
     </details>`);
   }
-  const nav = [];
   for (const c of RESOURCE_CATEGORIES) {
     if (c.id === 'emergency') continue;
     const rows = shown.filter((r) => r.category === c.id);
     if (!rows.length) continue;
-    nav.push(`<a href="#${c.id}">${esc(c.label)}</a>`);
     parts.push(`<details class="res-cat" id="${c.id}">
       <summary><h2>${esc(c.label)}</h2><span class="res-count">${rows.length}</span></summary>
       <ul class="res-list">
@@ -125,7 +124,17 @@ export function renderResources(list, town) {
       </ul>
     </details>`);
   }
-  if (nav.length > 1) parts.splice(top.length ? 1 : 0, 0, `<nav class="res-jump" aria-label="Jump to a section">${nav.join(' ')}</nav>`);
+  // Search box and category sub-tabs. Without JavaScript the sub-tabs are plain jump
+  // links and the search box stays hidden (towns.js turns both on).
+  const cats = RESOURCE_CATEGORIES.filter((c) => (c.id === 'emergency' ? top.length : shown.some((r) => r.category === c.id)));
+  parts.unshift(`<div class="res-tools">
+      <input type="search" class="res-search" placeholder="Search resources" aria-label="Search resources" autocomplete="off" hidden>
+      <nav class="res-subtabs" aria-label="Resource categories">
+        <a href="#resources" class="res-sub" data-cat="" aria-current="true" hidden>All</a>
+        ${cats.map((c) => `<a href="#${c.id}" class="res-sub" data-cat="${c.id}">${esc(c.label)}</a>`).join('\n        ')}
+      </nav>
+    </div>
+    <p class="res-empty muted" hidden>Nothing matches. In an emergency, call 911.</p>`);
   const checked = shown.map((r) => r.checkedAt || r.updatedAt).filter(Boolean);
   if (checked.length) {
     const d = new Date(Math.max(...checked));
