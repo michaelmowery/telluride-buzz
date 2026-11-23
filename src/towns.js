@@ -2,6 +2,7 @@
 // config/ are only an import/export format (first start imports them once, and the
 // admin can export a town back to JSON for safekeeping).
 import { ADAPTERS, newKey, validateSource } from './adapters.js';
+import { LOGO_STYLES } from './brand.js';
 
 const SOURCE_BLOCKS = ['nws', 'cdot', 'lifts', 'resortAlerts', 'meander', 'feeds'];
 
@@ -124,7 +125,7 @@ export function normalizeTown(input, others = []) {
   if (!/^https?:\/\/[^\s/]+$/.test(t.url)) return { error: 'Public address must look like https://ouray.thetown.buzz' };
   t.brand = { ...(t.brand || {}) };
   t.brand.siteName = String(t.brand.siteName || `${t.name} Buzz`).trim();
-  t.brand.logo = t.brand.logo === 'own' ? 'own' : 'thetown';
+  t.brand.logo = LOGO_STYLES[t.brand.logo] ? t.brand.logo : 'thetown';
   if (t.brand.feedbackEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t.brand.feedbackEmail)) return { error: 'Feedback email is not an email address.' };
   if (!t.brand.feedbackEmail) delete t.brand.feedbackEmail;
   if (!t.brand.notAffiliated) delete t.brand.notAffiliated;
