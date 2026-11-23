@@ -400,10 +400,13 @@ async function townPage(id) {
     f.elements.name.after(button);
     f.querySelector('.grid2').after(out);
   }
-  if (!t) kids.push(fillTownWithClaude(f));
+
   if (!t) kids.push(h('p', { class: 'muted' }, 'A new town starts as a draft with National Weather Service alerts and forecast already added (they only need the map point). Then add its roads, resort, town and news sources.'));
   if (t && t.status === 'draft') kids.push(h('div', { class: 'card' }, h('h2', {}, 'Going live'), goLiveSteps(t, health)));
   kids.push(h('div', { class: 'card' }, h('h2', {}, t ? 'Settings' : 'Town details'), f));
+  // Add a town: Fill with Claude sits under the form and builds its prompt from the
+  // town name (and state) typed above.
+  if (!t) kids.push(fillTownWithClaude(f));
   if (t) {
     kids.push(h('div', { class: 'card' }, h('h2', {}, 'Backup and removal'),
       h('p', {}, h('a', { class: 'button secondary', href: `/api/admin/export?town=${encodeURIComponent(t.id)}` }, 'Download town as JSON'),
@@ -584,6 +587,7 @@ function townLookup(form) {
     keep('siteName', `${m.name} Buzz`);
     el('lat').value = m.lat;
     el('lon').value = m.lon;
+    form.dispatchEvent(new Event('lookup-filled'));
     if (m.timezone && (!el('timezone').value.trim() || el('timezone').value === 'America/Denver')) el('timezone').value = m.timezone;
     out.replaceChildren(h('p', { class: 'ok-msg small' }, `Filled from ${m.label}. `,
       h('a', { href: m.maps, target: '_blank', rel: 'noopener' }, 'Check the point on Google Maps ↗')));
@@ -670,16 +674,29 @@ id,town,category,name,phone,phone2,website,address,hours,note,emergency,hidden,c
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  // The prompt shows here and follows the Town name and State boxes as they're typed.
+  const promptBox = h('textarea', { rows: 8, readonly: true, class: 'mono' });
+  const hint = h('p', { class: 'muted small' });
+  const sync = () => {
+    const has = !!form.elements.name.value.trim();
+    promptBox.hidden = !has;
+    hint.textContent = has ? '' : 'Type the town name above and the prompt for Claude appears here.';
+    if (has) promptBox.value = prompt();
+  };
+  for (const n of ['name', 'state']) form.elements[n].addEventListener('input', sync);
+  form.addEventListener('lookup-filled', sync);
+  sync();
   return h('div', { class: 'card' },
-    h('h2', {}, 'Fill with Claude'),
-    h('p', { class: 'muted small' }, '1. Type the town name and state in the form below. 2. Copy the prompt into Claude (claude.ai, with web search on). 3. Paste its answer here and press Fill form. Nothing is saved until you press Create town.'),
+    h('h2', {}, 'Fill the rest with Claude'),
+    h('p', { class: 'muted small' }, 'For the sources, the starter resources and anything the map lookup missed. 1. Copy the prompt into Claude (claude.ai, with web search on). 2. Paste its answer below and press Fill form. Nothing is saved until you press Create town.'),
+    hint, promptBox,
     h('div', { class: 'row' },
       h('button', { type: 'button', onclick: async () => {
         err.textContent = '';
-        if (!form.elements.name.value.trim()) { err.textContent = 'Type the town name in the form first.'; return; }
-        const text = prompt();
-        try { await navigator.clipboard.writeText(text); copied.textContent = 'Prompt copied. Paste it into Claude.'; }
-        catch { out.replaceChildren(h('textarea', { rows: 10, readonly: true }, text)); copied.textContent = 'Copy the prompt below.'; }
+        if (!form.elements.name.value.trim()) { err.textContent = 'Type the town name above first.'; form.elements.name.focus(); return; }
+        sync();
+        try { await navigator.clipboard.writeText(promptBox.value); copied.textContent = 'Prompt copied. Paste it into Claude.'; }
+        catch { promptBox.select(); copied.textContent = 'Select the prompt and copy it.'; }
       } }, 'Copy prompt for Claude'), copied),
     paste,
     h('div', { class: 'row' }, h('button', { type: 'button', class: 'secondary', onclick: fill }, 'Fill form')),

@@ -126,3 +126,4 @@ span.err { color: var(--red); }
 .town-tab:hover { color: var(--ink); }
 .town-tab[aria-current] { color: var(--ink); border-bottom-color: var(--brand); }
 .lookup { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; margin-top: .4rem; } .lookup-out p { margin: .5rem 0 .75rem; }
+[hidden] { display: none !important; }
