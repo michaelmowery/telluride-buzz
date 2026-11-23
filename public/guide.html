@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{pageTitle}} · {{site}}</title>
+  <meta name="description" content="{{pageDescription}}">
+  {{seo}}
+  <meta name="theme-color" content="#1f4e6e">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="/styles.css?v=28">
+  <script src="/theme.js?v=28"></script>
+  <script src="/towns.js?v=28" defer></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand-wrap">
+      <a class="brand" href="/" id="brand" aria-label="{{site}}: choose a town" aria-haspopup="true" aria-expanded="false" aria-controls="town-menu">
+        {{logo}}
+        <svg class="brand-caret" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </a>
+      {{townMenu}}
+    </div>
+    <a class="back" href="/">← Back to the feed</a>
+  </header>
+
+  <main class="about resources">
+    <h1>{{h1}}</h1>
+    {{guideNav}}
+    <p class="lede">{{lede}}</p>
+    {{resources}}
+    <p class="muted">Something wrong or missing? <a href="mailto:{{feedbackEmail}}?subject={{feedbackSubject}}">Tell us</a>. {{site}} is independent and is not affiliated with the organizations listed here.</p>
+  </main>
+
+  <footer class="foot">
+    <p class="fine"><a href="/">Live feed</a> · <a href="/about">About &amp; sources</a> · Not for emergencies: call 911.</p>
+  </footer>
+</body>
+</html>
