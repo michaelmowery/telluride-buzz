@@ -915,12 +915,24 @@ ${csv}
     }
     try {
       const r = await api('/resources/import', { csv: pending, town: f.town, apply });
-      if (apply) { file.value = ''; paste.value = ''; importBox.replaceChildren(h('p', { class: 'ok-msg' }, `Imported: ${r.adds} added, ${r.updates} updated.`)); const fresh = await api('/all-resources'); d.resources = fresh.resources; render(); return; }
+      const problems = (list) => h('ul', {}, ...list.map((e) => h('li', { class: 'err' }, `Row ${e.line}${e.name ? ` (${e.name})` : ''}: ${e.error}`)));
+      if (apply) {
+        file.value = ''; paste.value = '';
+        importBox.replaceChildren(...[
+          h('p', { class: 'ok-msg' }, `Imported: ${r.adds} added, ${r.updates} updated.`, r.errors.length ? ` Skipped ${r.errors.length} row${r.errors.length === 1 ? '' : 's'} with problems (below): fix them in the CSV and import just those, or add them by hand.` : ''),
+          r.errors.length ? problems(r.errors) : null].filter(Boolean));
+        const fresh = await api('/all-resources'); d.resources = fresh.resources; render(); return;
+      }
+      const n = r.adds + r.updates;
+      // The Import button sits right on the summary line, so it's the first thing you see.
+      const go = n ? h('button', { onclick: () => runImport(true) },
+        `Import ${n} row${n === 1 ? '' : 's'}${r.errors.length ? `, skip ${r.errors.length}` : ''}`) : null;
       importBox.replaceChildren(...[
-        h('p', {}, h('strong', {}, `${r.rows} row${r.rows === 1 ? '' : 's'}: ${r.adds} to add, ${r.updates} to update`), r.errors.length ? h('span', { class: 'err' }, `, ${r.errors.length} with problems`) : null, '.'),
-        r.errors.length ? h('ul', {}, ...r.errors.map((e) => h('li', { class: 'err' }, `Row ${e.line}${e.name ? ` (${e.name})` : ''}: ${e.error}`))) : null,
-        r.preview.length ? h('details', {}, h('summary', {}, 'Show rows'), h('ul', { class: 'small' }, ...r.preview.map((x) => h('li', {}, `Row ${x.line}: ${x.action} "${x.name}" in ${townName.get(x.town) || x.town}, ${catName.get(x.category) || x.category}`)))) : null,
-        !r.errors.length && (r.adds || r.updates) ? h('button', { onclick: () => runImport(true) }, `Import ${r.adds + r.updates} row${r.adds + r.updates === 1 ? '' : 's'}`) : null].filter(Boolean));
+        h('div', { class: 'row import-summary' },
+          h('p', {}, h('strong', {}, `${r.rows} row${r.rows === 1 ? '' : 's'}: ${r.adds} to add, ${r.updates} to update`), r.errors.length ? h('span', { class: 'err' }, `, ${r.errors.length} with problems (skipped)`) : null, '.'),
+          go),
+        r.errors.length ? problems(r.errors) : null,
+        r.preview.length ? h('details', {}, h('summary', {}, 'Show rows'), h('ul', { class: 'small' }, ...r.preview.map((x) => h('li', {}, `Row ${x.line}: ${x.action} "${x.name}" in ${townName.get(x.town) || x.town}, ${catName.get(x.category) || x.category}`)))) : null].filter(Boolean));
     } catch (e) { err.textContent = e.message; }
   }
 
@@ -932,7 +944,7 @@ ${csv}
     h('p', { class: 'muted' }, `Phone numbers, offices and links shown on each town's Resources tab. Entries not checked in ${d.staleDays} days show in red.`, f.town ? null : ' Pick a town in the filter to add a resource.'),
     bar, err, claudeCard(), results,
     h('div', { class: 'card' }, h('h2', {}, 'Import from a spreadsheet'),
-      h('p', { class: 'muted small' }, 'Export a CSV, edit it in Excel, Numbers or Google Sheets, then import it here. Rows with an id update that resource; rows without one are added. The town column says which town each row goes to', f.town ? `; blank means ${townName.get(f.town)}.` : '.', ' Category can be the id (medical) or the name (Medical). Nothing changes until you press Import.'),
+      h('p', { class: 'muted small' }, 'Export a CSV, edit it in Excel, Numbers or Google Sheets, then import it here. Rows with an id update that resource; rows without one are added. The town column says which town each row goes to', f.town ? `; blank means ${townName.get(f.town)}.` : '.', ' Category can be the id (medical) or the name (Medical). Nothing changes until you press Import; rows with problems are skipped.'),
       h('div', { class: 'row' }, file, h('button', { type: 'button', class: 'secondary', onclick: () => runImport(false) }, 'Preview')),
       paste,
       h('div', { class: 'row' }, h('button', { type: 'button', class: 'secondary', onclick: () => runImport(false) }, 'Preview pasted CSV')),

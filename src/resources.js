@@ -48,7 +48,11 @@ export function normalizeResource(r = {}) {
     if (!/^https?:\/\//i.test(out.website)) out.website = `https://${out.website}`;
     try { const u = new URL(out.website); if (!/^https?:$/.test(u.protocol) || !u.hostname.includes('.')) throw 0; out.website = u.href; } catch { return { error: 'The website doesn\'t look like a web address.' }; }
   }
-  if (!out.phone && !out.website && !out.address) return { error: 'Add at least a phone number, website or address.' };
+  // Emergency entries may be a note only (for example Mountain Rescue: "Call 911 and ask for...").
+  const noteOnlyOk = out.note && (out.category === 'emergency' || out.emergency);
+  if (!out.phone && !out.website && !out.address && !noteOnlyOk) {
+    return { error: out.category === 'emergency' || out.emergency ? 'Add a phone number, website, address, or at least a note (for example "Call 911 and ask for Mountain Rescue").' : 'Add at least a phone number, website or address.' };
+  }
   const sp = normalizeSponsor(r, out);
   if (sp.error) return sp;
   Object.assign(out, sp.sponsor);

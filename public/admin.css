@@ -102,3 +102,4 @@ span.err { color: var(--red); }
 .pill.sponsor { color: var(--amber); border-color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); }
 .sponsor-box { border: 1px solid var(--line); border-radius: var(--radius); padding: .5rem .9rem .8rem; margin: .8rem 0; }
 .sponsor-box legend { font-weight: 600; padding: 0 .3rem; }
+.import-summary { align-items: center; gap: .75rem; flex-wrap: wrap; } .import-summary p { margin: 0; }
