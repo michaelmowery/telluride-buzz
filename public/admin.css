@@ -98,3 +98,7 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: .85em; background
 @media (max-width: 640px) { .filters .filter { flex: 1 1 45%; min-width: 0; } }
 span.err { color: var(--red); }
 .pill { margin-left: .4rem; }
+.claude-pick { align-items: flex-end; } .claude-pick .filter { margin: 0; font-size: .8rem; }
+.pill.sponsor { color: var(--amber); border-color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); }
+.sponsor-box { border: 1px solid var(--line); border-radius: var(--radius); padding: .5rem .9rem .8rem; margin: .8rem 0; }
+.sponsor-box legend { font-weight: 600; padding: 0 .3rem; }

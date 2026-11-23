@@ -68,16 +68,17 @@ $('#logout').addEventListener('click', async () => { await api('/logout', {}).ca
 let timer = null;
 async function route() {
   clearInterval(timer);
-  const [path, query = ''] = (location.hash.slice(1) || 'health').split('?');
+  const [path, query = ''] = (location.hash.slice(1) || 'feeds').split('?');
   const [page, a, b] = path.split('/').map(decodeURIComponent);
   try {
     await api('/me');
   } catch { return; }
   $('#login').hidden = true;
   $('#nav').hidden = false;
-  document.querySelectorAll('[data-nav]').forEach((n) => n.toggleAttribute('aria-current', n.dataset.nav === (page === 'health' ? 'health' : /resource/.test(page) ? 'resources' : 'towns')));
+  document.querySelectorAll('[data-nav]').forEach((n) => n.toggleAttribute('aria-current', n.dataset.nav === (page === 'feeds' || page === 'health' ? 'feeds' : /resource/.test(page) ? 'resources' : 'towns')));
   try {
-    if (page === 'health') { readFilters(query); await healthPage(); timer = setInterval(() => healthPage(true).catch(() => {}), 30e3); }
+    if (page === 'health') { location.replace(`#feeds${query ? `?${query}` : ''}`); return; } // old bookmarks
+    if (page === 'feeds') { readFilters(query); await healthPage(); timer = setInterval(() => healthPage(true).catch(() => {}), 30e3); }
     else if (page === 'towns') await townsPage();
     else if (page === 'new-town') await townPage(null);
     else if (page === 'town') await townPage(a);
@@ -87,7 +88,7 @@ async function route() {
     else if (page === 'resources') await resourcesPage(a);
     else if (page === 'resource') await resourcePage(a, b);
     else if (page === 'new-resource') await resourcePage(a, null, b);
-    else location.hash = 'health';
+    else location.hash = 'feeds';
   } catch (err) {
     if (err.message !== 'Sign in first') view.replaceChildren(h('div', { class: 'card' }, h('p', { class: 'error' }, err.message)));
   }
@@ -96,7 +97,7 @@ async function route() {
 window.addEventListener('hashchange', route);
 
 // ---------- filters ----------
-// Health board filters live in the address (#health?town=durango&feed=roads&status=problems)
+// Health board filters live in the address (#feeds?town=durango&feed=roads&status=problems)
 // so a filtered view can be bookmarked, and the last one is remembered on this device.
 const FILTER_KEYS = ['town', 'feed', 'status', 'q'];
 const STATUS_FILTERS = [['', 'Any status'], ['problems', 'Failing or needs a look'], ['red', 'Failing'], ['amber', 'Needs a look'], ['green', 'OK'], ['paused', 'Paused']];
@@ -120,7 +121,7 @@ function saveFilters() {
   const p = new URLSearchParams();
   for (const k of FILTER_KEYS) if (filters[k]) p.set(k, filters[k]);
   const qs = p.toString();
-  history.replaceState(null, '', `#health${qs ? `?${qs}` : ''}`); // no hashchange, so no re-route
+  history.replaceState(null, '', `#feeds${qs ? `?${qs}` : ''}`); // no hashchange, so no re-route
 }
 
 function matches(s, f, townName = '') {
@@ -171,7 +172,7 @@ async function healthPage(refresh = false) {
     const towns = healthData.towns.map((t) => ({ id: t.id, name: `${t.name}${t.state ? `, ${t.state}` : ''}` }));
     if (filters.town && !towns.some((t) => t.id === filters.town)) filters.town = '';
     view.replaceChildren(
-      h('div', { class: 'row spread' }, h('h1', {}, 'Source health'), h('span', { class: 'muted small', id: 'health-updated' })),
+      h('div', { class: 'row spread' }, h('h1', {}, 'Feeds'), h('span', { class: 'muted small', id: 'health-updated' })),
       filterBar(filters, { towns, feeds: feedList(all, healthData.feeds || {}), feedNames: healthData.feeds || {} }, () => { saveFilters(); renderHealth(); }),
       h('div', { id: 'health-results' }),
     );
@@ -589,6 +590,8 @@ id,town,category,name,phone,phone2,website,address,hours,note,emergency,hidden,c
 const siteOf = (t) => (t.url || `https://${t.hostnames?.[0] || `${t.id}.thetown.buzz`}`).replace(/\/$/, '');
 // Each town's /resources page: phone numbers, offices and links, kept by hand.
 const DAY = 86400e3;
+const sponsorLabel = (state) => ({ active: 'sponsored', scheduled: 'sponsor starts later', ended: 'sponsor ended' }[state] || '');
+const sponsorPill = (r) => (r.sponsorState ? h('span', { class: `pill ${r.sponsorState === 'active' ? 'sponsor' : 'draft'}` }, sponsorLabel(r.sponsorState)) : null);
 async function resourcesPage(townId) {
   const d = await api(`/resources?town=${encodeURIComponent(townId)}`);
   const t = d.town;
@@ -611,6 +614,7 @@ async function resourcesPage(townId) {
     h('td', {}, h('a', { href: `#resource/${t.id}/${r.id}` }, r.name),
       r.emergency && r.category !== 'emergency' ? h('span', { class: 'pill live' }, 'emergency box') : null,
       r.hidden ? h('span', { class: 'pill draft' }, 'hidden') : null,
+      sponsorPill(r),
       h('div', { class: 'muted small' }, [r.phone, r.website && r.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')].filter(Boolean).join(' · '))),
     h('td', { class: 'small hide-sm' }, stale(r) ? h('span', { class: 'err' }, r.checkedAt ? `Checked ${ago(r.checkedAt)}` : 'Never checked') : `Checked ${ago(r.checkedAt)}`),
     h('td', { class: 'actions' },
@@ -644,6 +648,21 @@ async function resourcePage(townId, id, category = '') {
   const v = r || { category: category || 'emergency' };
   const err = h('p', { class: 'error', role: 'alert' });
   const input = (name, attrs = {}) => h('input', { name, value: v[name] || '', ...attrs });
+  // Sponsorship: business categories only. Shows first in its category with a
+  // "Sponsored" label between the two dates, then goes back to a normal listing.
+  const isBiz = (cat) => d.categories.find((c) => c.id === cat)?.group === 'business';
+  const plusDays = (day, n) => new Date(Date.parse(`${day}T12:00:00Z`) + n * DAY).toISOString().slice(0, 10);
+  const sponsorOn = h('input', { type: 'checkbox', name: 'sponsored', checked: !!v.sponsored });
+  const sponsorFields = h('div', { class: 'grid2', hidden: !v.sponsored },
+    field('Starts', input('sponsorFrom', { type: 'date', value: v.sponsorFrom || d.today })),
+    field('Ends', input('sponsorUntil', { type: 'date', value: v.sponsorUntil || plusDays(d.today, 29) }), 'Last day shown as sponsored. After that it goes back to a normal listing.'),
+    field('Tagline', input('sponsorTagline', { maxlength: 80, placeholder: 'Happy hour 3 to 5 daily' }), 'Optional. One short line under the name.'),
+    field('Logo', input('sponsorLogo', { maxlength: 300, placeholder: 'https://example.com/logo.png' }), 'Optional. An https:// image address. Shown small.'));
+  sponsorOn.addEventListener('change', () => { sponsorFields.hidden = !sponsorOn.checked; });
+  const sponsorBox = h('fieldset', { class: 'sponsor-box' },
+    h('legend', {}, 'Sponsored listing', v.sponsorState ? sponsorPill(v) : null),
+    h('label', { class: 'check' }, sponsorOn, ' Sponsored: show first in its category with a "Sponsored" label'),
+    sponsorFields);
   const f = h('form', {},
     h('div', { class: 'grid2' },
       field('Name', input('name', { required: true, maxlength: 120, placeholder: 'Telluride Regional Medical Center' })),
@@ -653,22 +672,29 @@ async function resourcePage(townId, id, category = '') {
       field('Website', input('website', { maxlength: 300, placeholder: 'https://www.tellmed.org' })),
       field('Address', input('address', { maxlength: 200, placeholder: '500 W Pacific Ave, Telluride, CO 81435' }), 'Shows a Map button.'),
       field('Hours', input('hours', { maxlength: 200, placeholder: 'Daily 8 a.m. to 6 p.m.' })),
+      field('Tags', input('tags', { maxlength: 80, placeholder: 'Mexican · $$' }), 'Short descriptor on the card. Mostly for businesses: cuisine, price, what they sell.'),
     ),
     field('Note', h('textarea', { name: 'note', rows: 2, maxlength: 400, placeholder: 'For the ER, call the main line and press 0.' }, v.note || '')),
     h('label', { class: 'check' }, h('input', { type: 'checkbox', name: 'emergency', checked: !!v.emergency }), ' Also show in the Emergency box at the top'),
     h('label', { class: 'check' }, h('input', { type: 'checkbox', name: 'hidden', checked: !!v.hidden }), ' Hide from the public page'),
     h('label', { class: 'check' }, h('input', { type: 'checkbox', name: 'checked', checked: !r }), ' I checked this is right today'),
+    sponsorBox,
     h('div', { class: 'row form-actions' },
       h('button', { type: 'submit' }, r ? 'Save' : 'Add resource'),
       r ? h('button', { type: 'button', class: 'danger', onclick: remove }, 'Delete') : null),
     err,
   );
+  const catSelect = f.querySelector('select[name=category]');
+  const syncSponsor = () => { sponsorBox.hidden = !isBiz(catSelect.value); };
+  catSelect.addEventListener('change', syncSponsor);
+  syncSponsor();
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
     err.textContent = '';
     const fd = new FormData(f);
     const resource = { id: r?.id, sort: r?.sort, emergency: fd.get('emergency') === 'on', hidden: fd.get('hidden') === 'on' };
-    for (const k of ['name', 'category', 'phone', 'phone2', 'website', 'address', 'hours', 'note']) resource[k] = fd.get(k);
+    for (const k of ['name', 'category', 'phone', 'phone2', 'website', 'address', 'hours', 'note', 'tags', 'sponsorFrom', 'sponsorUntil', 'sponsorTagline', 'sponsorLogo']) resource[k] = fd.get(k);
+    resource.sponsored = fd.get('sponsored') === 'on' && isBiz(resource.category);
     try {
       await api('/resource', { town: t.id, resource, checked: fd.get('checked') === 'on' });
       location.hash = `resources/${t.id}`;
@@ -689,7 +715,7 @@ async function resourcePage(townId, id, category = '') {
 // ---------- all resources (every town) ----------
 // One list across towns with filters and search, plus CSV export and import.
 const RES_FILTER_KEYS = ['town', 'cat', 'status', 'q'];
-const RES_STATUS = [['', 'Any status'], ['stale', 'Needs checking'], ['never', 'Never checked'], ['hidden', 'Hidden'], ['emergency', 'In the emergency box']];
+const RES_STATUS = [['', 'Any status'], ['stale', 'Needs checking'], ['never', 'Never checked'], ['hidden', 'Hidden'], ['emergency', 'In the emergency box'], ['sponsored', 'Sponsored (any)'], ['sponsor-active', 'Sponsored now'], ['sponsor-ended', 'Sponsorship ended']];
 let resFilters = { town: '', cat: '', status: '', q: '' };
 function readResFilters(query) {
   const p = new URLSearchParams(query);
@@ -738,8 +764,11 @@ async function allResourcesPage() {
     if (f.status === 'never' && r.checkedAt) return false;
     if (f.status === 'hidden' && !r.hidden) return false;
     if (f.status === 'emergency' && !(r.emergency || r.category === 'emergency')) return false;
+    if (f.status === 'sponsored' && !r.sponsored) return false;
+    if (f.status === 'sponsor-active' && r.sponsorState !== 'active') return false;
+    if (f.status === 'sponsor-ended' && r.sponsorState !== 'ended') return false;
     if (f.q) {
-      const hay = [r.name, r.phone, r.phone2, r.phone.replace(/\D/g, ''), r.website, r.address, r.hours, r.note, townName.get(r.townId), catName.get(r.category)].join(' ').toLowerCase();
+      const hay = [r.name, r.phone, r.phone2, r.phone.replace(/\D/g, ''), r.website, r.address, r.hours, r.note, r.tags, townName.get(r.townId), catName.get(r.category)].join(' ').toLowerCase();
       if (!f.q.toLowerCase().split(/\s+/).every((w) => hay.includes(w))) return false;
     }
     return true;
@@ -763,6 +792,8 @@ async function allResourcesPage() {
           h('td', {}, h('a', { href: `#resource/${r.townId}/${r.id}` }, r.name),
             r.emergency && r.category !== 'emergency' ? h('span', { class: 'pill live' }, 'emergency box') : null,
             r.hidden ? h('span', { class: 'pill draft' }, 'hidden') : null,
+            sponsorPill(r),
+            r.sponsored ? h('div', { class: 'muted small' }, `Sponsored ${r.sponsorFrom} to ${r.sponsorUntil}`) : null,
             r.hours ? h('div', { class: 'muted small' }, `🕒 ${r.hours}`) : null),
           f.town ? null : h('td', { class: 'small' }, townName.get(r.townId) || r.townId),
           h('td', { class: 'small hide-sm' }, catName.get(r.category) || r.category),
@@ -777,11 +808,19 @@ async function allResourcesPage() {
   // import box below, preview, then import. No API call: copy and paste only.
   function claudeCard() {
     const box = h('div', { hidden: true });
+    // Its own town and category pickers, starting from the page filter (or the town
+    // with the most resources), so it works without touching the filters above.
+    const count = (id) => d.resources.filter((r) => r.townId === id).length;
+    const startTown = f.town || [...d.towns].sort((a, b) => count(b.id) - count(a.id))[0]?.id || '';
+    const townSel = h('select', { name: 'claude-town' }, ...d.towns.map((t) => h('option', { value: t.id, selected: t.id === startTown }, `${townName.get(t.id)} (${count(t.id)})`)));
+    const catSel = h('select', { name: 'claude-cat' }, h('option', { value: '' }, 'All categories'), ...d.categories.map((c) => h('option', { value: c.id, selected: c.id === f.cat }, c.label)));
+    const refresh = () => { if (!box.hidden) { box.hidden = true; btn.click(); } };
+    townSel.addEventListener('change', refresh);
+    catSel.addEventListener('change', refresh);
     const btn = h('button', { type: 'button', onclick: () => {
       if (!box.hidden) { box.hidden = true; btn.textContent = 'Update with Claude'; return; }
-      if (!f.town) { err.textContent = 'Pick a town first, so the prompt is about one town.'; return; }
       err.textContent = '';
-      const prompt = claudePrompt(f.town, f.cat);
+      const prompt = claudePrompt(townSel.value, catSel.value);
       const ta = h('textarea', { rows: 14, readonly: true, class: 'mono' }, prompt);
       const copied = h('span', { class: 'ok-msg small', role: 'status' });
       box.replaceChildren(
@@ -797,26 +836,37 @@ async function allResourcesPage() {
       btn.textContent = 'Hide prompt';
     } }, 'Update with Claude');
     return h('div', { class: 'card' },
-      h('div', { class: 'row spread' }, h('h2', {}, 'Update with Claude'), btn),
-      h('p', { class: 'muted small' }, 'Builds a research prompt for the town (and category) picked above, with the current entries included. Claude checks them against official sources, fixes and adds entries, and answers in the import format.'),
+      h('h2', {}, 'Update with Claude'),
+      h('p', { class: 'muted small' }, 'Pick a town and, if you like, one category. You get a research prompt with the current entries included. Claude checks them against official sources, fixes and adds entries, and answers in the import format.'),
+      h('div', { class: 'row claude-pick' }, h('label', { class: 'filter' }, 'Town', townSel), h('label', { class: 'filter' }, 'Category', catSel), btn),
       box);
   }
 
+  const isBizCat = (id) => d.categories.find((c) => c.id === id)?.group === 'business';
   function claudePrompt(townId, cat) {
     const t = d.towns.find((x) => x.id === townId);
     const rows = d.resources.filter((r) => r.townId === townId && (!cat || r.category === cat));
     const cell = (v) => { const x = String(v ?? ''); return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
     const day = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '');
-    const cols = ['id', 'town', 'category', 'name', 'phone', 'phone2', 'website', 'address', 'hours', 'note', 'emergency', 'hidden', 'checked', 'source'];
-    const csv = [cols.join(','), ...rows.map((r) => [r.id, r.townId, r.category, r.name, r.phone, r.phone2, r.website, r.address, r.hours, r.note,
+    const cols = ['id', 'town', 'category', 'name', 'phone', 'phone2', 'website', 'address', 'hours', 'note', 'tags', 'emergency', 'hidden', 'checked', 'source'];
+    const csv = [cols.join(','), ...rows.map((r) => [r.id, r.townId, r.category, r.name, r.phone, r.phone2, r.website, r.address, r.hours, r.note, r.tags,
       r.emergency ? 'yes' : '', r.hidden ? 'yes' : '', day(r.checkedAt), ''].map(cell).join(','))].join('\n');
     const place = `${t.name}${t.state ? `, ${t.state}` : ''}`;
     const scope = cat ? `the "${catName.get(cat)}" category` : 'all categories';
     const today = new Date().toISOString().slice(0, 10);
-    return `You are helping maintain the Resources page of ${t.url.replace(/^https?:\/\//, '')}, a local information site for ${place}. It lists essential civic resources people look up: emergency numbers, medical care, town and county offices, transit and parking, utilities, roads and travel, trails and outdoors, schools and the library. It is not a business directory, so leave out shops, restaurants, lodging and other private businesses unless they are the only provider of an essential service (for example, the hospital or the electric co-op).
+    const biz = cat ? isBizCat(cat) : false;
+    const civicCats = d.categories.filter((c) => c.group !== 'business').map((c) => c.id).join(', ');
+    const bizCats = d.categories.filter((c) => c.group === 'business').map((c) => c.id).join(', ');
+    const about = cat
+      ? (biz
+        ? `This category lists local businesses. Include established, currently open, locally relevant places in or right next to ${place}: the ones residents and visitors actually use. Keep it to the most useful 10 to 25. Skip chains unless they are the only option, and skip anything permanently closed.`
+        : 'This category is essential civic information. Only include public agencies, utilities and essential services, not shops or restaurants.')
+      : `Civic categories (${civicCats}) are essential public information: agencies, utilities and essential services only. Business categories (${bizCats}) list established, currently open local businesses residents and visitors actually use: the most useful 10 to 25 per category, no chains unless they are the only option, nothing permanently closed.`;
+    return `You are helping maintain the Resources page of ${t.url.replace(/^https?:\/\//, '')}, a local information site for ${place}. The page lists emergency numbers, medical care, town and county offices, transit and parking, utilities, roads and travel, trails and outdoors, schools and the library, and then local businesses: food and drink, shops, local services and lodging.
+${about}
 
 Task: review and improve the entries for ${scope} in ${place}.
-1. Check every current entry below against official, primary sources (the agency's or organization's own website, or a government site). Fix wrong or outdated phone numbers, websites, addresses and hours.
+1. Check every current entry below against official, primary sources (the agency's, organization's or business's own website, a government site, or its Google Maps listing for hours and address). Fix wrong or outdated phone numbers, websites, addresses and hours.
 2. Add important missing resources for ${scope}.
 3. Use web search. Do not guess or fill in from memory. If you cannot confirm a value from an official source, leave that cell blank and say so in the source column.
 
@@ -833,6 +883,7 @@ Rules for the CSV:
 - address: street, town, state and ZIP.
 - hours: short and readable, like "Mon to Fri 8 a.m. to 5 p.m." or "24/7". Blank if unknown.
 - note: one short sentence a resident would find useful. No marketing language.
+- tags: a short descriptor, mostly for businesses: cuisine and price for food ("Mexican · $$"), what a shop sells ("Ski & bike rentals"), the kind of lodging ("Hotel · $$$"). Blank for civic entries.
 - emergency: "yes" only for things someone needs in an emergency (911, dispatch, ER, poison control). Otherwise blank.
 - hidden: keep the current value. Leave blank for new entries.
 - checked: ${today} for entries you verified against an official source today. Otherwise keep the current value.
@@ -878,7 +929,7 @@ ${csv}
       h('span', {},
         f.town ? h('a', { class: 'button', href: `#new-resource/${f.town}/${f.cat || 'emergency'}` }, 'Add resource') : null, ' ',
         h('a', { class: 'button secondary', href: `/api/admin/resources/export${f.town ? `?town=${encodeURIComponent(f.town)}` : ''}` }, f.town ? 'Export CSV' : 'Export all as CSV'))),
-    h('p', { class: 'muted' }, `Phone numbers, offices and links shown on each town's Resources tab. Entries not checked in ${d.staleDays} days show in red.`, f.town ? null : ' Pick a town to add a resource.'),
+    h('p', { class: 'muted' }, `Phone numbers, offices and links shown on each town's Resources tab. Entries not checked in ${d.staleDays} days show in red.`, f.town ? null : ' Pick a town in the filter to add a resource.'),
     bar, err, claudeCard(), results,
     h('div', { class: 'card' }, h('h2', {}, 'Import from a spreadsheet'),
       h('p', { class: 'muted small' }, 'Export a CSV, edit it in Excel, Numbers or Google Sheets, then import it here. Rows with an id update that resource; rows without one are added. The town column says which town each row goes to', f.town ? `; blank means ${townName.get(f.town)}.` : '.', ' Category can be the id (medical) or the name (Medical). Nothing changes until you press Import.'),

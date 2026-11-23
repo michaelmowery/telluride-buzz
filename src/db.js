@@ -137,6 +137,12 @@ function migrate(db) {
   add('towns', 'updated_at', 'INTEGER');
   add('source_status', 'failing_since', 'INTEGER');
   add('source_status', 'last_items', 'INTEGER');
+  add('resources', 'tags', 'TEXT');
+  // Sponsored listings: dates are yyyy-mm-dd in the town's time zone, both inclusive.
+  add('resources', 'sponsor_from', 'TEXT');
+  add('resources', 'sponsor_until', 'TEXT');
+  add('resources', 'sponsor_tagline', 'TEXT');
+  add('resources', 'sponsor_logo', 'TEXT');
 }
 
 function wrap(db) {
@@ -245,7 +251,9 @@ function wrap(db) {
         : db.prepare('SELECT * FROM resources ORDER BY town_id, sort, id').all();
       return rows.map((r) => ({
         id: r.id, townId: r.town_id, category: r.category, name: r.name, phone: r.phone || '', phone2: r.phone2 || '',
-        website: r.website || '', address: r.address || '', hours: r.hours || '', note: r.note || '',
+        website: r.website || '', address: r.address || '', hours: r.hours || '', note: r.note || '', tags: r.tags || '',
+        sponsored: !!r.sponsor_until, sponsorFrom: r.sponsor_from || '', sponsorUntil: r.sponsor_until || '',
+        sponsorTagline: r.sponsor_tagline || '', sponsorLogo: r.sponsor_logo || '',
         emergency: !!r.emergency, hidden: !!r.hidden, sort: r.sort, checkedAt: r.checked_at, updatedAt: r.updated_at,
       }));
     },
@@ -254,15 +262,19 @@ function wrap(db) {
     saveResource(townId, r) {
       const now = Date.now();
       const vals = [r.category, r.name, r.phone || null, r.phone2 || null, r.website || null, r.address || null,
-        r.hours || null, r.note || null, r.emergency ? 1 : 0, r.hidden ? 1 : 0, r.sort ?? 0];
+        r.hours || null, r.note || null, r.tags || null, r.emergency ? 1 : 0, r.hidden ? 1 : 0, r.sort ?? 0,
+        r.sponsored ? r.sponsorFrom : null, r.sponsored ? r.sponsorUntil : null,
+        r.sponsored ? r.sponsorTagline || null : null, r.sponsored ? r.sponsorLogo || null : null];
       if (r.id) {
         const res = db.prepare(`UPDATE resources SET category = ?, name = ?, phone = ?, phone2 = ?, website = ?, address = ?,
-                    hours = ?, note = ?, emergency = ?, hidden = ?, sort = ?, checked_at = COALESCE(?, checked_at), updated_at = ?
+                    hours = ?, note = ?, tags = ?, emergency = ?, hidden = ?, sort = ?,
+                    sponsor_from = ?, sponsor_until = ?, sponsor_tagline = ?, sponsor_logo = ?, checked_at = COALESCE(?, checked_at), updated_at = ?
                     WHERE id = ? AND town_id = ?`).run(...vals, r.checkedAt ?? null, now, r.id, townId);
         return res.changes ? r.id : null;
       }
-      const res = db.prepare(`INSERT INTO resources (town_id, category, name, phone, phone2, website, address, hours, note,
-                  emergency, hidden, sort, checked_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      const res = db.prepare(`INSERT INTO resources (town_id, category, name, phone, phone2, website, address, hours, note, tags,
+                  emergency, hidden, sort, sponsor_from, sponsor_until, sponsor_tagline, sponsor_logo, checked_at, updated_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(townId, ...vals, r.checkedAt ?? null, now);
       return Number(res.lastInsertRowid);
     },

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { openDb } from '../src/db.js';
 import { importConfigs, loadTowns } from '../src/towns.js';
 import { createAdmin } from '../src/admin.js';
-import { importResources, normalizeResource, renderResources, telHref } from '../src/resources.js';
+import { importResources, normalizeResource, planCsvImport, renderResources, resourcesToCsv, sponsorActive, telHref } from '../src/resources.js';
 import { renderTemplate } from '../src/brand.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -163,4 +163,68 @@ test('CSV export round-trips through import, and import previews before writing'
   // An id from another town is refused, not moved.
   plan = planCsvImport(`id,town,category,name,phone\n${dur[0].id},telluride,medical,X,911\n`, { towns, existing: db.listResources(null) });
   assert.match(plan.errors[0].error, /No resource/);
+});
+
+test('local businesses sit under their own heading, with tags', () => {
+  const town = { id: 'telluride', name: 'Telluride', state: 'CO', timezone: 'America/Denver' };
+  const list = [
+    { id: 1, category: 'medical', name: 'Clinic', phone: '970-555-0100', sort: 10 },
+    { id: 2, category: 'food', name: 'Taco Spot', phone: '970-555-0101', tags: 'Mexican · $', sort: 20 },
+    { id: 3, category: 'lodging', name: 'Inn', website: 'https://inn.example', sort: 30 },
+  ];
+  const html = renderResources(list, town);
+  const heading = html.indexOf('id="local-businesses"');
+  assert.ok(heading > html.indexOf('id="medical"') && heading < html.indexOf('id="food"') && html.indexOf('id="food"') < html.indexOf('id="lodging"'));
+  assert.match(html, /class="res-tags">Mexican · \$</);
+  assert.equal(renderResources(list.slice(0, 1), town).includes('local-businesses'), false);
+  const csv = resourcesToCsv([{ ...list[1], townId: 'telluride' }]);
+  assert.match(csv.split('\r\n')[0], /,note,tags,/);
+  assert.match(csv, /Mexican · \$/);
+});
+
+test('sponsored listings: business only, first in category, labelled, end on their date', () => {
+  const ok = (r) => normalizeResource({ name: 'X', phone: '970-555-0100', ...r });
+  const sp = { sponsored: true, sponsorFrom: '2026-12-01', sponsorUntil: '2026-12-31' };
+  assert.match(ok({ category: 'medical', ...sp }).error, /business/);
+  assert.match(ok({ category: 'food', emergency: true, ...sp }).error, /Emergency/);
+  assert.match(ok({ category: 'food', sponsored: true }).error, /date/);
+  assert.match(ok({ category: 'food', ...sp, sponsorUntil: '2026-11-01' }).error, /ends before/);
+  assert.match(ok({ category: 'food', ...sp, sponsorLogo: 'http://x.example/l.png' }).error, /https/);
+  assert.equal(ok({ category: 'food', sponsorFrom: '2026-12-01' }).resource.sponsorFrom, '', 'off means no dates kept');
+
+  const db = setup();
+  const save = (r) => db.saveResource('telluride', ok(r).resource);
+  save({ name: 'Plain Cafe', category: 'food', sort: 10 });
+  const sid = save({ name: 'Sponsor Bistro', category: 'food', sort: 20, sponsorTagline: 'Happy hour 3 to 5', sponsorLogo: 'https://bistro.example/logo.png', ...sp });
+  save({ name: 'Emergency line', category: 'emergency', phone: '911', sort: 5 });
+  const list = db.listResources('telluride');
+  assert.ok(list.find((r) => r.id === sid).sponsored);
+  const town = { id: 'telluride', name: 'Telluride', state: 'CO', timezone: 'America/Denver' };
+  const at = (iso) => renderResources(list, town, Date.parse(iso));
+
+  const during = at('2026-12-31T23:30:00-07:00'); // still Dec 31 in Telluride
+  const food = during.slice(during.indexOf('id="food"'));
+  assert.ok(food.indexOf('Sponsor Bistro') < food.indexOf('Plain Cafe'), 'sponsor first');
+  assert.match(food, /res-sponsored[\s\S]*Sponsored[\s\S]*Happy hour 3 to 5/);
+  assert.match(food, /<img class="res-logo" src="https:\/\/bistro.example\/logo.png"/);
+  const emergency = during.slice(0, during.indexOf('</details>'));
+  assert.equal(emergency.includes('Sponsored'), false);
+
+  for (const when of ['2026-11-30T12:00:00-07:00', '2027-01-01T00:30:00-07:00']) {
+    const html = at(when);
+    assert.equal(html.includes('res-sponsored'), false, when);
+    const f = html.slice(html.indexOf('id="food"'));
+    assert.ok(f.indexOf('Plain Cafe') < f.indexOf('Sponsor Bistro'), 'back to admin order');
+  }
+  assert.equal(sponsorActive(list.find((r) => r.id === sid), '2026-12-15'), true);
+
+  // A CSV update (no sponsor columns) keeps the sponsorship.
+  const s = list.find((r) => r.id === sid);
+  const plan = planCsvImport(`id,town,category,name,phone\n${sid},telluride,food,Sponsor Bistro & Bar,970-555-0100\n`,
+    { towns: db.listTowns(), existing: list });
+  assert.equal(plan.errors.length, 0, JSON.stringify(plan.errors));
+  db.saveResource('telluride', plan.updates[0].resource);
+  const after = db.listResources('telluride').find((r) => r.id === sid);
+  assert.equal(after.name, 'Sponsor Bistro & Bar');
+  assert.deepEqual([after.sponsored, after.sponsorUntil, after.sponsorTagline], [true, s.sponsorUntil, s.sponsorTagline]);
 });
