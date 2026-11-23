@@ -202,7 +202,15 @@ function serveTemplate(req, res, file, ext, st, town) {
   // Pages with resources are also re-rendered every 10 minutes, so a sponsorship
   // starts and ends on its dates without anyone touching the admin.
   if (!c || c.mtime !== st.mtimeMs || (c.expires && Date.now() > c.expires)) {
-    const extra = /[\\/](resources|index)\.html$/.test(file) ? { resources: renderResources(db.listResources(town.id), town) } : {};
+    let extra = {};
+    if (/[\\/]resources\.html$/.test(file)) extra = { resources: renderResources(db.listResources(town.id), town) };
+    else if (/[\\/]index\.html$/.test(file)) {
+      // Home page: one panel per tab (Essentials, Food & drink, Shops, Lodging).
+      const list = db.listResources(town.id);
+      const now = Date.now();
+      extra = { resources: renderResources(list, town, now, 'essentials'), eat: renderResources(list, town, now, 'eat'),
+        shop: renderResources(list, town, now, 'shop'), stay: renderResources(list, town, now, 'stay') };
+    }
     const body = Buffer.from(renderTemplate(fs.readFileSync(file, 'utf8'), ext, town, pickerTowns(town), extra));
     c = { mtime: st.mtimeMs, expires: extra.resources ? Date.now() + 10 * 60_000 : 0, body, etag: `"${crypto.createHash('sha1').update(body).digest('base64url').slice(0, 16)}"` };
     templateCache.set(key, c);

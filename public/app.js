@@ -679,34 +679,44 @@ async function togglePush() {
     .catch((e) => { console.warn('[push] service worker', e); setPush('error', 'service worker did not start'); });
 })();
 
-// ---------- tabs: Live feed | Resources ----------
-// #resources (or a section inside it, like #medical) opens the Resources tab, so the
-// header phone icon, footer link and shared links all land on it.
+// ---------- tabs: Live feed | Essentials | Food & drink | Shops | Lodging ----------
+// A tab's hash (#essentials, #eat, #shop, #stay; old #resources links mean Essentials)
+// or a section inside a panel (like #medical) opens that tab, so the header phone icon,
+// footer link and shared links all land on it.
+// A function, not a constant: showTab can run (from setFilter) before this line does.
+function tabList() {
+  return [['feed', 'feed-panel'], ['essentials', 'res-panel'], ['eat', 'eat-panel'], ['shop', 'shop-panel'], ['stay', 'stay-panel']]
+    .filter(([id, panel]) => document.getElementById(`tab-${id}`) && document.getElementById(panel));
+}
 function showTab(which, scroll = false) {
-  const res = which === 'resources';
-  $('#tab-feed').setAttribute('aria-selected', String(!res));
-  $('#tab-resources').setAttribute('aria-selected', String(res));
-  $('#feed-panel').hidden = res;
-  $('#res-panel').hidden = !res;
+  for (const [id, panel] of tabList()) {
+    document.getElementById(`tab-${id}`).setAttribute('aria-selected', String(id === which));
+    document.getElementById(panel).hidden = id !== which;
+  }
   if (scroll) $('.feed-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Keep the picked tab in view when the tab row scrolls sideways on a phone.
+  document.getElementById(`tab-${which}`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 function tabFromHash(scroll) {
-  const id = decodeURIComponent(location.hash.slice(1));
+  let id = decodeURIComponent(location.hash.slice(1));
   if (!id) return;
+  if (id === 'resources') id = 'essentials';
+  if (tabList().some(([t]) => t === id)) { showTab(id, scroll); return; }
   const el = document.getElementById(id);
-  if (id === 'resources' || (el && $('#res-panel').contains(el))) {
-    showTab('resources', id === 'resources' && scroll);
-    if (el && el.tagName === 'DETAILS') { el.open = true; if (scroll) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-  } else if (id === 'feed') showTab('feed', scroll);
+  const home = el && tabList().find(([, panel]) => panel !== 'feed-panel' && document.getElementById(panel).contains(el));
+  if (home) {
+    showTab(home[0]);
+    if (el.tagName === 'DETAILS') { el.open = true; if (scroll) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  }
 }
 document.querySelectorAll('.tabs [role=tab]').forEach((t) => t.addEventListener('click', (e) => {
   e.preventDefault();
   history.replaceState(null, '', t.getAttribute('href'));
-  showTab(t.id === 'tab-resources' ? 'resources' : 'feed');
+  showTab(t.id.replace(/^tab-/, ''));
 }));
-document.querySelectorAll('.tabs [role=tab]').forEach((t) => t.addEventListener('keydown', (e) => {
+document.querySelectorAll('.tabs [role=tab]').forEach((t, i, all) => t.addEventListener('keydown', (e) => {
   if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-  const other = t.id === 'tab-feed' ? $('#tab-resources') : $('#tab-feed');
+  const other = all[(i + (e.key === 'ArrowRight' ? 1 : all.length - 1)) % all.length];
   other.focus(); other.click();
 }));
 window.addEventListener('hashchange', () => tabFromHash(true));

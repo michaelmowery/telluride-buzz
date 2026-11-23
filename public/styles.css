@@ -173,8 +173,10 @@ main { max-width: 720px; margin: 0 auto; padding: 12px 16px 8px; }
 .feed-wrap { margin-top: 18px; }
 .feed-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .feed-head h2 { font: 700 18px var(--slab); margin: 0; }
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); flex: 1; margin-right: 10px; }
-.tab { font: 700 18px var(--slab); color: var(--ink-2); text-decoration: none; padding: 6px 4px 8px; margin: 0 10px -1px 0; border-bottom: 3px solid transparent; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); flex: 1; margin-right: 10px; min-width: 0; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { flex: none; white-space: nowrap; font: 700 18px var(--slab); color: var(--ink-2); text-decoration: none; padding: 6px 4px 8px; margin: 0 10px -1px 0; border-bottom: 3px solid transparent; }
+@media (max-width: 600px) { .tab { font-size: 16px; margin-right: 6px; } }
 .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--amber); }
 .tab:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; border-radius: 4px; }
 .res-tab { padding-top: 6px; }
@@ -534,6 +536,11 @@ a.prefs-btn { text-decoration: none; }
 .res-sub[data-cat="shops"], #shops summary h2 { --ico: var(--i-bag); }
 .res-sub[data-cat="services"], #services summary h2 { --ico: var(--i-wrench); }
 .res-sub[data-cat="lodging"], #lodging summary h2 { --ico: var(--i-bed); }
+#tab-eat { --ico: var(--i-food); }
+#tab-shop { --ico: var(--i-bag); }
+#tab-stay { --ico: var(--i-bed); }
+#tab-eat, #tab-shop, #tab-stay { display: inline-flex; align-items: center; gap: .4em; }
+#tab-eat::before, #tab-shop::before, #tab-stay::before { content: ""; flex: none; width: 1.15em; height: 1.15em; background: currentColor; -webkit-mask: var(--ico) center / contain no-repeat; mask: var(--ico) center / contain no-repeat; }
 .res-sub[data-cat="food"], #food summary h2, .res-sub[data-cat="shops"], #shops summary h2,
 .res-sub[data-cat="services"], #services summary h2, .res-sub[data-cat="lodging"], #lodging summary h2 { display: inline-flex; align-items: center; gap: .4em; }
 .res-sub[data-cat="food"]::before, #food summary h2::before, .res-sub[data-cat="shops"]::before, #shops summary h2::before,
@@ -570,7 +577,7 @@ a.prefs-btn { text-decoration: none; }
   --i-book: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5zM4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5%22/%3E%3C/svg%3E");
 }
 #tab-feed { --ico: var(--i-live); }
-#tab-resources { --ico: var(--i-phone); }
+#tab-essentials { --ico: var(--i-phone); }
 .feed-pill[data-cat=""] { --ico: var(--i-all); }
 .feed-pill[data-cat="alerts"] { --ico: var(--i-alert); }
 .feed-pill[data-cat="roads"] { --ico: var(--i-road); }
@@ -608,7 +615,7 @@ a.prefs-btn { text-decoration: none; }
 .res-sub[data-cat="schools"] { --ico: var(--i-book); }
 #schools summary h2 { --ico: var(--i-book); }
 #tab-feed,
-#tab-resources,
+#tab-essentials,
 .feed-pill[data-cat=""],
 .feed-pill[data-cat="alerts"],
 .feed-pill[data-cat="roads"],
@@ -646,7 +653,7 @@ a.prefs-btn { text-decoration: none; }
 .res-sub[data-cat="schools"],
 #schools summary h2 { display: inline-flex; align-items: center; gap: .4em; }
 #tab-feed::before,
-#tab-resources::before,
+#tab-essentials::before,
 .feed-pill[data-cat=""]::before,
 .feed-pill[data-cat="alerts"]::before,
 .feed-pill[data-cat="roads"]::before,

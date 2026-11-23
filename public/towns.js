@@ -35,6 +35,7 @@
     const sections = [...root.querySelectorAll('details.res-cat')];
     const empty = root.querySelector('.res-empty');
     let cat = '';
+    sections.forEach((d) => { if (d.open) d.setAttribute('data-start-open', ''); });
     input.hidden = false;
     subs.forEach((a) => { a.hidden = false; });
 
@@ -59,7 +60,7 @@
     function pick(c) {
       cat = c;
       subs.forEach((a) => a.setAttribute('aria-current', String(a.dataset.cat === cat)));
-      if (!cat && !input.value.trim()) sections.forEach((d) => { d.open = false; });
+      if (!cat && !input.value.trim()) sections.forEach((d) => { d.open = d.hasAttribute('data-start-open'); });
       apply();
     }
     subs.forEach((a) => a.addEventListener('click', (e) => {
