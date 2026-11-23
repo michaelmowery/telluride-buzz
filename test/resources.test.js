@@ -101,6 +101,8 @@ test('public page: emergency box first, categories collapsible, hidden left out,
   assert.match(page, /<h1>Telluride resources<\/h1>/);
   assert.match(page, /href="tel:911"/);
   assert.match(html, /class="res-search"/);
+  db.saveResource('telluride', normalizeResource({ name: 'Gondola', category: 'transit', website: 'https://x.org', hours: 'Daily 6:30 a.m. to midnight' }).resource);
+  assert.match(renderResources(db.listResources('telluride'), town), /class="res-hours"><span aria-hidden="true">🕒<\/span> Daily 6:30 a.m. to midnight/);
   assert.match(html, /data-cat="emergency">Emergency</);
   assert.match(html, /data-cat="schools">Schools &amp; library</);
   assert.doesNotMatch(html, /data-cat="utilities"/); // only hidden entries there

@@ -487,6 +487,7 @@ a.prefs-btn { text-decoration: none; }
 .res-name { font-weight: 600; }
 .res-note { font-size: 14px; }
 .res-meta { font-size: 13px; color: var(--ink-2); }
+.res-hours { font-size: 14px; font-weight: 600; color: var(--ink); }
 .res-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px !important; }
 .res-btn { display: inline-block; padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--ink); text-decoration: none; background: var(--cream); min-height: 20px; }
 .res-btn:hover { border-color: var(--forest-2); }

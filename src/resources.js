@@ -92,7 +92,8 @@ function card(r, town) {
   return `<li class="res">
           <p class="res-name">${esc(r.name)}</p>
           ${r.note ? `<p class="res-note">${esc(r.note)}</p>` : ''}
-          ${r.address || r.hours ? `<p class="res-meta">${[r.address, r.hours].filter(Boolean).map(esc).join(' · ')}</p>` : ''}
+          ${r.hours ? `<p class="res-hours"><span aria-hidden="true">🕒</span> ${esc(r.hours)}</p>` : ''}
+          ${r.address ? `<p class="res-meta">${esc(r.address)}</p>` : ''}
           <p class="res-actions">${bits.join(' ')}</p>
         </li>`;
 }
