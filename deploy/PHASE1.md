@@ -21,17 +21,17 @@ cd /opt/telluride-buzz && docker compose up -d
 Sign in at https://telluride.buzz/admin (works on any town's address). Without the
 password set, /admin answers "Not found".
 
-## 2. Wildcard subdomains (optional, one time)
+## 2. Any-town subdomains (one time; DONE on the server 2026-11-23)
 
 Without this, every new town still needs a DNS record and a Caddy block, as Durango did.
 With it, a town added in the admin at `<name>.thetown.buzz` works within a minute of
 its first visit, and Caddy only issues certificates for addresses that belong to a town
 in the database (it asks the app at `/api/tls-ask` first).
 
-**Porkbun DNS for thetown.buzz:** add A record, host `*`, answer `2.28.70.5`. (The
-existing `durango`, `@` and `www` records stay.)
+**Porkbun DNS for thetown.buzz:** A record, host `*`, answer `2.28.70.5`. (The
+`durango`, `ouray`, `@` and `www` records stay.)
 
-**Caddy** (`/opt/meander.me/infra/Caddyfile`): add to the global options block at the
+**Caddy** (`/opt/meander.me/infra/Caddyfile`): in the global options block at the
 very top (create one if there is none; keep anything already in it):
 
 ```
@@ -42,11 +42,10 @@ very top (create one if there is none; keep anything already in it):
 }
 ```
 
-and add this site block (the explicit `durango.thetown.buzz` and `thetown.buzz` blocks
-can stay; specific blocks win over the wildcard):
+and this catch-all site block at the end of the file:
 
 ```
-*.thetown.buzz {
+https:// {
 	tls {
 		on_demand
 	}
@@ -55,13 +54,22 @@ can stay; specific blocks win over the wildcard):
 }
 ```
 
+**Do not use a `*.thetown.buzz {` site block here.** On 2026-11-23 a wildcard site
+block made Caddy stop serving the explicit `durango.thetown.buzz` and
+`www.thetown.buzz` blocks (browsers got ERR_SSL_PROTOCOL_ERROR). The `https://`
+catch-all only handles names no other block matches, so the explicit blocks keep
+their own certificates. No per-town Caddy blocks are needed for new towns.
+
 Validate and reload:
 
 ```
-cd /opt/meander.me/infra && cp Caddyfile Caddyfile.bak-$(date +%Y%m%d) \
+cd /opt/meander.me/infra && cp Caddyfile Caddyfile.bak-$(date +%Y%m%d-%H%M%S) \
   && docker compose exec caddy caddy validate --config /etc/caddy/Caddyfile \
   && docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
 ```
+
+Check a town: `curl -sI https://<name>.thetown.buzz | head -1` should print `HTTP/2 200`
+(the first visit can take ~10 seconds while the certificate is issued).
 
 A town with its own domain (like telluride.buzz) still needs its own DNS record and
 Caddy block.
