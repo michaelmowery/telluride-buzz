@@ -13,6 +13,7 @@ import { HUB_HOSTS, renderHub, snapshot, townForPath } from './hub.js';
 import { importConfigs, loadTowns } from './towns.js';
 import { createAdmin } from './admin.js';
 import { sourceHealth } from './health.js';
+import { importResources, renderResources } from './resources.js';
 import crypto from 'node:crypto';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -38,6 +39,11 @@ const configs = fs.existsSync(CONFIG_DIR)
   ? fs.readdirSync(CONFIG_DIR).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(fs.readFileSync(path.join(CONFIG_DIR, f), 'utf8')))
   : [];
 importConfigs(db, configs, { log });
+// Resource seeds (config/resources/<town>.json), also imported once per town.
+const RES_DIR = path.join(CONFIG_DIR, 'resources');
+importResources(db, fs.existsSync(RES_DIR)
+  ? fs.readdirSync(RES_DIR).filter((f) => f.endsWith('.json')).map((f) => JSON.parse(fs.readFileSync(path.join(RES_DIR, f), 'utf8')))
+  : [], { log });
 
 let towns = [];        // every town, drafts included
 let publicTowns = [];  // live towns: the town picker and thetown.buzz list these
@@ -89,6 +95,7 @@ const admin = createAdmin({
   db,
   log,
   runNow: (townId, key) => scheduler.runNow(townId, key),
+  onResources() { templateCache.clear(); },
   onChange() {
     const before = new Set(towns.map((t) => t.id));
     refreshTowns();
@@ -193,7 +200,8 @@ function serveTemplate(req, res, file, ext, st, town) {
   const key = `${town.id}:${file}`;
   let c = templateCache.get(key);
   if (!c || c.mtime !== st.mtimeMs) {
-    const body = Buffer.from(renderTemplate(fs.readFileSync(file, 'utf8'), ext, town, pickerTowns(town)));
+    const extra = file.endsWith(`${path.sep}resources.html`) ? { resources: renderResources(db.listResources(town.id), town) } : {};
+    const body = Buffer.from(renderTemplate(fs.readFileSync(file, 'utf8'), ext, town, pickerTowns(town), extra));
     c = { mtime: st.mtimeMs, body, etag: `"${crypto.createHash('sha1').update(body).digest('base64url').slice(0, 16)}"` };
     templateCache.set(key, c);
   }

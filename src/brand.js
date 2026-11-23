@@ -88,11 +88,11 @@ export function brandValues(town, towns = [town]) {
 }
 
 // Values that are already markup (or URL-encoded) and must not be escaped again.
-const RAW = new Set(['logo', 'townMenu', 'aboutSources', 'feedbackSubject']);
+const RAW = new Set(['logo', 'townMenu', 'aboutSources', 'feedbackSubject', 'resources']);
 
 /** Fill {{name}} placeholders. HTML files get HTML escaping; JS and JSON files get string escaping. */
-export function renderTemplate(text, ext, town, towns = [town]) {
-  const v = brandValues(town, towns);
+export function renderTemplate(text, ext, town, towns = [town], extra = {}) {
+  const v = { ...brandValues(town, towns), ...extra };
   const html = ext === '.html';
   return text.replace(/\{\{(\w+)\}\}/g, (m, k) => {
     if (!(k in v)) return m;
@@ -101,4 +101,4 @@ export function renderTemplate(text, ext, town, towns = [town]) {
   });
 }
 
-export const TEMPLATED = new Set(['/index.html', '/about.html', '/manifest.webmanifest', '/sw.js']);
+export const TEMPLATED = new Set(['/index.html', '/about.html', '/resources.html', '/manifest.webmanifest', '/sw.js']);

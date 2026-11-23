@@ -1,0 +1,25 @@
+{
+  "town": "telluride",
+  "checked": "2026-11-23",
+  "note": "Seed for Telluride's /resources page, imported once on first start. After that, edit in /admin. Sources: tellmed.org, telluride-co.gov (Dispatch, Town Clerk, State Federal Local Resources), telluride.com (government resources, visitor information, gondola, library, SMPA), read 2026-11-23.",
+  "resources": [
+    { "category": "emergency", "name": "Emergency: police, fire, ambulance", "phone": "911", "note": "Call 911 for any life-threatening emergency." },
+    { "category": "emergency", "name": "Dispatch (non-emergency)", "phone": "970-249-9110", "note": "Regional dispatch center, answered 24 hours a day." },
+    { "category": "emergency", "name": "San Miguel County Sheriff's Office", "phone": "970-728-1911", "website": "https://www.sanmiguelcountyco.gov" },
+    { "category": "emergency", "name": "Mountain Village Police Department", "phone": "970-728-9281" },
+    { "category": "emergency", "name": "Poison Control", "phone": "1-800-222-1222", "note": "Free and confidential, 24 hours a day." },
+    { "category": "medical", "name": "Telluride Regional Medical Center", "emergency": true, "phone": "970-728-3848", "phone2": "970-729-1089", "website": "https://www.tellmed.org", "address": "500 W Pacific Ave, Telluride, CO 81435", "hours": "Emergency care 24/7", "note": "For the emergency room, call the main line and press 0. After hours, emergencies only: 970-729-1089." },
+    { "category": "government", "name": "Town of Telluride, Town Hall", "phone": "970-728-5700", "website": "https://www.telluride-co.gov", "address": "135 W Columbia Ave, Telluride, CO 81435" },
+    { "category": "government", "name": "Town Clerk", "phone": "970-728-8436", "website": "https://telluride-co.gov/276/Town-Clerk", "address": "135 W Columbia Ave, Telluride, CO 81435", "note": "Business licenses, records and elections." },
+    { "category": "government", "name": "San Miguel County", "website": "https://www.sanmiguelcountyco.gov", "address": "333 W Colorado Ave, Telluride, CO 81435", "note": "County courthouse and offices." },
+    { "category": "government", "name": "Town of Mountain Village, Town Hall", "phone": "970-728-8000", "website": "https://townofmountainvillage.com", "address": "455 Mountain Village Blvd, Suite A, Mountain Village, CO 81435" },
+    { "category": "government", "name": "Telluride Visitor Center", "phone": "1-888-605-2578", "website": "https://www.telluride.com", "address": "236 W Colorado Ave, Telluride, CO 81435", "hours": "Daily 8 a.m. to 6 p.m." },
+    { "category": "transit", "name": "The Gondola", "website": "https://www.telluride.com/discover/the-gondola/", "hours": "Daily 6:30 a.m. to midnight", "note": "Free. Connects Telluride (Oak Street) and Mountain Village. Winter season runs Nov 20, 2026 to Apr 4, 2027." },
+    { "category": "transit", "name": "Galloping Goose shuttle", "website": "https://www.telluride.com/page/business-community/visitor-information/", "hours": "Daily 7 a.m. to midnight, every 20 minutes", "note": "Free town shuttle around Telluride." },
+    { "category": "transit", "name": "Mountain Village Dial-A-Ride", "phone": "970-728-8888" },
+    { "category": "utilities", "name": "San Miguel Power Association (electric)", "phone": "970-864-7311", "website": "https://www.smpa.com", "note": "Electric co-op serving Telluride. Main office is in Nucla." },
+    { "category": "roads", "name": "COtrip road conditions (CDOT)", "phone": "511", "website": "https://www.cotrip.org", "note": "Statewide road conditions, closures and chain laws." },
+    { "category": "outdoors", "name": "US Forest Service, Telluride office", "phone": "970-728-4211", "address": "2740 Highway 145, Telluride, CO 81435", "note": "Trail, camping and forest information." },
+    { "category": "schools", "name": "Wilkinson Public Library", "phone": "970-728-4519", "website": "https://telluridelibrary.org", "address": "100 W Pacific Ave, Telluride, CO 81435", "hours": "Open seven days a week" }
+  ]
+}
