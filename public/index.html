@@ -14,9 +14,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/styles.css?v=22">
-  <script src="/theme.js?v=22"></script>
-  <script src="/towns.js?v=22" defer></script>
+  <link rel="stylesheet" href="/styles.css?v=24">
+  <script src="/theme.js?v=24"></script>
+  <script src="/towns.js?v=24" defer></script>
 </head>
 <body>
   <header class="top">
@@ -85,9 +85,18 @@
           <a class="tab" role="tab" id="tab-feed" href="#feed" aria-selected="true" aria-controls="feed-panel"><span id="feed-title">Live feed</span></a>
           <a class="tab" role="tab" id="tab-resources" href="#resources" aria-selected="false" aria-controls="res-panel">Resources</a>
         </div>
-        <button id="clear-filter" class="chip clear" hidden>Show all</button>
       </div>
       <div id="feed-panel" role="tabpanel" aria-labelledby="tab-feed">
+        <nav class="feed-pills" aria-label="Filter the live feed">
+          <button class="res-sub feed-pill" data-cat="" aria-current="true">All</button>
+          <button class="res-sub feed-pill" data-cat="alerts">Alerts</button>
+          <button class="res-sub feed-pill" data-cat="roads">Roads</button>
+          <button class="res-sub feed-pill" data-cat="weather">Weather</button>
+          <button class="res-sub feed-pill" data-cat="lifts">Lifts &amp; Snow</button>
+          <button class="res-sub feed-pill" data-cat="events">Events</button>
+          <button class="res-sub feed-pill" data-cat="news">News</button>
+          <button class="res-sub feed-pill" data-cat="town">Town</button>
+        </nav>
         <ol id="feed" class="feed"></ol>
         <button id="more" class="more" hidden>Load older posts</button>
       </div>
@@ -115,6 +124,6 @@
     <p class="fine">Every post links to its source. <a href="#resources">Resources</a> · <a href="/about">About &amp; sources</a> · <a href="#" id="prefs-link">Preferences</a> · Not for emergencies: call 911.</p>
   </footer>
 
-  <script src="/app.js?v=22" type="module"></script>
+  <script src="/app.js?v=24" type="module"></script>
 </body>
 </html>
