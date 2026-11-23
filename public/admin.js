@@ -664,17 +664,99 @@ async function allResourcesPage() {
     );
   }
 
+  // "Update with Claude": a ready-to-copy research prompt for the town and category
+  // picked in the filters, with the current entries as CSV. Paste the answer into the
+  // import box below, preview, then import. No API call: copy and paste only.
+  function claudeCard() {
+    const box = h('div', { hidden: true });
+    const btn = h('button', { type: 'button', onclick: () => {
+      if (!box.hidden) { box.hidden = true; btn.textContent = 'Update with Claude'; return; }
+      if (!f.town) { err.textContent = 'Pick a town first, so the prompt is about one town.'; return; }
+      err.textContent = '';
+      const prompt = claudePrompt(f.town, f.cat);
+      const ta = h('textarea', { rows: 14, readonly: true, class: 'mono' }, prompt);
+      const copied = h('span', { class: 'ok-msg small', role: 'status' });
+      box.replaceChildren(
+        h('p', { class: 'muted small' }, '1. Copy this prompt into Claude (claude.ai, with web search on). 2. Paste Claude\'s CSV answer into "Import from a spreadsheet" below. 3. Preview, check the changes, then Import.'),
+        ta,
+        h('div', { class: 'row' }, h('button', { type: 'button', onclick: async () => {
+          try { await navigator.clipboard.writeText(prompt); } catch { ta.select(); document.execCommand('copy'); }
+          copied.textContent = 'Copied.';
+          setTimeout(() => { copied.textContent = ''; }, 2500);
+        } }, 'Copy prompt'), copied,
+        h('button', { type: 'button', class: 'secondary', onclick: () => { paste.focus(); paste.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, 'Go to paste box')));
+      box.hidden = false;
+      btn.textContent = 'Hide prompt';
+    } }, 'Update with Claude');
+    return h('div', { class: 'card' },
+      h('div', { class: 'row spread' }, h('h2', {}, 'Update with Claude'), btn),
+      h('p', { class: 'muted small' }, 'Builds a research prompt for the town (and category) picked above, with the current entries included. Claude checks them against official sources, fixes and adds entries, and answers in the import format.'),
+      box);
+  }
+
+  function claudePrompt(townId, cat) {
+    const t = d.towns.find((x) => x.id === townId);
+    const rows = d.resources.filter((r) => r.townId === townId && (!cat || r.category === cat));
+    const cell = (v) => { const x = String(v ?? ''); return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
+    const day = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '');
+    const cols = ['id', 'town', 'category', 'name', 'phone', 'phone2', 'website', 'address', 'hours', 'note', 'emergency', 'hidden', 'checked', 'source'];
+    const csv = [cols.join(','), ...rows.map((r) => [r.id, r.townId, r.category, r.name, r.phone, r.phone2, r.website, r.address, r.hours, r.note,
+      r.emergency ? 'yes' : '', r.hidden ? 'yes' : '', day(r.checkedAt), ''].map(cell).join(','))].join('\n');
+    const place = `${t.name}${t.state ? `, ${t.state}` : ''}`;
+    const scope = cat ? `the "${catName.get(cat)}" category` : 'all categories';
+    const today = new Date().toISOString().slice(0, 10);
+    return `You are helping maintain the Resources page of ${t.url.replace(/^https?:\/\//, '')}, a local information site for ${place}. It lists essential civic resources people look up: emergency numbers, medical care, town and county offices, transit and parking, utilities, roads and travel, trails and outdoors, schools and the library. It is not a business directory, so leave out shops, restaurants, lodging and other private businesses unless they are the only provider of an essential service (for example, the hospital or the electric co-op).
+
+Task: review and improve the entries for ${scope} in ${place}.
+1. Check every current entry below against official, primary sources (the agency's or organization's own website, or a government site). Fix wrong or outdated phone numbers, websites, addresses and hours.
+2. Add important missing resources for ${scope}.
+3. Use web search. Do not guess or fill in from memory. If you cannot confirm a value from an official source, leave that cell blank and say so in the source column.
+
+Answer with ONLY one CSV code block (\`\`\`csv ... \`\`\`) in exactly this format, with the header row first:
+${cols.join(',')}
+
+Rules for the CSV:
+- id: keep the id for existing entries. Leave it blank for new ones. Never invent an id.
+- town: always "${townId}".
+- category: one of ${d.categories.map((c) => c.id).join(', ')}.
+- name: the official name, plainly written.
+- phone, phone2: like 970-728-3848. Use phone2 only for a second line (after hours, outage line) and explain it in note.
+- website: full https:// address of the official page.
+- address: street, town, state and ZIP.
+- hours: short and readable, like "Mon to Fri 8 a.m. to 5 p.m." or "24/7". Blank if unknown.
+- note: one short sentence a resident would find useful. No marketing language.
+- emergency: "yes" only for things someone needs in an emergency (911, dispatch, ER, poison control). Otherwise blank.
+- hidden: keep the current value. Leave blank for new entries.
+- checked: ${today} for entries you verified against an official source today. Otherwise keep the current value.
+- source: the URL(s) you used for that row, or why a value is blank. This column is for review only and is ignored on import.
+- Include every current entry, changed or not, so nothing is lost. To suggest removing one, keep it and write "suggest removing: <reason>" in source.
+- Quote any cell that contains a comma.
+
+Current entries (${rows.length}):
+\`\`\`csv
+${csv}
+\`\`\``;
+  }
+
   // CSV import: pick a file, preview what would change, then import.
   const importBox = h('div');
   const file = h('input', { type: 'file', accept: '.csv,text/csv' });
+  const paste = h('textarea', { rows: 6, placeholder: 'Or paste CSV here (for example, Claude\'s answer). A ```csv code block is fine.', spellcheck: 'false', class: 'mono' });
+  let pending = '';
   async function runImport(apply) {
     err.textContent = '';
-    const fl = file.files[0];
-    if (!fl) { err.textContent = 'Choose a CSV file first.'; return; }
-    if (fl.size > 400 * 1024) { err.textContent = 'That file is too big (400 KB at most).'; return; }
+    if (!apply) {
+      const pasted = paste.value.trim();
+      const fl = file.files[0];
+      if (!pasted && !fl) { err.textContent = 'Choose a CSV file or paste CSV first.'; return; }
+      if (!pasted && fl.size > 400 * 1024) { err.textContent = 'That file is too big (400 KB at most).'; return; }
+      // Claude often wraps CSV in a ```csv block with a sentence around it: keep just the block.
+      const block = pasted.match(/```(?:csv)?\s*\n([\s\S]*?)```/i);
+      pending = pasted ? (block ? block[1] : pasted) : await fl.text();
+    }
     try {
-      const r = await api('/resources/import', { csv: await fl.text(), town: f.town, apply });
-      if (apply) { file.value = ''; importBox.replaceChildren(h('p', { class: 'ok-msg' }, `Imported: ${r.adds} added, ${r.updates} updated.`)); const fresh = await api('/all-resources'); d.resources = fresh.resources; render(); return; }
+      const r = await api('/resources/import', { csv: pending, town: f.town, apply });
+      if (apply) { file.value = ''; paste.value = ''; importBox.replaceChildren(h('p', { class: 'ok-msg' }, `Imported: ${r.adds} added, ${r.updates} updated.`)); const fresh = await api('/all-resources'); d.resources = fresh.resources; render(); return; }
       importBox.replaceChildren(...[
         h('p', {}, h('strong', {}, `${r.rows} row${r.rows === 1 ? '' : 's'}: ${r.adds} to add, ${r.updates} to update`), r.errors.length ? h('span', { class: 'err' }, `, ${r.errors.length} with problems`) : null, '.'),
         r.errors.length ? h('ul', {}, ...r.errors.map((e) => h('li', { class: 'err' }, `Row ${e.line}${e.name ? ` (${e.name})` : ''}: ${e.error}`))) : null,
@@ -689,10 +771,12 @@ async function allResourcesPage() {
         f.town ? h('a', { class: 'button', href: `#new-resource/${f.town}/${f.cat || 'emergency'}` }, 'Add resource') : null, ' ',
         h('a', { class: 'button secondary', href: `/api/admin/resources/export${f.town ? `?town=${encodeURIComponent(f.town)}` : ''}` }, f.town ? 'Export CSV' : 'Export all as CSV'))),
     h('p', { class: 'muted' }, `Phone numbers, offices and links shown on each town's Resources tab. Entries not checked in ${d.staleDays} days show in red.`, f.town ? null : ' Pick a town to add a resource.'),
-    bar, err, results,
+    bar, err, claudeCard(), results,
     h('div', { class: 'card' }, h('h2', {}, 'Import from a spreadsheet'),
       h('p', { class: 'muted small' }, 'Export a CSV, edit it in Excel, Numbers or Google Sheets, then import it here. Rows with an id update that resource; rows without one are added. The town column says which town each row goes to', f.town ? `; blank means ${townName.get(f.town)}.` : '.', ' Category can be the id (medical) or the name (Medical). Nothing changes until you press Import.'),
       h('div', { class: 'row' }, file, h('button', { type: 'button', class: 'secondary', onclick: () => runImport(false) }, 'Preview')),
+      paste,
+      h('div', { class: 'row' }, h('button', { type: 'button', class: 'secondary', onclick: () => runImport(false) }, 'Preview pasted CSV')),
       importBox),
   );
   render();
