@@ -11,6 +11,7 @@ import { ADAPTERS } from './adapters.js';
 import { DEFAULT_DISCLAIMER } from './sources/cdot.js';
 import { NM_DISCLAIMER } from './sources/nmroads.js';
 import { stateName } from './geocode.js';
+import { formLinks } from './forms.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const jsStr = (s) => JSON.stringify(String(s ?? '')).slice(1, -1);
@@ -152,6 +153,7 @@ export function townMenu(town, towns) {
       </ul>
       <p class="town-none" data-none hidden>No towns match.</p>
       <a class="town-all" href="https://thetown.buzz">See all towns at <strong>thetown.buzz</strong></a>
+      <a class="town-suggest" href="${esc(formLinks().suggestTownUrl)}" target="_blank" rel="noopener">Don't see your town? <strong>Suggest a town</strong></a>
     </nav>`;
 }
 
@@ -202,6 +204,8 @@ export function brandValues(town, towns = [town]) {
     notAffiliated: b.notAffiliated || 'the agencies and businesses whose information it shows',
     feedbackEmail: b.feedbackEmail || 'telluridebuzz@gmail.com',
     feedbackSubject: encodeURIComponent(`${site} feedback`),
+    // ClickUp forms (src/forms.js), pre-filled with this town's display name.
+    ...formLinks(town.name),
     // Tiles with no source are left out (a town without state roads or a ski resort),
     // and a DOT's disclaimer shows only where that DOT's data does.
     bodyClass: tileGaps(town),

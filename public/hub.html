@@ -21,9 +21,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/styles.css?v=35">
-  <script src="/theme.js?v=35"></script>
-  <script src="/towns.js?v=35" defer></script>
+  <link rel="stylesheet" href="/styles.css?v=36">
+  <script src="/theme.js?v=36"></script>
+  <script src="/towns.js?v=36" defer></script>
 </head>
 <body class="hub">
   <header class="top">
@@ -41,7 +41,8 @@
       <h2 class="hub-h2" id="hub-towns-title">Pick your town</h2>
       <input type="search" class="town-search hub-search" data-town-search placeholder="Search towns or states" aria-label="Search towns" autocomplete="off" hidden>
       {{towns}}
-      <p class="town-none" data-none hidden>No towns match. <a href="mailto:{{feedbackEmail}}?subject={{feedbackSubject}}">Suggest your town</a></p>
+      <p class="town-none" data-none hidden>No towns match. <a href="{{suggestTownUrl}}" target="_blank" rel="noopener">Suggest your town</a></p>
+      <p class="hub-suggest">Don't see your town? <a href="{{suggestTownUrl}}" target="_blank" rel="noopener">Suggest a town</a></p>
     </section>
 
     <section class="hub-how" aria-label="How it works">
@@ -53,13 +54,14 @@
     <section class="hub-ask">
       <h2>Want Buzz in your town?</h2>
       <p>We're adding towns one at a time. Tell us where you live and what you'd want on it.</p>
-      <a class="push-btn" href="mailto:{{feedbackEmail}}?subject={{feedbackSubject}}">Suggest your town</a>
+      <a class="push-btn" href="{{suggestTownUrl}}" target="_blank" rel="noopener">Suggest your town</a>
     </section>
   </main>
 
   <footer class="foot">
     <p class="mission">thetown.buzz is the real-time pulse of your town: what's happening where you live, right now, from sources you can trust.</p>
     <p class="fine">In early testing, so check the original source before you rely on anything here. Not affiliated with the agencies and businesses whose information it shows. Not for emergencies: call 911.</p>
+    <p class="fine"><a href="{{feedbackUrl}}" target="_blank" rel="noopener">Feedback</a> · <a href="{{supportUrl}}" target="_blank" rel="noopener">Report a problem</a></p>
   </footer>
 </body>
 </html>
