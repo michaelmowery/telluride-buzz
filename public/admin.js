@@ -394,6 +394,12 @@ async function townPage(id) {
   // Settings is only the town's own fields: its sources live on the Feeds tab and its
   // listings on the Resources tab. A draft town also gets the going-live checklist.
   const kids = t ? [] : [h('p', {}, h('a', { href: '#towns' }, '← All towns')), h('h1', {}, 'Add a town')];
+  if (!t) {
+    // The Look up button sits right under the Town name box; its result shows under the fields.
+    const { button, out } = townLookup(f);
+    f.elements.name.after(button);
+    f.querySelector('.grid2').after(out);
+  }
   if (!t) kids.push(fillTownWithClaude(f));
   if (!t) kids.push(h('p', { class: 'muted' }, 'A new town starts as a draft with National Weather Service alerts and forecast already added (they only need the map point). Then add its roads, resort, town and news sources.'));
   if (t && t.status === 'draft') kids.push(h('div', { class: 'card' }, h('h2', {}, 'Going live'), goLiveSteps(t, health)));
@@ -564,6 +570,44 @@ function otherTownCard(t, s, towns) {
 // Copy a prompt (built from the name and state typed in the form) into Claude, paste
 // its JSON answer back, and the form fills in for review. Nothing is saved until
 // Create town. Suggested sources and starter resources are shown to add afterwards.
+// Add a town: type the name, press Look up, and the map point, state, address name,
+// site name and time zone fill in (OpenStreetMap search, via our server). Several
+// matches show as choices. Fields already typed by hand are kept, except the map point.
+function townLookup(form) {
+  const out = h('div', { class: 'lookup-out', role: 'status' });
+  const el = (n) => form.elements[n];
+  const fill = (m) => {
+    const keep = (n, v) => { if (v && !el(n).value.trim()) el(n).value = v; };
+    el('name').value = m.name;
+    keep('state', m.state);
+    keep('id', m.id);
+    keep('siteName', `${m.name} Buzz`);
+    el('lat').value = m.lat;
+    el('lon').value = m.lon;
+    if (m.timezone && (!el('timezone').value.trim() || el('timezone').value === 'America/Denver')) el('timezone').value = m.timezone;
+    out.replaceChildren(h('p', { class: 'ok-msg small' }, `Filled from ${m.label}. `,
+      h('a', { href: m.maps, target: '_blank', rel: 'noopener' }, 'Check the point on Google Maps ↗')));
+  };
+  const btn = h('button', { type: 'button', class: 'secondary', onclick: async () => {
+    const name = el('name').value.trim();
+    if (!name) { out.replaceChildren(h('p', { class: 'error' }, 'Type the town name first.')); el('name').focus(); return; }
+    btn.disabled = true; btn.textContent = 'Looking up…';
+    try {
+      const { matches } = await api(`/geocode?q=${encodeURIComponent(name)}&state=${encodeURIComponent(el('state').value.trim())}`);
+      if (!matches.length) out.replaceChildren(h('p', { class: 'error' }, `No town called "${name}" found. Add the state, or fill the point in by hand from `,
+        h('a', { href: `https://www.google.com/maps/search/${encodeURIComponent(name)}`, target: '_blank', rel: 'noopener' }, 'Google Maps ↗'), '.'));
+      else if (matches.length === 1 || matches[0].place && !matches[1].place) fill(matches[0]);
+      else out.replaceChildren(h('p', { class: 'small' }, 'Which one?'),
+        h('div', { class: 'row' }, ...matches.map((m) => h('button', { type: 'button', class: 'small secondary', title: m.label, onclick: () => fill(m) },
+          `${m.name}${m.state ? `, ${m.state}` : ''}${m.county ? ` (${m.county})` : ''}`))));
+    } catch (e) { out.replaceChildren(h('p', { class: 'error' }, e.message)); }
+    btn.disabled = false; btn.textContent = 'Look up on the map';
+  } }, 'Look up on the map');
+  const maps = h('a', { class: 'small', href: 'https://www.google.com/maps', target: '_blank', rel: 'noopener',
+    onclick: (e) => { const n = el('name').value.trim(); if (n) e.currentTarget.href = `https://www.google.com/maps/search/${encodeURIComponent(n)}`; } }, 'Open Google Maps ↗');
+  return { button: h('span', { class: 'lookup' }, btn, maps), out };
+}
+
 function fillTownWithClaude(form) {
   const err = h('p', { class: 'error', role: 'alert' });
   const out = h('div');

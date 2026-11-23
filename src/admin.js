@@ -9,6 +9,7 @@ import crypto from 'node:crypto';
 import { adapterCatalog, itemSourcesOf, testSource } from './adapters.js';
 import { exportTown, loadTowns, normalizeSource, normalizeTown, starterSources } from './towns.js';
 import { sourceHealth, townColor, FEED_NAMES } from './health.js';
+import { geocodeTown } from './geocode.js';
 import { normalizeResource, planCsvImport, resourcesToCsv, RESOURCE_CATEGORIES, STALE_DAYS, sponsorState, townDay } from './resources.js';
 import { townUrl } from './brand.js';
 
@@ -103,6 +104,17 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
     switch (route) {
       case 'GET /me':
         return ok();
+      case 'GET /geocode': {
+        // Add a town: look the name up on the map (OpenStreetMap) to fill the form.
+        const name = (url.searchParams.get('q') || '').slice(0, 80);
+        if (!name.trim()) return bad('Type a town name first.');
+        try {
+          return ok({ matches: await (deps.geocode || geocodeTown)(name, (url.searchParams.get('state') || '').slice(0, 2)) });
+        } catch (e) {
+          log.warn?.(`admin: geocode failed: ${e.message}`);
+          return bad('The map lookup didn\'t answer. Try again, or fill the point in by hand.', 502);
+        }
+      }
       case 'GET /adapters':
         return ok({ adapters: adapterCatalog() });
       case 'GET /towns':
