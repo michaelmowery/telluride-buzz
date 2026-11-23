@@ -345,13 +345,13 @@ async function townPage(id) {
   const b = t?.brand || {};
   const f = h('form', { id: 'town-form' },
     h('div', { class: 'grid2' },
-      field('Town name', h('input', { name: 'name', required: true, value: t?.name || '', placeholder: 'Ouray' })),
+      field('Town name', h('input', { name: 'name', required: true, value: t?.name || '', placeholder: 'Town name' })),
       field('State', h('input', { name: 'state', value: t?.state || '', placeholder: 'CO', maxlength: 2 })),
-      field('Address name', h('input', { name: 'id', required: true, value: t?.id || '', placeholder: 'ouray', pattern: '[a-z][a-z0-9\\-]{1,39}', readonly: !!t }),
-        t ? 'Fixed once the town exists.' : 'Becomes ouray.thetown.buzz. Lowercase letters, numbers, dashes.'),
-      field('Site name', h('input', { name: 'siteName', value: b.siteName || '', placeholder: 'Ouray Buzz' }), 'Used in sentences and the browser tab.'),
-      field('Latitude', h('input', { name: 'lat', required: true, inputmode: 'decimal', value: t?.location?.lat ?? '', placeholder: '38.0228' }), 'Right-click the town on Google Maps to copy its point.'),
-      field('Longitude', h('input', { name: 'lon', required: true, inputmode: 'decimal', value: t?.location?.lon ?? '', placeholder: '-107.6714' })),
+      field('Address name', h('input', { name: 'id', required: true, value: t?.id || '', placeholder: 'town-name', pattern: '[a-z][a-z0-9\\-]{1,39}', readonly: !!t }),
+        t ? 'Fixed once the town exists.' : 'Becomes [address name].thetown.buzz. Lowercase letters, numbers, dashes.'),
+      field('Site name', h('input', { name: 'siteName', value: b.siteName || '', placeholder: '[Town] Buzz' }), 'Used in sentences and the browser tab.'),
+      field('Latitude', h('input', { name: 'lat', required: true, inputmode: 'decimal', value: t?.location?.lat ?? '', placeholder: 'Filled by Look up' }), 'Right-click the town on Google Maps to copy its point.'),
+      field('Longitude', h('input', { name: 'lon', required: true, inputmode: 'decimal', value: t?.location?.lon ?? '', placeholder: 'Filled by Look up' })),
       field('Time zone', h('input', { name: 'timezone', value: t?.timezone || 'America/Denver', list: 'zones' })),
       field('Logo', h('select', { name: 'logo' },
         ...[['thetown', 'thetown.buzz style (town name + "thetown" circle)'],
@@ -362,7 +362,7 @@ async function townPage(id) {
           .map(([v, label]) => h('option', { value: v, selected: (b.logo || 'thetown') === v }, label)))),
     ),
     h('datalist', { id: 'zones' }, ...['America/Denver', 'America/Phoenix', 'America/Boise', 'America/Los_Angeles', 'America/Chicago', 'America/New_York', 'America/Anchorage', 'Pacific/Honolulu'].map((z) => h('option', { value: z }))),
-    field('Web addresses', h('textarea', { name: 'hostnames', rows: 2, placeholder: 'ouray.thetown.buzz' }, (t?.hostnames || []).join('\n')),
+    field('Web addresses', h('textarea', { name: 'hostnames', rows: 2, placeholder: '[address name].thetown.buzz' }, (t?.hostnames || []).join('\n')),
       'One per line. Leave blank for [address name].thetown.buzz. Each needs DNS pointing at the server.'),
     h('div', { class: 'grid2' },
       field('Feedback email', h('input', { name: 'feedbackEmail', type: 'email', value: b.feedbackEmail || '', placeholder: 'telluridebuzz@gmail.com' })),
@@ -370,7 +370,7 @@ async function townPage(id) {
         h('option', { value: 'draft', selected: t?.status !== 'live' }, 'Draft: works at its address, hidden from the town picker and thetown.buzz'),
         h('option', { value: 'live', selected: t?.status === 'live' }, 'Live: listed everywhere'))),
     ),
-    field('"Not affiliated with" line', h('input', { name: 'notAffiliated', value: b.notAffiliated || '', placeholder: 'the City of Ouray, CDOT or the National Weather Service' }), 'About page. Leave blank for a general line.'),
+    field('"Not affiliated with" line', h('input', { name: 'notAffiliated', value: b.notAffiliated || '', placeholder: 'the town, the county, CDOT or the National Weather Service' }), 'About page. Leave blank for a general line.'),
     h('button', { type: 'submit' }, t ? 'Save town' : 'Create town'),
     h('p', { class: 'error', id: 'town-error', role: 'alert' }),
   );
@@ -410,6 +410,15 @@ async function townPage(id) {
     f.querySelector('.grid2').before(h('div', { class: 'row lock-note' },
       h('span', { class: 'muted small' }, 'Type the town name and state. Everything else is filled in for you by Look up on the map or Fill with Claude.'), editBtn));
     lock(true);
+    // Placeholders follow the typed town name, so nothing looks like another town's data.
+    const hint = () => {
+      const n = f.elements.name.value.trim();
+      const slug = n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+      f.elements.id.placeholder = slug || 'town-name';
+      f.elements.siteName.placeholder = n ? `${n} Buzz` : '[Town] Buzz';
+      f.elements.hostnames.placeholder = `${slug || '[address name]'}.thetown.buzz`;
+    };
+    f.elements.name.addEventListener('input', hint);
     // Disabled selects aren't sent with the form, so turn them back on just before saving.
     f.addEventListener('submit', () => { for (const el of others) if (el.tagName === 'SELECT') el.disabled = false; }, true);
     // The Look up button sits right under the Town name box; its result shows under the fields.
@@ -496,7 +505,7 @@ async function sourcePage(townId, key) {
   const f = h('form', {},
     field('Type', typeSel), typeHelp,
     h('div', { class: 'grid2' },
-      field('Name shown on posts', h('input', { name: 'label', required: true, value: s?.label || '', placeholder: 'City of Ouray' })),
+      field('Name shown on posts', h('input', { name: 'label', required: true, value: s?.label || '', placeholder: 'Town or agency name' })),
       field('Check every (minutes)', every)),
     fieldsBox,
     field('About page line (optional)', h('input', { name: 'about', value: s?.about || '', placeholder: 'City news and the community calendar' }), 'Leave blank for the type\'s description.'),
@@ -643,12 +652,12 @@ function fillTownWithClaude(form) {
 {
   "name": "Town name as locals write it",
   "state": "Two-letter state",
-  "id": "address name: lowercase letters, numbers and dashes, usually the town name (ouray, crested-butte)",
+  "id": "address name: lowercase letters, numbers and dashes, usually the town name (like crested-butte)",
   "siteName": "[Town] Buzz",
-  "lat": 38.0228,
-  "lon": -107.6714,
+  "lat": 0.0000,
+  "lon": 0.0000,
   "timezone": "IANA time zone, like America/Denver",
-  "notAffiliated": "short list of the main agencies whose info the site will show, like: the City of Ouray, CDOT or the National Weather Service",
+  "notAffiliated": "short list of the main agencies whose info the site will show, like: the City of [Town], CDOT or the National Weather Service",
   "suggestedSources": [
     { "label": "Who publishes it", "type": "rss | ical | snow-report | resort-alerts | cdot | other", "url": "https://...", "why": "what it would add (town news, county alerts, events, ski resort snow report, local paper)" }
   ],

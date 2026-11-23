@@ -109,10 +109,10 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
         const name = (url.searchParams.get('q') || '').slice(0, 80);
         if (!name.trim()) return bad('Type a town name first.');
         try {
-          return ok({ matches: await (deps.geocode || geocodeTown)(name, (url.searchParams.get('state') || '').slice(0, 2)) });
+          return ok({ matches: await (deps.geocode || geocodeTown)(name, (url.searchParams.get('state') || '').slice(0, 2), { log }) });
         } catch (e) {
           log.warn?.(`admin: geocode failed: ${e.message}`);
-          return bad('The map lookup didn\'t answer. Try again, or fill the point in by hand.', 502);
+          return bad(`The map lookup didn't answer (${e.message}). Try again, or use Edit the other fields and fill the point in by hand.`, 502);
         }
       }
       case 'GET /adapters':
