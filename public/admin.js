@@ -579,6 +579,7 @@ async function sourcePage(townId, key) {
       let input;
       if (fd.type === 'select') input = h('select', { name: `s.${fd.key}` }, h('option', { value: '' }, ''), ...fd.options.map((o) => h('option', { value: o, selected: val === o }, o)));
       else if (fd.type === 'checkbox') return h('label', { class: 'check' }, h('input', { type: 'checkbox', name: `s.${fd.key}`, checked: !!val }), fd.label, fd.help ? h('span', { class: 'help inline-help' }, fd.help) : null);
+      else if (fd.editor === 'routes') return routeEditor(fd, Array.isArray(val) ? val : [], t, a);
       else if (fd.type === 'json') input = h('textarea', { name: `s.${fd.key}`, rows: 6, placeholder: fd.placeholder || '' }, val ? JSON.stringify(val, null, 2) : '');
       else if (fd.type === 'list' || fd.type === 'urls') input = h('textarea', { name: `s.${fd.key}`, rows: 3, placeholder: fd.placeholder || '' }, [].concat(val ?? []).join('\n'));
       else input = h('input', { name: `s.${fd.key}`, type: fd.type === 'number' ? 'number' : (fd.type === 'url' ? 'url' : 'text'), value: val ?? '', placeholder: fd.placeholder || '', required: !!fd.required });
@@ -627,7 +628,8 @@ async function sourcePage(townId, key) {
         r.items.length ? h('ol', {}, ...r.items.map((i) => h('li', {},
           i.link ? h('a', { href: i.link, target: '_blank', rel: 'noopener noreferrer' }, i.title) : i.title,
           h('div', { class: 'muted small' }, [i.category, i.startsAt ? `starts ${new Date(i.startsAt).toLocaleString()}` : `posted ${new Date(i.publishedAt).toLocaleString()}`, i.severity >= 2 ? 'BANNER' : null].filter(Boolean).join(' · '))))) : null,
-        ...tiles.map(([k, v]) => h('details', {}, h('summary', {}, `${k} tile`), h('pre', {}, JSON.stringify(v, null, 2)))),
+        r.tiles?.roads ? roadsPreview(r.tiles.roads) : null,
+        ...tiles.map(([k, v]) => h('details', {}, h('summary', {}, k === 'roads' ? 'roads tile (raw data)' : `${k} tile`), h('pre', {}, JSON.stringify(v, null, 2)))),
       ));
     } catch (e2) { result.replaceChildren(); err.textContent = e2.message; }
     btn.disabled = false; btn.textContent = 'Test';
@@ -654,6 +656,97 @@ async function sourcePage(townId, key) {
     h('div', { class: 'card' }, f),
     s && towns.length > 1 ? otherTownCard(t, s, towns) : null,
   ].filter(Boolean));
+}
+
+// The highways on a roads source (CDOT now; any state DOT adapter with nearbyRoutes
+// later): the current list, each with a note and Remove, and the highways the DOT
+// lists near the town to add. A hidden textarea carries the JSON the form saves.
+const ROUTE_RE = [[/^(?:I|INTERSTATE)[ -]?(\d{1,3})\b/, 'I'], [/^(?:US|U\.S\.)[ -]?(\d{1,3})\b/, 'US'], [/^(?:CO|SH|STATE HIGHWAY|[A-Z]{2})[ -]?(\d{1,3})\b/, null]];
+function parseRoute(text, state) {
+  const s = String(text || '').toUpperCase().replace(/\s+/g, ' ').trim();
+  for (const [re, pre] of ROUTE_RE) {
+    const m = s.match(re);
+    if (m) return { label: `${pre || state || 'CO'}-${+m[1]}`, match: [String(+m[1])] };
+  }
+  return null;
+}
+
+function routeEditor(fd, initial, t, adapter) {
+  let routes = initial.map((r) => ({ ...r }));
+  const store = h('textarea', { name: `s.${fd.key}`, hidden: true });
+  const list = h('ol', { class: 'route-list' });
+  const nearBox = h('div', { class: 'route-near' });
+  let near = null; // [{ label, match, km }] once loaded
+  const sync = () => { store.value = routes.length ? JSON.stringify(routes) : ''; };
+  const has = (label) => routes.some((r) => r.label === label);
+  const render = () => {
+    sync();
+    list.replaceChildren(...(routes.length ? routes.map((r, i) => {
+      const note = h('input', { type: 'text', value: r.note || '', placeholder: 'Note, e.g. Ridgway to Red Mountain Pass', 'aria-label': `Note for ${r.label}` });
+      note.addEventListener('input', () => { if (note.value.trim()) r.note = note.value.trim(); else delete r.note; sync(); });
+      const btn = (label, title, fn, disabled) => h('button', { type: 'button', class: 'secondary small', title, 'aria-label': `${title} ${r.label}`, disabled: !!disabled, onclick: fn }, label);
+      return h('li', { class: 'route-row' },
+        h('strong', { class: 'route-label' }, r.label),
+        h('span', { class: 'muted small route-match', title: 'Route number as CDOT writes it' }, `#${r.match.join(', #')}`),
+        note,
+        btn('↑', 'Move up', () => { [routes[i - 1], routes[i]] = [routes[i], routes[i - 1]]; render(); }, i === 0),
+        btn('Remove', 'Remove', () => { routes.splice(i, 1); render(); }));
+    }) : [h('li', { class: 'muted' }, 'No highways yet. Add one from the list below.')]));
+    renderNear();
+  };
+  const add = (r) => { if (!has(r.label)) routes.push({ label: r.label, match: [...r.match] }); render(); };
+
+  const hand = h('input', { type: 'text', placeholder: 'US 550, I-70, CO 145…', 'aria-label': 'Highway to add' });
+  const handErr = h('span', { class: 'error small' });
+  const addHand = () => {
+    const r = parseRoute(hand.value, t.state);
+    handErr.textContent = r ? '' : 'Type a highway like US 550 or CO 145.';
+    if (r) { add(r); hand.value = ''; }
+  };
+  hand.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addHand(); } });
+
+  function renderNear() {
+    if (!adapter.nearbyRoutes) return;
+    if (!near) return;
+    if (!near.length) { nearBox.replaceChildren(h('p', { class: 'muted small' }, 'The roads feed lists no highways within 50 km of the map point.')); return; }
+    nearBox.replaceChildren(h('ul', { class: 'route-near-list' }, ...near.map((r) => h('li', {},
+      h('strong', {}, r.label), h('span', { class: 'muted small' }, r.km < 1 ? 'through town' : `${Math.round(r.km)} km away`),
+      has(r.label) ? h('span', { class: 'muted small' }, 'Added')
+        : h('button', { type: 'button', class: 'secondary small', onclick: () => add(r) }, 'Add')))));
+  }
+  async function loadNear() {
+    nearBox.replaceChildren(h('p', { class: 'muted small' }, 'Asking the roads feed which highways are near the map point…'));
+    try {
+      near = (await api('/source/nearby-routes', { town: t.id, adapter: adapter.type })).routes;
+      renderNear();
+    } catch (e) {
+      nearBox.replaceChildren(h('p', { class: 'muted small' }, `Couldn't list nearby highways: ${e.message}`),
+        h('button', { type: 'button', class: 'secondary small', onclick: loadNear }, 'Try again'));
+    }
+  }
+  render();
+  if (adapter.nearbyRoutes) loadNear();
+
+  return h('fieldset', { class: 'route-editor' },
+    h('legend', {}, 'Highways on the Roads tile'),
+    h('p', { class: 'help' }, 'In the order the Roads tile shows them. Press Test below to see what CDOT reports on them now.'),
+    list, store,
+    adapter.nearbyRoutes ? h('h3', { class: 'route-sub' }, `Highways near ${t.name}`) : null,
+    nearBox,
+    h('div', { class: 'row route-hand' }, hand, h('button', { type: 'button', class: 'secondary small', onclick: addHand }, 'Add highway'), handErr));
+}
+
+// The Test result's Roads tile, as people will read it.
+function roadsPreview(tile) {
+  const color = { ok: 'green', caution: 'amber', closed: 'red' };
+  return h('div', { class: 'roads-preview' },
+    h('h3', {}, 'Roads tile now'),
+    tile.error ? h('p', { class: 'error' }, tile.error) : null,
+    h('ul', {}, ...(tile.routes || []).map((r) => h('li', {},
+      h('div', { class: 'route-status' }, dot(color[r.level] || 'grey'), h('strong', {}, r.label), h('span', {}, r.status), r.note ? h('span', { class: 'muted small' }, r.note) : null),
+      (r.events?.length || r.conditions?.length) ? h('ul', { class: 'muted small' },
+        ...(r.events || []).map((e) => h('li', {}, e.title)),
+        ...(r.conditions || []).map((c) => h('li', {}, c))) : null))));
 }
 
 // Copy a source to another town (one feed serving several towns), or move it there
