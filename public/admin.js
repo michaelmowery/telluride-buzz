@@ -75,7 +75,7 @@ async function route() {
   } catch { return; }
   $('#login').hidden = true;
   $('#nav').hidden = false;
-  document.querySelectorAll('[data-nav]').forEach((n) => n.toggleAttribute('aria-current', n.dataset.nav === (page === 'health' ? 'health' : 'towns')));
+  document.querySelectorAll('[data-nav]').forEach((n) => n.toggleAttribute('aria-current', n.dataset.nav === (page === 'health' ? 'health' : /resource/.test(page) ? 'resources' : 'towns')));
   try {
     if (page === 'health') { readFilters(query); await healthPage(); timer = setInterval(() => healthPage(true).catch(() => {}), 30e3); }
     else if (page === 'towns') await townsPage();
@@ -83,6 +83,7 @@ async function route() {
     else if (page === 'town') await townPage(a);
     else if (page === 'source') await sourcePage(a, b);
     else if (page === 'new-source') await sourcePage(a, null);
+    else if (page === 'all-resources') { readResFilters(query); await allResourcesPage(); }
     else if (page === 'resources') await resourcesPage(a);
     else if (page === 'resource') await resourcePage(a, b);
     else if (page === 'new-resource') await resourcePage(a, null, b);
@@ -575,6 +576,126 @@ async function resourcePage(townId, id, category = '') {
     r ? h('p', { class: 'muted' }, r.checkedAt ? `Last checked ${ago(r.checkedAt)}.` : 'Never checked.') : null,
     h('div', { class: 'card' }, f),
   );
+}
+
+// ---------- all resources (every town) ----------
+// One list across towns with filters and search, plus CSV export and import.
+const RES_FILTER_KEYS = ['town', 'cat', 'status', 'q'];
+const RES_STATUS = [['', 'Any status'], ['stale', 'Needs checking'], ['never', 'Never checked'], ['hidden', 'Hidden'], ['emergency', 'In the emergency box']];
+let resFilters = { town: '', cat: '', status: '', q: '' };
+function readResFilters(query) {
+  const p = new URLSearchParams(query);
+  const fromUrl = RES_FILTER_KEYS.some((k) => p.has(k));
+  const saved = store.get('buzz-admin-res-filters') || {};
+  for (const k of RES_FILTER_KEYS) resFilters[k] = String((fromUrl ? p.get(k) : saved[k]) || '');
+}
+function saveResFilters() {
+  store.set('buzz-admin-res-filters', resFilters);
+  const p = new URLSearchParams();
+  for (const k of RES_FILTER_KEYS) if (resFilters[k]) p.set(k, resFilters[k]);
+  const qs = p.toString();
+  history.replaceState(null, '', `#all-resources${qs ? `?${qs}` : ''}`);
+}
+
+async function allResourcesPage() {
+  const d = await api('/all-resources');
+  const townName = new Map(d.towns.map((t) => [t.id, `${t.name}${t.state ? `, ${t.state}` : ''}`]));
+  const catName = new Map(d.categories.map((c) => [c.id, c.label]));
+  const stale = (r) => !r.checkedAt || Date.now() - r.checkedAt > d.staleDays * DAY;
+  if (resFilters.town && !townName.has(resFilters.town)) resFilters.town = '';
+  const f = resFilters;
+  const err = h('p', { class: 'error', role: 'alert' });
+  const results = h('div');
+
+  const sel = (key, label, options) => h('label', { class: 'filter' }, label,
+    h('select', { name: key, onchange: (e) => { f[key] = e.target.value; saveResFilters(); render(); } },
+      ...options.map(([v, text]) => h('option', { value: v, selected: f[key] === v }, text))));
+  const q = h('input', { type: 'search', value: f.q, placeholder: 'Name, phone, address, note', autocomplete: 'off' });
+  q.addEventListener('input', () => { f.q = q.value.trim(); saveResFilters(); render(); });
+  const bar = h('div', { class: 'filters card', role: 'search' },
+    sel('town', 'Town', [['', 'All towns'], ...d.towns.map((t) => [t.id, townName.get(t.id)])]),
+    sel('cat', 'Category', [['', 'All categories'], ...d.categories.map((c) => [c.id, c.label])]),
+    sel('status', 'Status', RES_STATUS),
+    h('label', { class: 'filter grow' }, 'Search', q),
+    h('button', { type: 'button', class: 'small secondary', onclick: () => {
+      Object.assign(f, { town: '', cat: '', status: '', q: '' });
+      bar.querySelectorAll('select').forEach((x) => { x.value = ''; });
+      q.value = ''; saveResFilters(); render();
+    } }, 'Clear'));
+
+  function matches(r) {
+    if (f.town && r.townId !== f.town) return false;
+    if (f.cat && r.category !== f.cat) return false;
+    if (f.status === 'stale' && !stale(r)) return false;
+    if (f.status === 'never' && r.checkedAt) return false;
+    if (f.status === 'hidden' && !r.hidden) return false;
+    if (f.status === 'emergency' && !(r.emergency || r.category === 'emergency')) return false;
+    if (f.q) {
+      const hay = [r.name, r.phone, r.phone2, r.phone.replace(/\D/g, ''), r.website, r.address, r.hours, r.note, townName.get(r.townId), catName.get(r.category)].join(' ').toLowerCase();
+      if (!f.q.toLowerCase().split(/\s+/).every((w) => hay.includes(w))) return false;
+    }
+    return true;
+  }
+
+  function render() {
+    const rows = d.resources.filter(matches);
+    const staleN = rows.filter(stale).length;
+    results.replaceChildren(
+      h('p', { class: 'summary' }, `${rows.length} of ${d.resources.length} resources`, staleN ? h('span', { class: 'err' }, ` · ${staleN} need checking`) : null,
+        rows.length && staleN ? h('button', { class: 'small secondary', onclick: async () => {
+          const ids = rows.filter(stale).map((r) => r.id);
+          const byTown = new Map();
+          for (const r of rows.filter(stale)) byTown.set(r.townId, [...(byTown.get(r.townId) || []), r.id]);
+          if (!confirm(`Mark ${ids.length} shown resource${ids.length === 1 ? '' : 's'} as checked today?`)) return;
+          try { for (const [town, list] of byTown) await api('/resource/checked', { town, ids: list }); route(); } catch (e) { err.textContent = e.message; }
+        } }, 'Mark shown as checked') : null),
+      rows.length ? h('div', { class: 'card table-wrap' }, h('table', {},
+        h('thead', {}, h('tr', {}, h('th', {}, 'Resource'), f.town ? null : h('th', {}, 'Town'), h('th', { class: 'hide-sm' }, 'Category'), h('th', { class: 'hide-sm' }, 'Contact'), h('th', {}, 'Checked'))),
+        h('tbody', {}, ...rows.map((r) => h('tr', { class: r.hidden ? 'muted' : null },
+          h('td', {}, h('a', { href: `#resource/${r.townId}/${r.id}` }, r.name),
+            r.emergency && r.category !== 'emergency' ? h('span', { class: 'pill live' }, 'emergency box') : null,
+            r.hidden ? h('span', { class: 'pill draft' }, 'hidden') : null,
+            r.hours ? h('div', { class: 'muted small' }, `🕒 ${r.hours}`) : null),
+          f.town ? null : h('td', { class: 'small' }, townName.get(r.townId) || r.townId),
+          h('td', { class: 'small hide-sm' }, catName.get(r.category) || r.category),
+          h('td', { class: 'small hide-sm' }, [r.phone, r.website && r.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')].filter(Boolean).join(' · ')),
+          h('td', { class: 'small' }, stale(r) ? h('span', { class: 'err' }, r.checkedAt ? ago(r.checkedAt) : 'Never') : ago(r.checkedAt))))))) :
+        h('div', { class: 'card' }, h('p', { class: 'muted' }, d.resources.length ? 'No resources match the filters.' : 'No resources yet.')),
+    );
+  }
+
+  // CSV import: pick a file, preview what would change, then import.
+  const importBox = h('div');
+  const file = h('input', { type: 'file', accept: '.csv,text/csv' });
+  async function runImport(apply) {
+    err.textContent = '';
+    const fl = file.files[0];
+    if (!fl) { err.textContent = 'Choose a CSV file first.'; return; }
+    if (fl.size > 400 * 1024) { err.textContent = 'That file is too big (400 KB at most).'; return; }
+    try {
+      const r = await api('/resources/import', { csv: await fl.text(), town: f.town, apply });
+      if (apply) { file.value = ''; importBox.replaceChildren(h('p', { class: 'ok-msg' }, `Imported: ${r.adds} added, ${r.updates} updated.`)); const fresh = await api('/all-resources'); d.resources = fresh.resources; render(); return; }
+      importBox.replaceChildren(...[
+        h('p', {}, h('strong', {}, `${r.rows} row${r.rows === 1 ? '' : 's'}: ${r.adds} to add, ${r.updates} to update`), r.errors.length ? h('span', { class: 'err' }, `, ${r.errors.length} with problems`) : null, '.'),
+        r.errors.length ? h('ul', {}, ...r.errors.map((e) => h('li', { class: 'err' }, `Row ${e.line}${e.name ? ` (${e.name})` : ''}: ${e.error}`))) : null,
+        r.preview.length ? h('details', {}, h('summary', {}, 'Show rows'), h('ul', { class: 'small' }, ...r.preview.map((x) => h('li', {}, `Row ${x.line}: ${x.action} "${x.name}" in ${townName.get(x.town) || x.town}, ${catName.get(x.category) || x.category}`)))) : null,
+        !r.errors.length && (r.adds || r.updates) ? h('button', { onclick: () => runImport(true) }, `Import ${r.adds + r.updates} row${r.adds + r.updates === 1 ? '' : 's'}`) : null].filter(Boolean));
+    } catch (e) { err.textContent = e.message; }
+  }
+
+  view.replaceChildren(
+    h('div', { class: 'row spread' }, h('h1', {}, 'Resources'),
+      h('span', {},
+        f.town ? h('a', { class: 'button', href: `#new-resource/${f.town}/${f.cat || 'emergency'}` }, 'Add resource') : null, ' ',
+        h('a', { class: 'button secondary', href: `/api/admin/resources/export${f.town ? `?town=${encodeURIComponent(f.town)}` : ''}` }, f.town ? 'Export CSV' : 'Export all as CSV'))),
+    h('p', { class: 'muted' }, `Phone numbers, offices and links shown on each town's Resources tab. Entries not checked in ${d.staleDays} days show in red.`, f.town ? null : ' Pick a town to add a resource.'),
+    bar, err, results,
+    h('div', { class: 'card' }, h('h2', {}, 'Import from a spreadsheet'),
+      h('p', { class: 'muted small' }, 'Export a CSV, edit it in Excel, Numbers or Google Sheets, then import it here. Rows with an id update that resource; rows without one are added. The town column says which town each row goes to', f.town ? `; blank means ${townName.get(f.town)}.` : '.', ' Category can be the id (medical) or the name (Medical). Nothing changes until you press Import.'),
+      h('div', { class: 'row' }, file, h('button', { type: 'button', class: 'secondary', onclick: () => runImport(false) }, 'Preview')),
+      importBox),
+  );
+  render();
 }
 
 route();

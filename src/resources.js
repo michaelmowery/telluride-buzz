@@ -142,3 +142,85 @@ export function renderResources(list, town) {
   }
   return parts.join('\n    ');
 }
+
+// ---------- CSV (admin export and import) ----------
+export const CSV_COLUMNS = ['id', 'town', 'category', 'name', 'phone', 'phone2', 'website', 'address', 'hours', 'note', 'emergency', 'hidden', 'checked'];
+
+const csvCell = (v) => {
+  const s = String(v ?? '');
+  // A leading = + - @ would run as a formula in a spreadsheet; prefix it so it shows as text.
+  const safe = /^[=+@\t\r]/.test(s) || (/^-/.test(s) && !/^-?[\d\s().-]+$/.test(s)) ? `'${s}` : s;
+  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+};
+
+/** Resources as CSV, one row each, with the town and a yyyy-mm-dd "checked" date. */
+export function resourcesToCsv(list) {
+  const day = (t) => (t ? new Date(t).toISOString().slice(0, 10) : '');
+  const rows = list.map((r) => [r.id, r.townId, r.category, r.name, r.phone, r.phone2, r.website, r.address, r.hours, r.note,
+    r.emergency ? 'yes' : '', r.hidden ? 'yes' : '', day(r.checkedAt)]);
+  return [CSV_COLUMNS, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
+}
+
+/** Parse CSV text (RFC 4180: quotes, doubled quotes, newlines inside quotes) into rows of strings. */
+export function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let q = false;
+  const s = String(text).replace(/^\uFEFF/, '');
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (q) {
+      if (c === '"' && s[i + 1] === '"') { cell += '"'; i++; } else if (c === '"') q = false; else cell += c;
+    } else if (c === '"') q = true;
+    else if (c === ',') { row.push(cell); cell = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && s[i + 1] === '\n') i++;
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else cell += c;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter((r) => r.some((x) => x.trim() !== ''));
+}
+
+const yes = (v) => /^(y|yes|true|1|x)$/i.test(String(v || '').trim());
+const unformula = (v) => String(v ?? '').replace(/^'(?=[=+\-@])/, '');
+
+/**
+ * Turn CSV text into a plan: rows to add and rows to update, plus per-row errors.
+ * Rows with an id that exists in that town update it; other rows are added.
+ * A blank town cell uses defaultTown. Nothing is written here.
+ */
+export function planCsvImport(text, { towns, existing, defaultTown = '' }) {
+  const rows = parseCsv(text);
+  if (!rows.length) return { error: 'The file is empty.' };
+  const head = rows[0].map((h) => h.trim().toLowerCase());
+  if (!head.includes('name') || !head.includes('category')) return { error: 'The first row must be the column names, including name and category. Export a CSV to see the format.' };
+  const townIds = new Set(towns.map((t) => t.id));
+  const cats = new Map(RESOURCE_CATEGORIES.flatMap((c) => [[c.id, c.id], [c.label.toLowerCase(), c.id]]));
+  const byId = new Map(existing.map((r) => [r.id, r]));
+  const adds = [];
+  const updates = [];
+  const errors = [];
+  rows.slice(1).forEach((cells, i) => {
+    const line = i + 2;
+    const v = Object.fromEntries(head.map((h, j) => [h, unformula(cells[j]).trim()]));
+    const town = v.town || defaultTown;
+    if (!townIds.has(town)) { errors.push({ line, name: v.name, error: town ? `No town "${town}".` : 'Add a town column or pick a town.' }); return; }
+    const id = v.id ? Number(v.id) : null;
+    const old = id ? byId.get(id) : null;
+    if (id && (!old || old.townId !== town)) { errors.push({ line, name: v.name, error: `No resource ${id} in ${town}. Clear the id to add it as new.` }); return; }
+    const category = cats.get(String(v.category || '').toLowerCase()) || v.category;
+    const { resource, error } = normalizeResource({
+      ...v, id: id || undefined, category, sort: old?.sort,
+      emergency: 'emergency' in v ? yes(v.emergency) : old?.emergency,
+      hidden: 'hidden' in v ? yes(v.hidden) : old?.hidden,
+    });
+    if (error) { errors.push({ line, name: v.name, error }); return; }
+    const checkedAt = v.checked ? Date.parse(/T/.test(v.checked) ? v.checked : `${v.checked}T12:00:00Z`) || null : null;
+    if (v.checked && !checkedAt) { errors.push({ line, name: v.name, error: `"${v.checked}" isn't a date (use 2026-11-23).` }); return; }
+    const item = { town, line, resource: { ...resource, ...(checkedAt ? { checkedAt } : {}) } };
+    (old ? updates : adds).push(item);
+  });
+  return { adds, updates, errors, rows: rows.length - 1 };
+}

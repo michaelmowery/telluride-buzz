@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import { adapterCatalog, itemSourcesOf, testSource } from './adapters.js';
 import { exportTown, loadTowns, normalizeSource, normalizeTown, starterSources } from './towns.js';
 import { sourceHealth, townColor, FEED_NAMES } from './health.js';
-import { normalizeResource, RESOURCE_CATEGORIES, STALE_DAYS } from './resources.js';
+import { normalizeResource, planCsvImport, resourcesToCsv, RESOURCE_CATEGORIES, STALE_DAYS } from './resources.js';
 import { townUrl } from './brand.js';
 
 const COOKIE = 'buzz_admin';
@@ -109,6 +109,18 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
         if (!t) return bad('No such town', 404);
         return ok({ town: { id: t.id, name: t.name, state: t.state || '', url: townUrl(t) }, categories: RESOURCE_CATEGORIES, staleDays: STALE_DAYS, resources: db.listResources(t.id) });
       }
+      case 'GET /all-resources':
+        return ok({
+          towns: towns().map((t) => ({ id: t.id, name: t.name, state: t.state || '', status: t.status, url: townUrl(t) })),
+          categories: RESOURCE_CATEGORIES, staleDays: STALE_DAYS, resources: db.listResources(null),
+        });
+      case 'GET /resources/export': {
+        const id = url.searchParams.get('town') || '';
+        if (id && !findTown(id)) return bad('No such town', 404);
+        const day = new Date().toISOString().slice(0, 10);
+        return { status: 200, body: resourcesToCsv(db.listResources(id || null)), type: 'text/csv; charset=utf-8',
+          headers: { 'Content-Disposition': `attachment; filename="resources-${id || 'all-towns'}-${day}.csv"` } };
+      }
       case 'GET /export': {
         const t = findTown(url.searchParams.get('town'));
         if (!t) return bad('No such town', 404);
@@ -203,6 +215,30 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
         log.info?.(`admin: ${resource.id ? 'saved' : 'added'} resource ${t.id}/${id}`);
         onResources(t.id);
         return ok({ resource: db.listResources(t.id).find((r) => r.id === id) });
+      }
+      case 'POST /resources/import': {
+        // Preview first (nothing written), then the same call with apply: true.
+        const plan = planCsvImport(body.csv || '', { towns: all, existing: db.listResources(null), defaultTown: body.town || '' });
+        if (plan.error) return bad(plan.error);
+        const summary = { rows: plan.rows, adds: plan.adds.length, updates: plan.updates.length, errors: plan.errors,
+          preview: [...plan.adds.map((x) => ({ ...x, action: 'add' })), ...plan.updates.map((x) => ({ ...x, action: 'update' }))]
+            .sort((a, b) => a.line - b.line).slice(0, 200).map((x) => ({ line: x.line, action: x.action, town: x.town, name: x.resource.name, category: x.resource.category })) };
+        if (!body.apply) return ok(summary);
+        if (plan.errors.length) return bad(`Fix the ${plan.errors.length} row${plan.errors.length === 1 ? '' : 's'} with problems first.`);
+        db.raw.exec('BEGIN');
+        try {
+          const ends = new Map();
+          for (const { town, resource } of plan.adds) {
+            if (!ends.has(town)) ends.set(town, Math.max(0, ...db.listResources(town).map((r) => r.sort)));
+            ends.set(town, ends.get(town) + 10);
+            db.saveResource(town, { ...resource, sort: ends.get(town) });
+          }
+          for (const { town, resource } of plan.updates) db.saveResource(town, resource);
+          db.raw.exec('COMMIT');
+        } catch (e) { db.raw.exec('ROLLBACK'); throw e; }
+        log.info?.(`admin: imported resources (${plan.adds.length} added, ${plan.updates.length} updated)`);
+        for (const t of new Set([...plan.adds, ...plan.updates].map((x) => x.town))) onResources(t);
+        return ok(summary);
       }
       case 'POST /resource/delete': {
         const t = all.find((x) => x.id === body.town);

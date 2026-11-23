@@ -115,3 +115,52 @@ test('deleting a town removes its resources', () => {
   db.deleteTown('durango');
   assert.equal(db.listResources('durango').length, 0);
 });
+
+test('CSV export round-trips through import, and import previews before writing', async () => {
+  const { parseCsv, planCsvImport, resourcesToCsv } = await import('../src/resources.js');
+  const db = setup();
+  importResources(db, [seed]);
+  const towns = loadTowns(db);
+  const csv = resourcesToCsv(db.listResources('telluride'));
+  const rows = parseCsv(csv);
+  assert.equal(rows.length, seed.resources.length + 1);
+  // Unchanged export imports as pure updates with no errors.
+  let plan = planCsvImport(csv, { towns, existing: db.listResources(null) });
+  assert.equal(plan.errors.length, 0, JSON.stringify(plan.errors));
+  assert.equal(plan.adds.length, 0);
+  assert.equal(plan.updates.length, seed.resources.length);
+  // Quotes, commas, newlines and formula-looking text survive.
+  assert.deepEqual(parseCsv('a,b\r\n"x, ""y""","line1\nline2"\r\n'), [['a', 'b'], ['x, "y"', 'line1\nline2']]);
+  assert.match(resourcesToCsv([{ id: 1, townId: 't', category: 'medical', name: '=HYPERLINK("x")', phone: '911' }]), /'=HYPERLINK/);
+
+  const admin = createAdmin({ db, password: 'correct horse battery', log: quiet });
+  const call = async (method, p, body, cookie) => admin.handle(
+    { method, headers: { host: 'localhost', 'content-type': 'application/json', ...(cookie ? { cookie } : {}) }, socket: {} },
+    new URL(`http://localhost/api/admin${p}`), async () => body);
+  const cookie = (await call('POST', '/login', { password: 'correct horse battery' })).headers['Set-Cookie'].split(';')[0];
+  const ex = await call('GET', '/resources/export?town=telluride', undefined, cookie);
+  assert.equal(ex.type, 'text/csv; charset=utf-8');
+  assert.match(ex.headers['Content-Disposition'], /resources-telluride-/);
+  const all = await call('GET', '/all-resources', undefined, cookie);
+  assert.equal(all.body.resources.length, seed.resources.length);
+  assert.equal(all.body.towns.length, 2);
+
+  const upload = 'town,category,name,phone,hours,emergency\n'
+    + 'durango,Medical,Mercy Hospital,970-247-4311,24/7,yes\n'
+    + ',schools,Durango Library,970-375-3380,,\n'
+    + 'durango,nope,Bad Row,970-555-0100,,\n';
+  let r = await call('POST', '/resources/import', { csv: upload, town: 'durango' }, cookie);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.adds, 2);
+  assert.equal(r.body.errors.length, 1);
+  assert.equal(r.body.errors[0].line, 4);
+  assert.equal(db.listResources('durango').length, 0, 'preview writes nothing');
+  assert.equal((await call('POST', '/resources/import', { csv: upload, town: 'durango', apply: true }, cookie)).status, 400);
+  r = await call('POST', '/resources/import', { csv: upload.split('\n').slice(0, 3).join('\n'), town: 'durango', apply: true }, cookie);
+  assert.equal(r.status, 200);
+  const dur = db.listResources('durango');
+  assert.deepEqual(dur.map((x) => [x.name, x.category, x.emergency, x.hours]), [['Mercy Hospital', 'medical', true, '24/7'], ['Durango Library', 'schools', false, '']]);
+  // An id from another town is refused, not moved.
+  plan = planCsvImport(`id,town,category,name,phone\n${dur[0].id},telluride,medical,X,911\n`, { towns, existing: db.listResources(null) });
+  assert.match(plan.errors[0].error, /No resource/);
+});
