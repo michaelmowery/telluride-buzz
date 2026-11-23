@@ -475,7 +475,32 @@ async function sourcePage(townId, key) {
     h('div', { class: 'town-head' }, health ? dot(health.color) : null, h('h1', {}, s ? s.label : `Add a source to ${t.name}`)),
     health?.error ? h('p', { class: 'error' }, `${health.note}: ${health.error}`) : (health ? h('p', { class: 'muted' }, `${health.note}. Last success ${ago(health.lastOk)}.`) : null),
     h('div', { class: 'card' }, f),
+    s && towns.length > 1 ? otherTownCard(t, s, towns) : null,
   ].filter(Boolean));
+}
+
+// Copy a source to another town (one feed serving several towns), or move it there
+// with its posts and health history.
+function otherTownCard(t, s, towns) {
+  const sel = h('select', {}, ...towns.filter((x) => x.id !== t.id).map((x) => h('option', { value: x.id }, x.name)));
+  const err = h('p', { class: 'error', role: 'alert' });
+  const go = (mode) => async (e) => {
+    const to = towns.find((x) => x.id === sel.value);
+    if (mode === 'move' && !confirm(`Move "${s.label}" from ${t.name} to ${to.name}? Its posts move too and leave the ${t.name} feed.`)) return;
+    const btn = e.currentTarget;
+    err.textContent = '';
+    btn.disabled = true;
+    try {
+      const r = await api('/source/move', { town: t.id, key: s.key, to: to.id, mode });
+      location.hash = `source/${r.town}/${r.key}`;
+    } catch (e2) { err.textContent = e2.message; btn.disabled = false; }
+  };
+  return h('div', { class: 'card' }, h('h2', {}, 'Use in another town'),
+    h('p', { class: 'muted small' }, 'Copy adds the same feed to another town too, so both show it. Move takes it out of this town, with its posts and history.'),
+    h('div', { class: 'row form-actions' }, field('Town', sel),
+      h('button', { type: 'button', class: 'secondary', onclick: go('copy') }, 'Copy to town'),
+      h('button', { type: 'button', class: 'secondary', onclick: go('move') }, 'Move to town')),
+    err);
 }
 
 // ---------- new town: fill with Claude ----------
