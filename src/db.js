@@ -210,6 +210,27 @@ function wrap(db) {
       for (const s of itemSources) db.prepare('UPDATE items SET active = 0 WHERE town_id = ? AND source = ?').run(townId, s);
     },
 
+    /**
+     * Move a source to another town with its posts and health. Posts the other town
+     * already has (same id from the source) stay there; the leftovers are hidden.
+     * Moved alerts count as already pushed, so the new town's phones aren't sent old news.
+     */
+    moveSource(fromTown, toTown, key, itemSources = [key], sort = 0) {
+      db.exec('BEGIN');
+      try {
+        db.prepare('UPDATE sources SET town_id = ?, sort = ?, updated_at = ? WHERE town_id = ? AND key = ?').run(toTown, sort, Date.now(), fromTown, key);
+        db.prepare('DELETE FROM source_status WHERE town_id = ? AND source = ?').run(toTown, key);
+        db.prepare('UPDATE source_status SET town_id = ? WHERE town_id = ? AND source = ?').run(toTown, fromTown, key);
+        for (const src of itemSources) {
+          db.prepare('UPDATE OR IGNORE items SET town_id = ? WHERE town_id = ? AND source = ?').run(toTown, fromTown, src);
+          db.prepare('UPDATE items SET active = 0 WHERE town_id = ? AND source = ?').run(fromTown, src);
+          db.prepare(`INSERT OR IGNORE INTO pushed_alerts (town_id, item_id, at)
+                      SELECT town_id, id, ? FROM items WHERE town_id = ? AND source = ?`).run(Date.now(), toTown, src);
+        }
+        db.exec('COMMIT');
+      } catch (e) { db.exec('ROLLBACK'); throw e; }
+    },
+
     /** Drop health rows for jobs that no longer exist (e.g. after a source was renamed). */
     pruneStatus(townId, keys) {
       const ph = keys.map(() => '?').join(',');

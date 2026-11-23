@@ -193,6 +193,24 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
         changed(`deleted source ${t.id}/${s.key}`);
         return ok();
       }
+      case 'POST /source/move': {
+        // Move or copy a source to another town, so one feed can serve several towns.
+        const t = all.find((x) => x.id === body.town);
+        const s = t?.sources.find((x) => x.key === body.key);
+        if (!s) return bad('No such source', 404);
+        const to = all.find((x) => x.id === body.to);
+        if (!to || to.id === t.id) return bad('Pick another town.');
+        const copy = body.mode === 'copy';
+        const taken = to.sources.some((x) => x.key === s.key);
+        if (!copy && taken) return bad(`${to.name} already has a source called "${s.key}". Copy it instead, or delete that one first.`);
+        const { source, error } = normalizeSource({ ...s, key: taken ? '' : s.key, sort: undefined }, to, to.sources);
+        if (error) return bad(`Can't add it to ${to.name}: ${error}`);
+        for (const [k, v] of Object.entries(s.settings || {})) if (!(k in source.settings)) source.settings[k] = v; // e.g. a CDOT disclaimer
+        if (copy) db.saveSource(to.id, source);
+        else db.moveSource(t.id, to.id, s.key, itemSourcesOf(s), source.sort);
+        changed(`${copy ? 'copied' : 'moved'} source ${t.id}/${s.key} to ${to.id}/${source.key}`);
+        return ok({ town: to.id, key: source.key });
+      }
       case 'POST /source/run': {
         const t = all.find((x) => x.id === body.town);
         const s = t?.sources.find((x) => x.key === body.key);
