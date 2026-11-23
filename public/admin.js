@@ -497,7 +497,7 @@ function otherTownCard(t, s, towns) {
   };
   return h('div', { class: 'card' }, h('h2', {}, 'Use in another town'),
     h('p', { class: 'muted small' }, 'Copy adds the same feed to another town too, so both show it. Move takes it out of this town, with its posts and history.'),
-    h('div', { class: 'row form-actions' }, field('Town', sel),
+    h('div', { class: 'row form-actions move-row' }, field('Town', sel),
       h('button', { type: 'button', class: 'secondary', onclick: go('copy') }, 'Copy to town'),
       h('button', { type: 'button', class: 'secondary', onclick: go('move') }, 'Move to town')),
     err);
