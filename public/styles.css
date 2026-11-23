@@ -515,6 +515,32 @@ a.prefs-btn { text-decoration: none; }
 .res-sub[data-cat="emergency"] { color: var(--rust); border-color: var(--rust); }
 .res-sub[data-cat="emergency"][aria-current="true"] { background: var(--rust); color: #f6efe2; }
 .res-empty { margin: 12px 0; }
+.res-tags { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+/* Local businesses come after the civic list, under their own heading. */
+.res-group { font-family: var(--slab, inherit); font-size: 15px !important; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); margin: 28px 0 4px !important; padding-top: 14px; border-top: 3px double var(--line); }
+/* Sponsored listings: clearly labelled, first in their category, never in Emergency. */
+.res-sponsored { background: var(--amber-soft); border-radius: var(--radius); padding: 10px 12px !important; margin: 6px 0; border: 1px solid var(--amber); }
+.res-sponsor-label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+.res-sponsor-head { display: flex; align-items: center; gap: 10px; }
+.res-logo { width: 36px; height: 36px; object-fit: contain; border-radius: 6px; background: #fff; flex: none; }
+.res-tagline { font-size: 14px; font-style: italic; }
+:root {
+  --i-food: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7%22/%3E%3C/svg%3E");
+  --i-bag: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0%22/%3E%3C/svg%3E");
+  --i-wrench: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z%22/%3E%3C/svg%3E");
+  --i-bed: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M2 4v16M2 8h18a2 2 0 0 1 2 2v10M2 17h20M6 8v9%22/%3E%3C/svg%3E");
+}
+.res-sub[data-cat="food"], #food summary h2 { --ico: var(--i-food); }
+.res-sub[data-cat="shops"], #shops summary h2 { --ico: var(--i-bag); }
+.res-sub[data-cat="services"], #services summary h2 { --ico: var(--i-wrench); }
+.res-sub[data-cat="lodging"], #lodging summary h2 { --ico: var(--i-bed); }
+.res-sub[data-cat="food"], #food summary h2, .res-sub[data-cat="shops"], #shops summary h2,
+.res-sub[data-cat="services"], #services summary h2, .res-sub[data-cat="lodging"], #lodging summary h2 { display: inline-flex; align-items: center; gap: .4em; }
+.res-sub[data-cat="food"]::before, #food summary h2::before, .res-sub[data-cat="shops"]::before, #shops summary h2::before,
+.res-sub[data-cat="services"]::before, #services summary h2::before, .res-sub[data-cat="lodging"]::before, #lodging summary h2::before {
+  content: ""; flex: none; width: 1.15em; height: 1.15em; background: currentColor;
+  -webkit-mask: var(--ico) center / contain no-repeat; mask: var(--ico) center / contain no-repeat;
+}
 .feed-pills { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .feed-pills::-webkit-scrollbar { display: none; }
 .feed-pill { cursor: pointer; font-family: var(--sans); }

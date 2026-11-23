@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import { adapterCatalog, itemSourcesOf, testSource } from './adapters.js';
 import { exportTown, loadTowns, normalizeSource, normalizeTown, starterSources } from './towns.js';
 import { sourceHealth, townColor, FEED_NAMES } from './health.js';
-import { normalizeResource, planCsvImport, resourcesToCsv, RESOURCE_CATEGORIES, STALE_DAYS } from './resources.js';
+import { normalizeResource, planCsvImport, resourcesToCsv, RESOURCE_CATEGORIES, STALE_DAYS, sponsorState, townDay } from './resources.js';
 import { townUrl } from './brand.js';
 
 const COOKIE = 'buzz_admin';
@@ -54,6 +54,11 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
 
   const towns = () => loadTowns(db);
   const findTown = (id) => towns().find((t) => t.id === id);
+  // Each entry's sponsorship state ("active", "scheduled", "ended" or "") for today in its town.
+  const withSponsorState = (list) => {
+    const days = new Map(towns().map((t) => [t.id, townDay(t)]));
+    return list.map((r) => ({ ...r, sponsorState: sponsorState(r, days.get(r.townId) || townDay(null)) }));
+  };
   const changed = (what) => { log.info?.(`admin: ${what}`); onChange(); };
 
   function healthBoard() {
@@ -107,12 +112,13 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
       case 'GET /resources': {
         const t = findTown(url.searchParams.get('town'));
         if (!t) return bad('No such town', 404);
-        return ok({ town: { id: t.id, name: t.name, state: t.state || '', url: townUrl(t) }, categories: RESOURCE_CATEGORIES, staleDays: STALE_DAYS, resources: db.listResources(t.id) });
+        return ok({ town: { id: t.id, name: t.name, state: t.state || '', url: townUrl(t) }, categories: RESOURCE_CATEGORIES, staleDays: STALE_DAYS,
+          today: townDay(t), resources: withSponsorState(db.listResources(t.id)) });
       }
       case 'GET /all-resources':
         return ok({
           towns: towns().map((t) => ({ id: t.id, name: t.name, state: t.state || '', status: t.status, url: townUrl(t) })),
-          categories: RESOURCE_CATEGORIES, staleDays: STALE_DAYS, resources: db.listResources(null),
+          categories: RESOURCE_CATEGORIES, staleDays: STALE_DAYS, resources: withSponsorState(db.listResources(null)),
         });
       case 'GET /resources/export': {
         const id = url.searchParams.get('town') || '';

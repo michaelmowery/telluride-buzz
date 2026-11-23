@@ -199,10 +199,12 @@ function serveStatic(req, res, urlPath, town) {
 function serveTemplate(req, res, file, ext, st, town) {
   const key = `${town.id}:${file}`;
   let c = templateCache.get(key);
-  if (!c || c.mtime !== st.mtimeMs) {
+  // Pages with resources are also re-rendered every 10 minutes, so a sponsorship
+  // starts and ends on its dates without anyone touching the admin.
+  if (!c || c.mtime !== st.mtimeMs || (c.expires && Date.now() > c.expires)) {
     const extra = /[\\/](resources|index)\.html$/.test(file) ? { resources: renderResources(db.listResources(town.id), town) } : {};
     const body = Buffer.from(renderTemplate(fs.readFileSync(file, 'utf8'), ext, town, pickerTowns(town), extra));
-    c = { mtime: st.mtimeMs, body, etag: `"${crypto.createHash('sha1').update(body).digest('base64url').slice(0, 16)}"` };
+    c = { mtime: st.mtimeMs, expires: extra.resources ? Date.now() + 10 * 60_000 : 0, body, etag: `"${crypto.createHash('sha1').update(body).digest('base64url').slice(0, 16)}"` };
     templateCache.set(key, c);
   }
   const headers = { 'Cache-Control': 'no-cache', ETag: c.etag, Vary: 'Host', ...SECURITY_HEADERS };
@@ -228,7 +230,7 @@ function serveHub(req, res) {
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Content-Security-Policy': "default-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'",
+  'Content-Security-Policy': "default-src 'self'; img-src 'self' data: https:; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'",
 };
 
 function send(res, status, body, type = 'text/plain; charset=utf-8', extra = {}) {

@@ -1,7 +1,7 @@
 // Town resources: the phone numbers, offices and links people look up (emergency
 // numbers, the clinic, transit, town hall, utilities). Kept by hand in /admin and
-// shown at /resources on every town's site. Civic and essential info only: a
-// business directory or classifieds would be a separate feature.
+// shown at /resources on every town's site. Civic and essential info first; local
+// businesses (food, shops, services, lodging) are their own group further down.
 //
 // config/resources/<town>.json seeds a town once (meta key resources-imported:<id>);
 // after that the database wins, like towns and sources.
@@ -16,13 +16,20 @@ export const RESOURCE_CATEGORIES = [
   { id: 'roads', label: 'Roads & travel' },
   { id: 'outdoors', label: 'Trails & outdoors' },
   { id: 'schools', label: 'Schools & library' },
+  // Local businesses: shown after the civic list, under their own heading.
+  { id: 'food', label: 'Food & drink', group: 'business' },
+  { id: 'shops', label: 'Shops', group: 'business' },
+  { id: 'services', label: 'Local services', group: 'business' },
+  { id: 'lodging', label: 'Lodging', group: 'business' },
 ];
+export const isBusiness = (cat) => RESOURCE_CATEGORIES.find((c) => c.id === cat)?.group === 'business';
 const CAT_IDS = new Set(RESOURCE_CATEGORIES.map((c) => c.id));
 
 /** Entries not checked for this long are flagged in the admin. */
 export const STALE_DAYS = 180;
 
-const LIMITS = { name: 120, phone: 40, phone2: 40, website: 300, address: 200, hours: 200, note: 400 };
+// tags: a short descriptor shown on the card, e.g. "Mexican · $$" or "Ski rentals".
+const LIMITS = { name: 120, phone: 40, phone2: 40, website: 300, address: 200, hours: 200, note: 400, tags: 80 };
 
 /** Clean and validate one resource from the admin form or a seed file. */
 export function normalizeResource(r = {}) {
@@ -42,7 +49,54 @@ export function normalizeResource(r = {}) {
     try { const u = new URL(out.website); if (!/^https?:$/.test(u.protocol) || !u.hostname.includes('.')) throw 0; out.website = u.href; } catch { return { error: 'The website doesn\'t look like a web address.' }; }
   }
   if (!out.phone && !out.website && !out.address) return { error: 'Add at least a phone number, website or address.' };
+  const sp = normalizeSponsor(r, out);
+  if (sp.error) return sp;
+  Object.assign(out, sp.sponsor);
   return { resource: out };
+}
+
+// ---------- Sponsored listings ----------
+// A business listing can be sponsored between two dates (inclusive, in the town's time
+// zone). While active it shows first in its category with a "Sponsored" label and an
+// optional tagline and logo. Only business categories, never the Emergency box. No
+// payments here: the admin turns it on by hand. After the end date it quietly goes
+// back to a normal listing.
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const validDay = (d) => DAY_RE.test(d) && !Number.isNaN(Date.parse(`${d}T12:00:00Z`)) && new Date(`${d}T12:00:00Z`).toISOString().startsWith(d);
+const NO_SPONSOR = { sponsored: false, sponsorFrom: '', sponsorUntil: '', sponsorTagline: '', sponsorLogo: '' };
+
+function normalizeSponsor(r, out) {
+  if (!r.sponsored) return { sponsor: { ...NO_SPONSOR } };
+  const s = {
+    sponsored: true,
+    sponsorFrom: String(r.sponsorFrom || '').trim(),
+    sponsorUntil: String(r.sponsorUntil || '').trim(),
+    sponsorTagline: String(r.sponsorTagline || '').trim().replace(/\s+/g, ' ').slice(0, 80),
+    sponsorLogo: String(r.sponsorLogo || '').trim().slice(0, 300),
+  };
+  if (!isBusiness(out.category)) return { error: 'Only business listings (food, shops, services, lodging) can be sponsored.' };
+  if (out.emergency) return { error: 'A sponsored listing can\'t be in the Emergency box.' };
+  if (!validDay(s.sponsorFrom) || !validDay(s.sponsorUntil)) return { error: 'Give the sponsorship a start and end date.' };
+  if (s.sponsorUntil < s.sponsorFrom) return { error: 'The sponsorship ends before it starts.' };
+  if (s.sponsorLogo) {
+    try { const u = new URL(s.sponsorLogo); if (u.protocol !== 'https:') throw 0; s.sponsorLogo = u.href; } catch { return { error: 'The logo must be an https:// image address.' }; }
+  }
+  return { sponsor: s };
+}
+
+/** Today as yyyy-mm-dd in the town's time zone. */
+export const townDay = (town, now = Date.now()) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: town?.timezone || 'America/Denver', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+
+/** Sponsored and inside its dates today. */
+export const sponsorActive = (r, day) => !!(r.sponsored && r.sponsorFrom <= day && day <= r.sponsorUntil && isBusiness(r.category) && !r.emergency);
+
+/** "active", "scheduled", "ended" or "" for the admin. */
+export function sponsorState(r, day) {
+  if (!r.sponsored) return '';
+  if (day < r.sponsorFrom) return 'scheduled';
+  if (day > r.sponsorUntil) return 'ended';
+  return 'active';
 }
 
 /** tel: link for a typed number ("970-728-3844", "911", "1-800-222-1222 ext 4"), or null. */
@@ -82,15 +136,29 @@ export function importResources(db, seeds, { log = null } = {}) {
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
 
-function card(r, town) {
+function card(r, town, sponsored = false) {
   const tel = (p) => { const h = telHref(p); return h ? `<a class="res-btn res-call" href="${esc(h)}">${esc(p)}</a>` : esc(p); };
   const bits = [];
   if (r.phone) bits.push(tel(r.phone));
   if (r.phone2) bits.push(tel(r.phone2));
   if (r.website) bits.push(`<a class="res-btn" href="${esc(r.website)}" target="_blank" rel="noopener">${esc(host(r.website))}</a>`);
   if (r.address) bits.push(`<a class="res-btn" href="${esc(mapHref(r.address, town))}" target="_blank" rel="noopener">Map</a>`);
+  if (sponsored) {
+    const logo = r.sponsorLogo ? `<img class="res-logo" src="${esc(r.sponsorLogo)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '';
+    return `<li class="res res-sponsored">
+          <p class="res-sponsor-label">Sponsored</p>
+          <div class="res-sponsor-head">${logo}<p class="res-name">${esc(r.name)}</p></div>
+          ${r.sponsorTagline ? `<p class="res-tagline">${esc(r.sponsorTagline)}</p>` : ''}
+          ${r.tags ? `<p class="res-tags">${esc(r.tags)}</p>` : ''}
+          ${r.note ? `<p class="res-note">${esc(r.note)}</p>` : ''}
+          ${r.hours ? `<p class="res-hours"><span aria-hidden="true">🕒</span> ${esc(r.hours)}</p>` : ''}
+          ${r.address ? `<p class="res-meta">${esc(r.address)}</p>` : ''}
+          <p class="res-actions">${bits.join(' ')}</p>
+        </li>`;
+  }
   return `<li class="res">
           <p class="res-name">${esc(r.name)}</p>
+          ${r.tags ? `<p class="res-tags">${esc(r.tags)}</p>` : ''}
           ${r.note ? `<p class="res-note">${esc(r.note)}</p>` : ''}
           ${r.hours ? `<p class="res-hours"><span aria-hidden="true">🕒</span> ${esc(r.hours)}</p>` : ''}
           ${r.address ? `<p class="res-meta">${esc(r.address)}</p>` : ''}
@@ -99,7 +167,8 @@ function card(r, town) {
 }
 
 /** The body of /resources: an emergency box, then one collapsible section per category. */
-export function renderResources(list, town) {
+export function renderResources(list, town, now = Date.now()) {
+  const day = townDay(town, now);
   const shown = list.filter((r) => !r.hidden);
   if (!shown.length) return '<p class="muted">Resources for this town are on the way. In an emergency, call 911.</p>';
   const top = shown.filter((r) => r.emergency || r.category === 'emergency');
@@ -113,14 +182,21 @@ export function renderResources(list, town) {
       </ul>
     </details>`);
   }
+  let bizHeading = false;
   for (const c of RESOURCE_CATEGORIES) {
     if (c.id === 'emergency') continue;
-    const rows = shown.filter((r) => r.category === c.id);
-    if (!rows.length) continue;
+    const all = shown.filter((r) => r.category === c.id);
+    if (!all.length) continue;
+    // Active sponsors first (keeping their admin order), then everyone else.
+    const rows = [...all.filter((r) => sponsorActive(r, day)), ...all.filter((r) => !sponsorActive(r, day))];
+    if (c.group === 'business' && !bizHeading) {
+      bizHeading = true;
+      parts.push(`<h2 class="res-group" id="local-businesses">Local businesses</h2>`);
+    }
     parts.push(`<details class="res-cat" id="${c.id}">
       <summary><h2>${esc(c.label)}</h2><span class="res-count">${rows.length}</span></summary>
       <ul class="res-list">
-        ${rows.map((r) => card(r, town)).join('\n        ')}
+        ${rows.map((r) => card(r, town, sponsorActive(r, day))).join('\n        ')}
       </ul>
     </details>`);
   }
@@ -144,7 +220,7 @@ export function renderResources(list, town) {
 }
 
 // ---------- CSV (admin export and import) ----------
-export const CSV_COLUMNS = ['id', 'town', 'category', 'name', 'phone', 'phone2', 'website', 'address', 'hours', 'note', 'emergency', 'hidden', 'checked'];
+export const CSV_COLUMNS = ['id', 'town', 'category', 'name', 'phone', 'phone2', 'website', 'address', 'hours', 'note', 'tags', 'emergency', 'hidden', 'checked'];
 
 const csvCell = (v) => {
   const s = String(v ?? '');
@@ -156,10 +232,12 @@ const csvCell = (v) => {
 /** Resources as CSV, one row each, with the town and a yyyy-mm-dd "checked" date. */
 export function resourcesToCsv(list) {
   const day = (t) => (t ? new Date(t).toISOString().slice(0, 10) : '');
-  const rows = list.map((r) => [r.id, r.townId, r.category, r.name, r.phone, r.phone2, r.website, r.address, r.hours, r.note,
+  const rows = list.map((r) => [r.id, r.townId, r.category, r.name, r.phone, r.phone2, r.website, r.address, r.hours, r.note, r.tags,
     r.emergency ? 'yes' : '', r.hidden ? 'yes' : '', day(r.checkedAt)]);
   return [CSV_COLUMNS, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }
+
+const sponsorFields = (r) => ({ sponsored: r.sponsored, sponsorFrom: r.sponsorFrom, sponsorUntil: r.sponsorUntil, sponsorTagline: r.sponsorTagline, sponsorLogo: r.sponsorLogo });
 
 /** Parse CSV text (RFC 4180: quotes, doubled quotes, newlines inside quotes) into rows of strings. */
 export function parseCsv(text) {
@@ -212,6 +290,8 @@ export function planCsvImport(text, { towns, existing, defaultTown = '' }) {
     if (id && (!old || old.townId !== town)) { errors.push({ line, name: v.name, error: `No resource ${id} in ${town}. Clear the id to add it as new.` }); return; }
     const category = cats.get(String(v.category || '').toLowerCase()) || v.category;
     const { resource, error } = normalizeResource({
+      // Sponsorship isn't in the CSV: an update keeps whatever the entry had.
+      ...(old ? sponsorFields(old) : {}),
       ...v, id: id || undefined, category, sort: old?.sort,
       emergency: 'emergency' in v ? yes(v.emergency) : old?.emergency,
       hidden: 'hidden' in v ? yes(v.hidden) : old?.hidden,
