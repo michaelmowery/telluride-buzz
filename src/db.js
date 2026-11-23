@@ -217,8 +217,12 @@ function wrap(db) {
     },
 
     // ---------- resources ----------
+    /** One town's resources, or every town's when townId is null. */
     listResources(townId) {
-      return db.prepare('SELECT * FROM resources WHERE town_id = ? ORDER BY sort, id').all(townId).map((r) => ({
+      const rows = townId
+        ? db.prepare('SELECT * FROM resources WHERE town_id = ? ORDER BY sort, id').all(townId)
+        : db.prepare('SELECT * FROM resources ORDER BY town_id, sort, id').all();
+      return rows.map((r) => ({
         id: r.id, townId: r.town_id, category: r.category, name: r.name, phone: r.phone || '', phone2: r.phone2 || '',
         website: r.website || '', address: r.address || '', hours: r.hours || '', note: r.note || '',
         emergency: !!r.emergency, hidden: !!r.hidden, sort: r.sort, checkedAt: r.checked_at, updatedAt: r.updated_at,

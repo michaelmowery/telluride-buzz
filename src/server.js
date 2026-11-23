@@ -241,6 +241,7 @@ const json = (res, body, maxAge = 15) =>
     { 'Cache-Control': `public, max-age=${maxAge}` });
 
 function sendAdmin(res, r) {
+  if (typeof r.body === 'string') return send(res, r.status, r.body, r.type || 'text/plain; charset=utf-8', { 'Cache-Control': 'no-store', ...(r.headers || {}) });
   send(res, r.status, JSON.stringify(r.body), 'application/json; charset=utf-8', { 'Cache-Control': 'no-store', ...(r.headers || {}) });
 }
 
@@ -284,7 +285,7 @@ const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
     const town = townFor(req);
     if (url.pathname.startsWith('/api/admin/')) {
-      return admin.handle(req, url, () => readJson(req, 64 * 1024).catch(() => ({})))
+      return admin.handle(req, url, () => readJson(req, 512 * 1024).catch(() => ({})))
         .then((r) => sendAdmin(res, r))
         .catch((e) => { log.warn(`admin failed: ${e.stack || e.message}`); sendAdmin(res, { status: 500, body: { ok: false, error: 'Server error' } }); });
     }

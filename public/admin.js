@@ -75,7 +75,7 @@ async function route() {
   } catch { return; }
   $('#login').hidden = true;
   $('#nav').hidden = false;
-  document.querySelectorAll('[data-nav]').forEach((n) => n.toggleAttribute('aria-current', n.dataset.nav === (page === 'health' ? 'health' : 'towns')));
+  document.querySelectorAll('[data-nav]').forEach((n) => n.toggleAttribute('aria-current', n.dataset.nav === (page === 'health' ? 'health' : /resource/.test(page) ? 'resources' : 'towns')));
   try {
     if (page === 'health') { readFilters(query); await healthPage(); timer = setInterval(() => healthPage(true).catch(() => {}), 30e3); }
     else if (page === 'towns') await townsPage();
@@ -83,6 +83,7 @@ async function route() {
     else if (page === 'town') await townPage(a);
     else if (page === 'source') await sourcePage(a, b);
     else if (page === 'new-source') await sourcePage(a, null);
+    else if (page === 'all-resources') { readResFilters(query); await allResourcesPage(); }
     else if (page === 'resources') await resourcesPage(a);
     else if (page === 'resource') await resourcePage(a, b);
     else if (page === 'new-resource') await resourcePage(a, null, b);
@@ -310,6 +311,7 @@ async function townPage(id) {
 
   const kids = [h('p', {}, h('a', { href: '#towns' }, '← Towns')),
     h('div', { class: 'town-head' }, health ? dot(health.color) : null, h('h1', {}, t ? `${t.name}${t.state ? `, ${t.state}` : ''}` : 'Add a town'), t ? h('span', { class: `pill ${t.status}` }, t.status) : null)];
+  if (!t) kids.push(fillTownWithClaude(f));
   if (!t) kids.push(h('p', { class: 'muted' }, 'A new town starts as a draft with National Weather Service alerts and forecast already added (they only need the map point). Then add its roads, resort, town and news sources.'));
   if (t) {
     kids.push(
@@ -476,6 +478,88 @@ async function sourcePage(townId, key) {
   ].filter(Boolean));
 }
 
+// ---------- new town: fill with Claude ----------
+// Copy a prompt (built from the name and state typed in the form) into Claude, paste
+// its JSON answer back, and the form fills in for review. Nothing is saved until
+// Create town. Suggested sources and starter resources are shown to add afterwards.
+function fillTownWithClaude(form) {
+  const err = h('p', { class: 'error', role: 'alert' });
+  const out = h('div');
+  const paste = h('textarea', { rows: 6, spellcheck: 'false', placeholder: 'Paste Claude\'s answer here (the ```json block, or the whole reply).' });
+  const copied = h('span', { class: 'ok-msg small', role: 'status' });
+
+  function prompt() {
+    const v = Object.fromEntries(new FormData(form));
+    const place = [v.name, v.state].filter(Boolean).join(', ');
+    return `I'm adding ${place} to thetown.buzz, a network of local real-time info sites (weather, roads, ski conditions, town news, events and a civic resources page). Each town has a page at [address-name].thetown.buzz. Research ${place} with web search and answer with ONLY one JSON code block (\`\`\`json ... \`\`\`) in exactly this shape:
+
+{
+  "name": "Town name as locals write it",
+  "state": "Two-letter state",
+  "id": "address name: lowercase letters, numbers and dashes, usually the town name (ouray, crested-butte)",
+  "siteName": "[Town] Buzz",
+  "lat": 38.0228,
+  "lon": -107.6714,
+  "timezone": "IANA time zone, like America/Denver",
+  "notAffiliated": "short list of the main agencies whose info the site will show, like: the City of Ouray, CDOT or the National Weather Service",
+  "suggestedSources": [
+    { "label": "Who publishes it", "type": "rss | ical | snow-report | resort-alerts | cdot | other", "url": "https://...", "why": "what it would add (town news, county alerts, events, ski resort snow report, local paper)" }
+  ],
+  "resourcesCsv": "CSV text, see below"
+}
+
+Rules:
+- lat and lon: the center of town (town hall or main street), as numbers with 4 decimals.
+- suggestedSources: official RSS or iCal feeds for the town/city and county (news, alerts, calendar), the local newspaper or radio station feed, the nearest ski resort's snow report page, and anything else that publishes timely local information. Only include URLs you actually found. Say in "why" if a feed needs checking.
+- resourcesCsv: starter entries for the Resources page as CSV text (use \\n for new lines inside the JSON string), header first:
+id,town,category,name,phone,phone2,website,address,hours,note,emergency,hidden,checked,source
+  Leave id blank. town is the id above. category is one of emergency, medical, government, transit, utilities, roads, outdoors, schools. Include 911, the non-emergency dispatch or police line, the nearest hospital or clinic, town hall, the county, transit, the electric/gas/water utilities, the state road conditions line, the local forest or park office, and the school district and library. emergency is "yes" only for emergency lines and the ER. checked is today's date (${new Date().toISOString().slice(0, 10)}) for rows you verified on an official site. source is the URL you used.
+- Use official sources only. Never guess: leave a value blank (or empty string) if you can't confirm it.`;
+  }
+
+  function fill() {
+    err.textContent = '';
+    const text = paste.value.trim();
+    if (!text) { err.textContent = 'Paste Claude\'s answer first.'; return; }
+    const block = text.match(/```(?:json)?\s*\n([\s\S]*?)```/i);
+    let j;
+    try { j = JSON.parse(block ? block[1] : text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); } catch { err.textContent = 'That doesn\'t look like the JSON answer. Paste the whole ```json block.'; return; }
+    const set = (name, val) => { const el = form.elements[name]; if (el && val != null && val !== '' && !el.readOnly) el.value = String(val); };
+    set('name', j.name); set('state', j.state); set('id', String(j.id || '').toLowerCase()); set('siteName', j.siteName);
+    set('lat', j.lat ?? j.location?.lat); set('lon', j.lon ?? j.location?.lon); set('timezone', j.timezone); set('notAffiliated', j.notAffiliated);
+    const srcs = Array.isArray(j.suggestedSources) ? j.suggestedSources.filter((x) => x && x.url) : [];
+    const csv = typeof j.resourcesCsv === 'string' ? j.resourcesCsv.trim() : '';
+    const csvCopied = h('span', { class: 'ok-msg small', role: 'status' });
+    out.replaceChildren(...[
+      h('p', { class: 'ok-msg' }, 'Filled in the form below. Check each field (especially the map point), then Create town.'),
+      srcs.length ? h('details', { open: true }, h('summary', {}, `Suggested sources (${srcs.length}): add these after creating the town, using Add a source and Test`),
+        h('ul', {}, ...srcs.map((x) => h('li', {}, h('strong', {}, x.label || 'Source'), x.type ? ` (${x.type})` : '', ': ',
+          /^https?:\/\//.test(x.url) ? h('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer' }, x.url) : x.url, x.why ? h('div', { class: 'muted small' }, x.why) : null)))) : null,
+      csv ? h('details', {}, h('summary', {}, `Starter resources (${csv.split('\n').length - 1} rows): after creating the town, paste into Resources, Import`),
+        h('textarea', { rows: 8, readonly: true }, csv),
+        h('div', { class: 'row' }, h('button', { type: 'button', class: 'secondary', onclick: async () => {
+          try { await navigator.clipboard.writeText(csv); csvCopied.textContent = 'Copied.'; } catch { csvCopied.textContent = 'Select the text and copy it.'; }
+        } }, 'Copy resources CSV'), csvCopied)) : null,
+    ].filter(Boolean));
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  return h('div', { class: 'card' },
+    h('h2', {}, 'Fill with Claude'),
+    h('p', { class: 'muted small' }, '1. Type the town name and state in the form below. 2. Copy the prompt into Claude (claude.ai, with web search on). 3. Paste its answer here and press Fill form. Nothing is saved until you press Create town.'),
+    h('div', { class: 'row' },
+      h('button', { type: 'button', onclick: async () => {
+        err.textContent = '';
+        if (!form.elements.name.value.trim()) { err.textContent = 'Type the town name in the form first.'; return; }
+        const text = prompt();
+        try { await navigator.clipboard.writeText(text); copied.textContent = 'Prompt copied. Paste it into Claude.'; }
+        catch { out.replaceChildren(h('textarea', { rows: 10, readonly: true }, text)); copied.textContent = 'Copy the prompt below.'; }
+      } }, 'Copy prompt for Claude'), copied),
+    paste,
+    h('div', { class: 'row' }, h('button', { type: 'button', class: 'secondary', onclick: fill }, 'Fill form')),
+    err, out);
+}
+
 // ---------- resources ----------
 const siteOf = (t) => (t.url || `https://${t.hostnames?.[0] || `${t.id}.thetown.buzz`}`).replace(/\/$/, '');
 // Each town's /resources page: phone numbers, offices and links, kept by hand.
@@ -575,6 +659,210 @@ async function resourcePage(townId, id, category = '') {
     r ? h('p', { class: 'muted' }, r.checkedAt ? `Last checked ${ago(r.checkedAt)}.` : 'Never checked.') : null,
     h('div', { class: 'card' }, f),
   );
+}
+
+// ---------- all resources (every town) ----------
+// One list across towns with filters and search, plus CSV export and import.
+const RES_FILTER_KEYS = ['town', 'cat', 'status', 'q'];
+const RES_STATUS = [['', 'Any status'], ['stale', 'Needs checking'], ['never', 'Never checked'], ['hidden', 'Hidden'], ['emergency', 'In the emergency box']];
+let resFilters = { town: '', cat: '', status: '', q: '' };
+function readResFilters(query) {
+  const p = new URLSearchParams(query);
+  const fromUrl = RES_FILTER_KEYS.some((k) => p.has(k));
+  const saved = store.get('buzz-admin-res-filters') || {};
+  for (const k of RES_FILTER_KEYS) resFilters[k] = String((fromUrl ? p.get(k) : saved[k]) || '');
+}
+function saveResFilters() {
+  store.set('buzz-admin-res-filters', resFilters);
+  const p = new URLSearchParams();
+  for (const k of RES_FILTER_KEYS) if (resFilters[k]) p.set(k, resFilters[k]);
+  const qs = p.toString();
+  history.replaceState(null, '', `#all-resources${qs ? `?${qs}` : ''}`);
+}
+
+async function allResourcesPage() {
+  const d = await api('/all-resources');
+  const townName = new Map(d.towns.map((t) => [t.id, `${t.name}${t.state ? `, ${t.state}` : ''}`]));
+  const catName = new Map(d.categories.map((c) => [c.id, c.label]));
+  const stale = (r) => !r.checkedAt || Date.now() - r.checkedAt > d.staleDays * DAY;
+  if (resFilters.town && !townName.has(resFilters.town)) resFilters.town = '';
+  const f = resFilters;
+  const err = h('p', { class: 'error', role: 'alert' });
+  const results = h('div');
+
+  const sel = (key, label, options) => h('label', { class: 'filter' }, label,
+    h('select', { name: key, onchange: (e) => { f[key] = e.target.value; saveResFilters(); render(); } },
+      ...options.map(([v, text]) => h('option', { value: v, selected: f[key] === v }, text))));
+  const q = h('input', { type: 'search', value: f.q, placeholder: 'Name, phone, address, note', autocomplete: 'off' });
+  q.addEventListener('input', () => { f.q = q.value.trim(); saveResFilters(); render(); });
+  const bar = h('div', { class: 'filters card', role: 'search' },
+    sel('town', 'Town', [['', 'All towns'], ...d.towns.map((t) => [t.id, townName.get(t.id)])]),
+    sel('cat', 'Category', [['', 'All categories'], ...d.categories.map((c) => [c.id, c.label])]),
+    sel('status', 'Status', RES_STATUS),
+    h('label', { class: 'filter grow' }, 'Search', q),
+    h('button', { type: 'button', class: 'small secondary', onclick: () => {
+      Object.assign(f, { town: '', cat: '', status: '', q: '' });
+      bar.querySelectorAll('select').forEach((x) => { x.value = ''; });
+      q.value = ''; saveResFilters(); render();
+    } }, 'Clear'));
+
+  function matches(r) {
+    if (f.town && r.townId !== f.town) return false;
+    if (f.cat && r.category !== f.cat) return false;
+    if (f.status === 'stale' && !stale(r)) return false;
+    if (f.status === 'never' && r.checkedAt) return false;
+    if (f.status === 'hidden' && !r.hidden) return false;
+    if (f.status === 'emergency' && !(r.emergency || r.category === 'emergency')) return false;
+    if (f.q) {
+      const hay = [r.name, r.phone, r.phone2, r.phone.replace(/\D/g, ''), r.website, r.address, r.hours, r.note, townName.get(r.townId), catName.get(r.category)].join(' ').toLowerCase();
+      if (!f.q.toLowerCase().split(/\s+/).every((w) => hay.includes(w))) return false;
+    }
+    return true;
+  }
+
+  function render() {
+    const rows = d.resources.filter(matches);
+    const staleN = rows.filter(stale).length;
+    results.replaceChildren(
+      h('p', { class: 'summary' }, `${rows.length} of ${d.resources.length} resources`, staleN ? h('span', { class: 'err' }, ` · ${staleN} need checking`) : null,
+        rows.length && staleN ? h('button', { class: 'small secondary', onclick: async () => {
+          const ids = rows.filter(stale).map((r) => r.id);
+          const byTown = new Map();
+          for (const r of rows.filter(stale)) byTown.set(r.townId, [...(byTown.get(r.townId) || []), r.id]);
+          if (!confirm(`Mark ${ids.length} shown resource${ids.length === 1 ? '' : 's'} as checked today?`)) return;
+          try { for (const [town, list] of byTown) await api('/resource/checked', { town, ids: list }); route(); } catch (e) { err.textContent = e.message; }
+        } }, 'Mark shown as checked') : null),
+      rows.length ? h('div', { class: 'card table-wrap' }, h('table', {},
+        h('thead', {}, h('tr', {}, h('th', {}, 'Resource'), f.town ? null : h('th', {}, 'Town'), h('th', { class: 'hide-sm' }, 'Category'), h('th', { class: 'hide-sm' }, 'Contact'), h('th', {}, 'Checked'))),
+        h('tbody', {}, ...rows.map((r) => h('tr', { class: r.hidden ? 'muted' : null },
+          h('td', {}, h('a', { href: `#resource/${r.townId}/${r.id}` }, r.name),
+            r.emergency && r.category !== 'emergency' ? h('span', { class: 'pill live' }, 'emergency box') : null,
+            r.hidden ? h('span', { class: 'pill draft' }, 'hidden') : null,
+            r.hours ? h('div', { class: 'muted small' }, `🕒 ${r.hours}`) : null),
+          f.town ? null : h('td', { class: 'small' }, townName.get(r.townId) || r.townId),
+          h('td', { class: 'small hide-sm' }, catName.get(r.category) || r.category),
+          h('td', { class: 'small hide-sm' }, [r.phone, r.website && r.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')].filter(Boolean).join(' · ')),
+          h('td', { class: 'small' }, stale(r) ? h('span', { class: 'err' }, r.checkedAt ? ago(r.checkedAt) : 'Never') : ago(r.checkedAt))))))) :
+        h('div', { class: 'card' }, h('p', { class: 'muted' }, d.resources.length ? 'No resources match the filters.' : 'No resources yet.')),
+    );
+  }
+
+  // "Update with Claude": a ready-to-copy research prompt for the town and category
+  // picked in the filters, with the current entries as CSV. Paste the answer into the
+  // import box below, preview, then import. No API call: copy and paste only.
+  function claudeCard() {
+    const box = h('div', { hidden: true });
+    const btn = h('button', { type: 'button', onclick: () => {
+      if (!box.hidden) { box.hidden = true; btn.textContent = 'Update with Claude'; return; }
+      if (!f.town) { err.textContent = 'Pick a town first, so the prompt is about one town.'; return; }
+      err.textContent = '';
+      const prompt = claudePrompt(f.town, f.cat);
+      const ta = h('textarea', { rows: 14, readonly: true, class: 'mono' }, prompt);
+      const copied = h('span', { class: 'ok-msg small', role: 'status' });
+      box.replaceChildren(
+        h('p', { class: 'muted small' }, '1. Copy this prompt into Claude (claude.ai, with web search on). 2. Paste Claude\'s CSV answer into "Import from a spreadsheet" below. 3. Preview, check the changes, then Import.'),
+        ta,
+        h('div', { class: 'row' }, h('button', { type: 'button', onclick: async () => {
+          try { await navigator.clipboard.writeText(prompt); } catch { ta.select(); document.execCommand('copy'); }
+          copied.textContent = 'Copied.';
+          setTimeout(() => { copied.textContent = ''; }, 2500);
+        } }, 'Copy prompt'), copied,
+        h('button', { type: 'button', class: 'secondary', onclick: () => { paste.focus(); paste.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, 'Go to paste box')));
+      box.hidden = false;
+      btn.textContent = 'Hide prompt';
+    } }, 'Update with Claude');
+    return h('div', { class: 'card' },
+      h('div', { class: 'row spread' }, h('h2', {}, 'Update with Claude'), btn),
+      h('p', { class: 'muted small' }, 'Builds a research prompt for the town (and category) picked above, with the current entries included. Claude checks them against official sources, fixes and adds entries, and answers in the import format.'),
+      box);
+  }
+
+  function claudePrompt(townId, cat) {
+    const t = d.towns.find((x) => x.id === townId);
+    const rows = d.resources.filter((r) => r.townId === townId && (!cat || r.category === cat));
+    const cell = (v) => { const x = String(v ?? ''); return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
+    const day = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '');
+    const cols = ['id', 'town', 'category', 'name', 'phone', 'phone2', 'website', 'address', 'hours', 'note', 'emergency', 'hidden', 'checked', 'source'];
+    const csv = [cols.join(','), ...rows.map((r) => [r.id, r.townId, r.category, r.name, r.phone, r.phone2, r.website, r.address, r.hours, r.note,
+      r.emergency ? 'yes' : '', r.hidden ? 'yes' : '', day(r.checkedAt), ''].map(cell).join(','))].join('\n');
+    const place = `${t.name}${t.state ? `, ${t.state}` : ''}`;
+    const scope = cat ? `the "${catName.get(cat)}" category` : 'all categories';
+    const today = new Date().toISOString().slice(0, 10);
+    return `You are helping maintain the Resources page of ${t.url.replace(/^https?:\/\//, '')}, a local information site for ${place}. It lists essential civic resources people look up: emergency numbers, medical care, town and county offices, transit and parking, utilities, roads and travel, trails and outdoors, schools and the library. It is not a business directory, so leave out shops, restaurants, lodging and other private businesses unless they are the only provider of an essential service (for example, the hospital or the electric co-op).
+
+Task: review and improve the entries for ${scope} in ${place}.
+1. Check every current entry below against official, primary sources (the agency's or organization's own website, or a government site). Fix wrong or outdated phone numbers, websites, addresses and hours.
+2. Add important missing resources for ${scope}.
+3. Use web search. Do not guess or fill in from memory. If you cannot confirm a value from an official source, leave that cell blank and say so in the source column.
+
+Answer with ONLY one CSV code block (\`\`\`csv ... \`\`\`) in exactly this format, with the header row first:
+${cols.join(',')}
+
+Rules for the CSV:
+- id: keep the id for existing entries. Leave it blank for new ones. Never invent an id.
+- town: always "${townId}".
+- category: one of ${d.categories.map((c) => c.id).join(', ')}.
+- name: the official name, plainly written.
+- phone, phone2: like 970-728-3848. Use phone2 only for a second line (after hours, outage line) and explain it in note.
+- website: full https:// address of the official page.
+- address: street, town, state and ZIP.
+- hours: short and readable, like "Mon to Fri 8 a.m. to 5 p.m." or "24/7". Blank if unknown.
+- note: one short sentence a resident would find useful. No marketing language.
+- emergency: "yes" only for things someone needs in an emergency (911, dispatch, ER, poison control). Otherwise blank.
+- hidden: keep the current value. Leave blank for new entries.
+- checked: ${today} for entries you verified against an official source today. Otherwise keep the current value.
+- source: the URL(s) you used for that row, or why a value is blank. This column is for review only and is ignored on import.
+- Include every current entry, changed or not, so nothing is lost. To suggest removing one, keep it and write "suggest removing: <reason>" in source.
+- Quote any cell that contains a comma.
+
+Current entries (${rows.length}):
+\`\`\`csv
+${csv}
+\`\`\``;
+  }
+
+  // CSV import: pick a file, preview what would change, then import.
+  const importBox = h('div');
+  const file = h('input', { type: 'file', accept: '.csv,text/csv' });
+  const paste = h('textarea', { rows: 6, placeholder: 'Or paste CSV here (for example, Claude\'s answer). A ```csv code block is fine.', spellcheck: 'false', class: 'mono' });
+  let pending = '';
+  async function runImport(apply) {
+    err.textContent = '';
+    if (!apply) {
+      const pasted = paste.value.trim();
+      const fl = file.files[0];
+      if (!pasted && !fl) { err.textContent = 'Choose a CSV file or paste CSV first.'; return; }
+      if (!pasted && fl.size > 400 * 1024) { err.textContent = 'That file is too big (400 KB at most).'; return; }
+      // Claude often wraps CSV in a ```csv block with a sentence around it: keep just the block.
+      const block = pasted.match(/```(?:csv)?\s*\n([\s\S]*?)```/i);
+      pending = pasted ? (block ? block[1] : pasted) : await fl.text();
+    }
+    try {
+      const r = await api('/resources/import', { csv: pending, town: f.town, apply });
+      if (apply) { file.value = ''; paste.value = ''; importBox.replaceChildren(h('p', { class: 'ok-msg' }, `Imported: ${r.adds} added, ${r.updates} updated.`)); const fresh = await api('/all-resources'); d.resources = fresh.resources; render(); return; }
+      importBox.replaceChildren(...[
+        h('p', {}, h('strong', {}, `${r.rows} row${r.rows === 1 ? '' : 's'}: ${r.adds} to add, ${r.updates} to update`), r.errors.length ? h('span', { class: 'err' }, `, ${r.errors.length} with problems`) : null, '.'),
+        r.errors.length ? h('ul', {}, ...r.errors.map((e) => h('li', { class: 'err' }, `Row ${e.line}${e.name ? ` (${e.name})` : ''}: ${e.error}`))) : null,
+        r.preview.length ? h('details', {}, h('summary', {}, 'Show rows'), h('ul', { class: 'small' }, ...r.preview.map((x) => h('li', {}, `Row ${x.line}: ${x.action} "${x.name}" in ${townName.get(x.town) || x.town}, ${catName.get(x.category) || x.category}`)))) : null,
+        !r.errors.length && (r.adds || r.updates) ? h('button', { onclick: () => runImport(true) }, `Import ${r.adds + r.updates} row${r.adds + r.updates === 1 ? '' : 's'}`) : null].filter(Boolean));
+    } catch (e) { err.textContent = e.message; }
+  }
+
+  view.replaceChildren(
+    h('div', { class: 'row spread' }, h('h1', {}, 'Resources'),
+      h('span', {},
+        f.town ? h('a', { class: 'button', href: `#new-resource/${f.town}/${f.cat || 'emergency'}` }, 'Add resource') : null, ' ',
+        h('a', { class: 'button secondary', href: `/api/admin/resources/export${f.town ? `?town=${encodeURIComponent(f.town)}` : ''}` }, f.town ? 'Export CSV' : 'Export all as CSV'))),
+    h('p', { class: 'muted' }, `Phone numbers, offices and links shown on each town's Resources tab. Entries not checked in ${d.staleDays} days show in red.`, f.town ? null : ' Pick a town to add a resource.'),
+    bar, err, claudeCard(), results,
+    h('div', { class: 'card' }, h('h2', {}, 'Import from a spreadsheet'),
+      h('p', { class: 'muted small' }, 'Export a CSV, edit it in Excel, Numbers or Google Sheets, then import it here. Rows with an id update that resource; rows without one are added. The town column says which town each row goes to', f.town ? `; blank means ${townName.get(f.town)}.` : '.', ' Category can be the id (medical) or the name (Medical). Nothing changes until you press Import.'),
+      h('div', { class: 'row' }, file, h('button', { type: 'button', class: 'secondary', onclick: () => runImport(false) }, 'Preview')),
+      paste,
+      h('div', { class: 'row' }, h('button', { type: 'button', class: 'secondary', onclick: () => runImport(false) }, 'Preview pasted CSV')),
+      importBox),
+  );
+  render();
 }
 
 route();
