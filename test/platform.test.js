@@ -316,3 +316,88 @@ test('town lookup: Nominatim results become town suggestions with state, slug an
   // Both down: one error naming both.
   await assert.rejects(geocodeTown('Ouray', 'CO', { fetchJsonImpl: async () => { throw new Error('nope'); } }), /nope/);
 });
+
+test('admin: Create town with Claude\'s answer saves its sources and starter resources', async () => {
+  const db = openDb(':memory:');
+  importConfigs(db, configs);
+  const admin = createAdmin({ db, password: 'correct horse battery', log: quiet });
+  const login = fakeReq('POST', '/api/admin/login', { body: { password: 'correct horse battery' } });
+  const cookie = (await admin.handle(login.req, login.url, login.read)).headers['Set-Cookie'].split(';')[0];
+  const call = async (method, p, body) => { const r = fakeReq(method, p, { cookie, body }); return admin.handle(r.req, r.url, r.read); };
+  const fromClaude = {
+    suggestedSources: [
+      { label: 'Denver7 (KMGH)', type: 'rss', url: 'https://www.denver7.com/news/front-range/fort-collins.rss', why: 'Fort Collins news feed; confirmed working RSS.' },
+      { label: 'CBS Colorado', type: 'rss', url: 'https://www.cbsnews.com/latest/rss/local-news-northern-colorado', why: 'Latest items looked stale, so check it updates.' },
+      { label: 'City of Fort Collins', type: 'other', url: 'https://www.fortcollins.gov/Home/Tabs/News', why: 'Official city news. No RSS URL confirmed.' },
+      { label: 'City events', type: 'ical', url: 'https://example.com/events.ics', why: 'City calendar' },
+      { label: 'CDOT', type: 'cdot', url: 'https://www.cotrip.org', why: 'Roads' },
+      { label: 'Broken', type: 'rss', url: 'not a url' },
+      { label: 'Denver7 again', type: 'rss', url: 'https://www.denver7.com/news/front-range/fort-collins.rss' },
+    ],
+    // The town column says something else: a new town's starter list goes in that town anyway.
+    resourcesCsv: 'id,town,category,name,phone\n,fort-collins,emergency,Emergency,911\n,fort-collins,government,City Hall,970-221-6500\n,fort-collins,nonsense,Bad row,1',
+  };
+  const r = await call('POST', '/api/admin/town', { create: true, fromClaude, town: { id: 'fortcollins', name: 'Fort Collins', state: 'CO', location: { lat: 40.5853, lon: -105.0844 } } });
+  assert.equal(r.status, 200, r.body.error);
+  const fc = r.body.fromClaude;
+  assert.deepEqual(fc.sources.map((s) => [s.adapter, s.label, s.enabled]), [
+    ['rss', 'Denver7 (KMGH)', true], ['rss', 'CBS Colorado', false], ['rss', 'City of Fort Collins', false], ['ical', 'City events', true]]);
+  assert.deepEqual(fc.skipped.map((x) => x.label), ['CDOT', 'Broken', 'Denver7 again']);
+  const saved = db.listSources('fortcollins');
+  assert.equal(saved.length, 6); // + NWS alerts and forecast
+  assert.equal(saved.find((s) => s.label === 'City of Fort Collins').settings.category, 'town');
+  assert.equal(saved.find((s) => s.label === 'Denver7 (KMGH)').settings.category, 'news');
+  assert.equal(fc.resources.added, 2);
+  assert.equal(fc.resources.errors.length, 1);
+  assert.deepEqual(db.listResources('fortcollins').map((x) => x.name).sort(), ['City Hall', 'Emergency']);
+});
+
+test('header messages: every-town message, town message and the preview note', async () => {
+  const { normalizeNotice, noticesFor, renderNotices } = await import('../src/notice.js');
+  assert.deepEqual(normalizeNotice({ text: '  ', level: 'warn' }), { notice: null });
+  assert.deepEqual(normalizeNotice({ text: 'Town Hall closed Friday', level: 'nope', until: '2026-11-27' }), { notice: { text: 'Town Hall closed Friday', level: 'info', until: '2026-11-27' } });
+  assert.match(normalizeNotice({ text: 'x'.repeat(300) }).error, /280/);
+  assert.match(normalizeNotice({ text: 'x', until: 'Friday' }).error, /date/);
+  const town = { id: 'durango', name: 'Durango', timezone: 'America/Denver', brand: { siteName: 'Durango Buzz', notice: { text: 'Main Ave closed <Sat>', level: 'warn', until: '2026-11-28' } } };
+  const now = Date.parse('2026-11-23T20:00:00Z');
+  let list = noticesFor(town, { text: 'Snowstorm tonight', level: 'urgent' }, now);
+  assert.deepEqual(list.map((n) => n.level), ['urgent', 'warn', 'preview']);
+  assert.match(list[2].text, /Durango Buzz is in early testing/);
+  list = noticesFor({ ...town, brand: { ...town.brand, preview: false } }, { text: 'Old', until: '2026-11-01' }, now);
+  assert.deepEqual(list.map((n) => n.level), ['warn']); // expired every-town message, preview off
+  const html = renderNotices(list);
+  assert.match(html, /class="note note-warn"/);
+  assert.match(html, /Main Ave closed &lt;Sat&gt;/);
+  assert.equal(renderNotices([]), '');
+
+  const db = openDb(':memory:');
+  importConfigs(db, configs);
+  const admin = createAdmin({ db, password: 'correct horse battery', log: quiet });
+  const login = fakeReq('POST', '/api/admin/login', { body: { password: 'correct horse battery' } });
+  const cookie = (await admin.handle(login.req, login.url, login.read)).headers['Set-Cookie'].split(';')[0];
+  const call = async (method, p, body) => { const r = fakeReq(method, p, { cookie, body }); return admin.handle(r.req, r.url, r.read); };
+  let r = await call('POST', '/api/admin/notice', { text: 'Snowstorm tonight', level: 'urgent' });
+  assert.equal(r.status, 200);
+  assert.equal((await call('GET', '/api/admin/notice')).body.notice.text, 'Snowstorm tonight');
+  r = await call('POST', '/api/admin/notice', { text: '' });
+  assert.equal(r.body.notice, null);
+  const id = (await call('GET', '/api/admin/towns')).body.towns[0].id;
+  r = await call('POST', '/api/admin/town', { town: { id, brand: { notice: { text: 'Road work', level: 'warn' }, preview: false } } });
+  assert.equal(r.status, 200, r.body.error);
+  assert.deepEqual([r.body.town.brand.notice.text, r.body.town.brand.preview], ['Road work', false]);
+  r = await call('POST', '/api/admin/town', { town: { id, brand: { notice: { text: '' }, preview: true } } });
+  assert.deepEqual([r.body.town.brand.notice, r.body.town.brand.preview], [undefined, undefined]);
+});
+
+test('logo: long town names wrap to two lines or shrink so they never run off the edge', async () => {
+  const { logoSvg } = await import('../src/brand.js');
+  const names = (svg) => [...svg.matchAll(/<text[^>]*class="logo-name"[^>]*>([^<]*)</g)].map((m) => m[1]);
+  assert.deepEqual(names(logoSvg({ name: 'Telluride', brand: {} })), ['telluride']);
+  assert.doesNotMatch(logoSvg({ name: 'Telluride', brand: {} }), /scale\(/);
+  assert.deepEqual(names(logoSvg({ name: 'Fort Collins', brand: {} })), ['fort', 'collins']);
+  assert.deepEqual(names(logoSvg({ name: 'Steamboat Springs', brand: {} })), ['steamboat', 'springs']);
+  assert.deepEqual(names(logoSvg({ name: 'Mt. Crested Butte', brand: {} })), ['mt. crested', 'butte']);
+  const breck = logoSvg({ name: 'Breckenridge', brand: {} });
+  assert.deepEqual(names(breck), ['breckenridge']);
+  assert.ok(Number(breck.match(/scale\(([\d.]+)\)/)[1]) < 0.7);
+});

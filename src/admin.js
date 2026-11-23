@@ -10,6 +10,8 @@ import { adapterCatalog, itemSourcesOf, testSource } from './adapters.js';
 import { exportTown, loadTowns, normalizeSource, normalizeTown, starterSources } from './towns.js';
 import { sourceHealth, townColor, FEED_NAMES } from './health.js';
 import { geocodeTown } from './geocode.js';
+import { planClaudeSources } from './claude-town.js';
+import { ALL_TOWNS_KEY, normalizeNotice } from './notice.js';
 import { normalizeResource, planCsvImport, resourcesToCsv, RESOURCE_CATEGORIES, STALE_DAYS, sponsorState, townDay } from './resources.js';
 import { townUrl } from './brand.js';
 
@@ -61,6 +63,22 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
     return list.map((r) => ({ ...r, sponsorState: sponsorState(r, days.get(r.townId) || townDay(null)) }));
   };
   const changed = (what) => { log.info?.(`admin: ${what}`); onChange(); };
+  // Write a planned CSV import (planCsvImport): new rows go to the end of their town's list.
+  function applyImport(plan) {
+    db.raw.exec('BEGIN');
+    try {
+      const ends = new Map();
+      for (const { town, resource } of plan.adds) {
+        if (!ends.has(town)) ends.set(town, Math.max(0, ...db.listResources(town).map((r) => r.sort)));
+        ends.set(town, ends.get(town) + 10);
+        db.saveResource(town, { ...resource, sort: ends.get(town) });
+      }
+      for (const { town, resource } of plan.updates) db.saveResource(town, resource);
+      db.raw.exec('COMMIT');
+    } catch (e) { db.raw.exec('ROLLBACK'); throw e; }
+    log.info?.(`admin: imported resources (${plan.adds.length} added, ${plan.updates.length} updated)`);
+    for (const t of new Set([...plan.adds, ...plan.updates].map((x) => x.town))) onResources(t);
+  }
 
   function healthBoard() {
     const status = db.sourceStatus();
@@ -115,6 +133,11 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
           return bad(`The map lookup didn't answer (${e.message}). Try again, or use Edit the other fields and fill the point in by hand.`, 502);
         }
       }
+      case 'GET /notice': {
+        let notice = null;
+        try { notice = JSON.parse(db.getMeta(ALL_TOWNS_KEY) || 'null'); } catch { /* none */ }
+        return ok({ notice });
+      }
       case 'GET /adapters':
         return ok({ adapters: adapterCatalog() });
       case 'GET /towns':
@@ -159,10 +182,34 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
         const merged = existing ? { ...existing, ...body.town, brand: { ...existing.brand, ...body.town.brand } } : body.town;
         const { town, error } = normalizeTown(merged, all);
         if (error) return bad(error);
+        // The state shows after the name in the town picker and on thetown.buzz.
+        if (!/^[A-Z]{2}$/.test(town.state || '')) return bad('Add the two-letter state (like CO).');
         db.saveTown(town, town.status);
         if (body.create) for (const s of starterSources(town)) db.saveSource(town.id, s);
+        // Add a town with Claude: its suggested sources and starter resources come along.
+        let fromClaude = null;
+        if (body.create && body.fromClaude && typeof body.fromClaude === 'object') {
+          const have = findTown(town.id).sources;
+          const { sources, skipped } = planClaudeSources(body.fromClaude.suggestedSources, town, have);
+          for (const s of sources) db.saveSource(town.id, s);
+          fromClaude = { sources: sources.map((s) => ({ key: s.key, label: s.label, adapter: s.adapter, enabled: s.enabled, url: s.settings.url, about: s.about })), skipped, resources: null };
+          const csv = typeof body.fromClaude.resourcesCsv === 'string' ? body.fromClaude.resourcesCsv : '';
+          if (csv.trim()) {
+            const plan = planCsvImport(csv, { towns: towns(), existing: db.listResources(null), forceTown: town.id });
+            fromClaude.resources = plan.error ? { added: 0, errors: [{ line: 0, error: plan.error }] } : { added: plan.adds.length, errors: plan.errors.slice(0, 50) };
+            if (!plan.error && (plan.adds.length || plan.updates.length)) applyImport(plan);
+          }
+        }
         changed(`${body.create ? 'added' : 'saved'} town ${town.id} (${town.status})`);
-        return ok({ town: findTown(town.id) });
+        return ok({ town: findTown(town.id), fromClaude });
+      }
+      case 'POST /notice': {
+        // The header message for every town (a town's own is in its Settings).
+        const { notice, error } = normalizeNotice(body);
+        if (error) return bad(error);
+        db.setMeta(ALL_TOWNS_KEY, JSON.stringify(notice));
+        changed(notice ? 'set the message for every town' : 'cleared the message for every town');
+        return ok({ notice });
       }
       case 'POST /town/delete': {
         const t = all.find((x) => x.id === body.town);
@@ -262,19 +309,7 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
         if (!body.apply) return ok(summary);
         // Rows with problems are skipped; the good rows go in (summary.errors lists the skipped ones).
         if (!plan.adds.length && !plan.updates.length) return bad('Nothing to import: every row has a problem.');
-        db.raw.exec('BEGIN');
-        try {
-          const ends = new Map();
-          for (const { town, resource } of plan.adds) {
-            if (!ends.has(town)) ends.set(town, Math.max(0, ...db.listResources(town).map((r) => r.sort)));
-            ends.set(town, ends.get(town) + 10);
-            db.saveResource(town, { ...resource, sort: ends.get(town) });
-          }
-          for (const { town, resource } of plan.updates) db.saveResource(town, resource);
-          db.raw.exec('COMMIT');
-        } catch (e) { db.raw.exec('ROLLBACK'); throw e; }
-        log.info?.(`admin: imported resources (${plan.adds.length} added, ${plan.updates.length} updated)`);
-        for (const t of new Set([...plan.adds, ...plan.updates].map((x) => x.town))) onResources(t);
+        applyImport(plan);
         return ok(summary);
       }
       case 'POST /resource/delete': {

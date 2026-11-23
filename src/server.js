@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDb } from './db.js';
+import { ALL_TOWNS_KEY, noticesFor, renderNotices } from './notice.js';
 import { startScheduler } from './scheduler.js';
 import { seedDemo } from './demo.js';
 import { loadVapid, validSubscription, pushNewAlerts } from './push.js';
@@ -199,6 +200,13 @@ function serveStatic(req, res, urlPath, town) {
 const siteOf = (town) => town.brand?.siteName || `${town.name} Buzz`;
 
 /** Per-request values for a page template: listings, search tags, first-paint posts. */
+// The header's message area (see notice.js).
+function siteNotices(town) {
+  let all = null;
+  try { all = JSON.parse(db.getMeta(ALL_TOWNS_KEY) || 'null'); } catch { /* ignore a bad value */ }
+  return renderNotices(noticesFor(town, all));
+}
+
 function pageExtras(file, town, guide) {
   const name = path.basename(file);
   const site = siteOf(town);
@@ -242,10 +250,11 @@ function serveTemplate(req, res, file, ext, st, town, guide = null) {
   // Pages with resources are also re-rendered every 10 minutes, so a sponsorship
   // starts and ends on its dates without anyone touching the admin.
   if (!c || c.mtime !== st.mtimeMs || (c.expires && Date.now() > c.expires)) {
-    const extra = ext === '.html' ? pageExtras(file, town, guide) : {};
+    const extra = ext === '.html' ? { ...pageExtras(file, town, guide), notices: siteNotices(town) } : {};
     const body = Buffer.from(renderTemplate(fs.readFileSync(file, 'utf8'), ext, town, pickerTowns(town), extra));
     // The home page carries a snapshot of the feed, so it is rebuilt every 2 minutes.
-    const ttl = extra.feedSnapshot !== undefined ? 2 * 60_000 : extra.resources ? 10 * 60_000 : 0;
+    // Messages with an end date, and sponsorships, need the page rebuilt now and then too.
+    const ttl = extra.feedSnapshot !== undefined ? 2 * 60_000 : extra.resources || extra.notices ? 10 * 60_000 : 0;
     c = { mtime: st.mtimeMs, expires: ttl ? Date.now() + ttl : 0, body, etag: `"${crypto.createHash('sha1').update(body).digest('base64url').slice(0, 16)}"` };
     templateCache.set(key, c);
   }
