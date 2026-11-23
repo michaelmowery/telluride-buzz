@@ -270,6 +270,23 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
         changed(`added ${dot.name} roads to ${t.id}`);
         return ok({ roads: { ...roads, dot: dot.name } });
       }
+      // Feeds tab, "Find feeds with Claude": preview Claude's suggestions (no pick), then
+      // add the ones ticked (pick: positions in suggestedSources). Duplicates are skipped.
+      case 'POST /source/from-claude': {
+        const t = all.find((x) => x.id === body.town);
+        if (!t) return bad('No such town', 404);
+        const suggested = Array.isArray(body.suggestedSources) ? body.suggestedSources.slice(0, 40) : [];
+        if (!suggested.length) return bad('No suggested sources in that answer.');
+        if (!Array.isArray(body.pick)) {
+          const { sources, picks, skipped } = planClaudeSources(suggested, t, t.sources);
+          return ok({ sources: sources.map((s, i) => ({ index: picks[i], key: s.key, label: s.label, adapter: s.adapter, url: s.settings?.url, enabled: s.enabled, about: s.about })), skipped });
+        }
+        const pick = new Set(body.pick.map(Number));
+        const { sources } = planClaudeSources(suggested.map((x, i) => (pick.has(i) ? x : null)), t, t.sources);
+        for (const s of sources) db.saveSource(t.id, s);
+        if (sources.length) changed(`added ${sources.length} Claude sources to ${t.id}`);
+        return ok({ added: sources.map((s) => ({ key: s.key, label: s.label, enabled: s.enabled })) });
+      }
       case 'POST /source/nearby-routes': {
         const t = all.find((x) => x.id === body.town);
         if (!t) return bad('No such town', 404);

@@ -158,3 +158,12 @@ span.err { color: var(--red); }
 .roads-preview > ul > li { margin: .4rem 0; }
 .route-status { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .5rem; }
 .roads-preview ul ul { margin: .2rem 0 0 1.2rem; padding-left: 1rem; }
+
+/* Feeds tab: Find feeds with Claude */
+.claude-feeds { list-style: none; padding: 0; margin: .75rem 0; }
+.claude-feeds > li { padding: .5rem 0; border-top: 1px solid var(--line); }
+.claude-feeds label.check { gap: .5rem; align-items: flex-start; font-weight: 400; }
+.claude-feeds label.check input { margin-top: .25rem; }
+.claude-feeds .muted.small { margin-left: 1.6rem; overflow-wrap: anywhere; }
+.pill.on { color: var(--green); border-color: var(--green); }
+.pill.off { color: var(--amber); border-color: var(--amber); }

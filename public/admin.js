@@ -295,6 +295,120 @@ function roadsCard(t) {
     h('span', {}, h('strong', {}, `${t.name} has no roads yet. `), h('span', { class: 'muted small' }, 'The Roads tile stays hidden until it does.')), btn), msg);
 }
 
+// Feeds tab, "Find feeds with Claude": copy a research prompt built from the town
+// (name, state, map point, the sources it already has), paste Claude's JSON answer,
+// preview with checkboxes, then add the ticked ones. Confirmed RSS and iCal feeds start
+// running; anything else is added paused to check. No API call: copy and paste only.
+function claudeFeedsCard(townId) {
+  const box = h('div', { hidden: true });
+  const err = h('p', { class: 'error', role: 'alert' });
+  const out = h('div');
+  const copied = h('span', { class: 'ok-msg small', role: 'status' });
+  const paste = h('textarea', { rows: 6, spellcheck: 'false', placeholder: 'Paste Claude\'s answer here (the ```json block, or the whole reply).' });
+  let t = null;
+
+  function prompt() {
+    const place = `${t.name}${t.state ? `, ${t.state}` : ''}`;
+    const point = t.location ? ` (map point ${(+t.location.lat).toFixed(4)}, ${(+t.location.lon).toFixed(4)})` : '';
+    const have = t.sources.map((x) => `- ${x.label} (${x.adapter})${[].concat(x.settings?.url || [])[0] ? `: ${[].concat(x.settings.url)[0]}` : ''}`).join('\n') || '- none yet';
+    return `I run ${String(t.url || '').replace(/^https?:\/\//, '') || 'a local info site'}, a real-time local information site for ${place}${point}. It shows a live feed of posts from official and trusted local sources. Find more sources for it with web search.
+
+It already has these sources, so don't suggest them again:
+${have}
+
+Look for sources that publish timely local information for ${place} and the area around it:
+- news: the local newspaper, radio or TV station, and the town or city news page
+- government: the town or city, the county, and tribal or regional government if there is one (news, meeting notices, public notices)
+- events: community calendars, the library, the chamber or visitor center, arts and recreation (iCal feeds if they have them)
+- schools: the school district and local colleges (news, closures, calendars)
+- utilities: electric, gas, water and trash providers (outage and service notices)
+- emergency: county emergency management, sheriff, police and fire, the hospital, and public health (alerts and notices)
+
+Skip weather and roads (the site already gets them from the National Weather Service and the state DOT), and skip social media accounts.
+
+Answer with ONLY one JSON code block (\`\`\`json ... \`\`\`) in exactly this shape:
+
+{
+  "suggestedSources": [
+    { "label": "Who publishes it", "type": "rss | ical | other", "url": "https://...", "why": "what it would add (county alerts, school closures, events)" }
+  ]
+}
+
+Rules:
+- type "rss" is an RSS or Atom feed address and "ical" is an iCal (.ics or webcal) calendar address. Use them only for feed addresses you actually found and opened. Use "other" for a useful page that has no feed.
+- Only include URLs you actually found. Never guess a feed address.
+- Say in "why" if a feed needs checking (old posts, not sure it updates).
+- Up to 25 sources, most useful first.`;
+  }
+
+  const SKIP_DONE = /^Already added/;
+  async function preview() {
+    err.textContent = '';
+    const text = paste.value.trim();
+    if (!text) { err.textContent = 'Paste Claude\'s answer first.'; return; }
+    const block = text.match(/```(?:json)?\s*\n([\s\S]*?)```/i);
+    let j;
+    try { j = JSON.parse(block ? block[1] : text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); } catch { err.textContent = 'That doesn\'t look like the JSON answer. Paste the whole ```json block.'; return; }
+    const suggested = Array.isArray(j) ? j : j.suggestedSources;
+    let plan;
+    try { plan = await api('/source/from-claude', { town: t.id, suggestedSources: suggested }); } catch (e) { err.textContent = e.message; return; }
+    const checks = plan.sources.map((x) => h('input', { type: 'checkbox', value: x.index, checked: true, 'aria-label': `Add ${x.label}` }));
+    const addBtn = h('button', { type: 'button' }, 'Add ticked sources');
+    const msg = h('span', { class: 'small', role: 'status' });
+    const sync = () => { const n = checks.filter((c) => c.checked).length; addBtn.disabled = !n; addBtn.textContent = n ? `Add ${n} source${n === 1 ? '' : 's'}` : 'Add ticked sources'; };
+    checks.forEach((c) => c.addEventListener('change', sync));
+    addBtn.addEventListener('click', async () => {
+      addBtn.disabled = true; msg.className = 'small muted'; msg.textContent = 'Adding…';
+      try {
+        const r = await api('/source/from-claude', { town: t.id, suggestedSources: suggested, pick: checks.filter((c) => c.checked).map((c) => +c.value) });
+        const on = r.added.filter((x) => x.enabled).length;
+        out.replaceChildren(h('p', { class: 'ok-msg' }, `Added ${r.added.length} source${r.added.length === 1 ? '' : 's'}: ${on} running, ${r.added.length - on} paused to check. They're in the table above.`));
+        paste.value = '';
+        healthPage();
+      } catch (e) { addBtn.disabled = false; msg.className = 'small error'; msg.textContent = e.message; }
+    });
+    sync();
+    const skipped = plan.skipped.filter((x) => x.url || !SKIP_DONE.test(x.reason));
+    out.replaceChildren(...[
+      plan.sources.length
+        ? h('ul', { class: 'claude-feeds' }, ...plan.sources.map((x, i) => h('li', {},
+          h('label', { class: 'check' }, checks[i],
+            h('span', {}, h('strong', {}, x.label), ' ', h('span', { class: `pill ${x.enabled ? 'on' : 'off'}` }, x.enabled ? `${x.adapter.toUpperCase()}, runs now` : 'Paused to check'))),
+          h('div', { class: 'muted small' }, x.url ? h('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer' }, x.url) : null),
+          x.about ? h('div', { class: 'muted small' }, x.about) : null)))
+        : h('p', { class: 'muted' }, 'Nothing new to add from that answer.'),
+      skipped.length ? h('details', {}, h('summary', {}, `Not added (${skipped.length})`),
+        h('ul', {}, ...skipped.map((x) => h('li', { class: 'small' }, h('strong', {}, x.label), x.url ? ` (${x.url})` : '', `: ${x.reason}`)))) : null,
+      plan.sources.length ? h('div', { class: 'row form-actions' }, addBtn, msg) : null,
+    ].filter(Boolean));
+  }
+
+  const btn = h('button', { type: 'button', class: 'secondary', onclick: async () => {
+    if (!box.hidden) { box.hidden = true; btn.textContent = 'Show prompt'; return; }
+    err.textContent = '';
+    try { t = (await api('/towns')).towns.find((x) => x.id === townId); } catch (e) { err.textContent = e.message; return; }
+    if (!t) { err.textContent = 'Town not found.'; return; }
+    const p = prompt();
+    const ta = h('textarea', { rows: 12, readonly: true, class: 'mono' }, p);
+    box.replaceChildren(
+      h('p', { class: 'muted small' }, '1. Copy this prompt into Claude (claude.ai, with web search on). 2. Paste Claude\'s answer below and press Preview. 3. Untick anything you don\'t want, then Add.'),
+      ta,
+      h('div', { class: 'row' }, h('button', { type: 'button', onclick: async () => {
+        try { await navigator.clipboard.writeText(p); } catch { ta.select(); document.execCommand('copy'); }
+        copied.textContent = 'Copied.'; setTimeout(() => { copied.textContent = ''; }, 2500);
+      } }, 'Copy prompt'), copied),
+      field('Claude\'s answer', paste),
+      h('div', { class: 'row' }, h('button', { type: 'button', onclick: preview }, 'Preview')),
+      out);
+    box.hidden = false;
+    btn.textContent = 'Hide prompt';
+  } }, 'Show prompt');
+  return h('div', { class: 'card' },
+    h('div', { class: 'row spread' }, h('h2', {}, 'Find feeds with Claude'), btn),
+    h('p', { class: 'muted small' }, 'Get a research prompt for this town that lists the sources it already has. Claude looks for news, government, events, schools, utilities and emergency feeds. Confirmed RSS and iCal feeds start running; the rest are added paused so you can check them.'),
+    err, box);
+}
+
 // ---------- health board ----------
 let healthData = null;
 async function healthPage(refresh = false) {
@@ -307,6 +421,7 @@ async function healthPage(refresh = false) {
       h('div', { class: 'row spread' }, h('h2', {}, 'Feeds'), h('span', {}, filters.town ? h('a', { class: 'button small', href: `#new-source/${filters.town}` }, 'Add a source') : null, ' ', h('span', { class: 'muted small', id: 'health-updated' }))),
       filterBar(filters, { towns: null, feeds: feedList(all, healthData.feeds || {}), feedNames: healthData.feeds || {} }, () => { saveFilters(); renderHealth(); }),
       h('div', { id: 'health-results' }),
+      filters.town ? claudeFeedsCard(filters.town) : '',
     );
   }
   $('#health-updated').textContent = `Updated ${new Date().toLocaleTimeString()}, refreshes every 30 s`;
