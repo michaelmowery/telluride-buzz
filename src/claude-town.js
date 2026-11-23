@@ -10,7 +10,7 @@
 import { normalizeSource } from './towns.js';
 
 const NEEDS_CHECK = /\b(check|verify|unconfirmed|not confirmed|no (rss|feed|ical)|stale|may not|might|unsure|unclear|scrape|if available|look for)\b/i;
-const BY_HAND = { cdot: 'Add a CDOT source with the town\'s highways.', 'snow-report': 'Add a Lifts & Snow source for the resort.', 'resort-alerts': 'Add a resort alerts source for the resort.' };
+const BY_HAND = { 'snow-report': 'Add a Lifts & Snow source for the resort.', 'resort-alerts': 'Add a resort alerts source for the resort.' };
 
 export function categoryGuess(x) {
   const text = `${x.label || ''} ${x.why || ''}`;
@@ -35,6 +35,7 @@ export function planClaudeSources(suggested, town, existing = []) {
     const type = String(x.type || 'other').trim().toLowerCase();
     const why = String(x.why || '').trim().slice(0, 240);
     const skip = (reason) => skipped.push({ label, url, type, reason });
+    if (type === 'cdot' || /\b(dot|roads?|cotrip|511)\b/i.test(type)) { skip(town.state === 'CO' ? 'Roads come from CDOT automatically (or Add CDOT roads on Feeds).' : 'No roads feed for this state yet.'); continue; }
     if (BY_HAND[type]) { skip(BY_HAND[type]); continue; }
     if (!/^(https?|webcal):\/\/\S+$/i.test(url)) { skip('No usable web address.'); continue; }
     if (seen.has(url.toLowerCase())) { skip('Already added.'); continue; }

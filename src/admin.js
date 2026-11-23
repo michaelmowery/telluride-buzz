@@ -11,6 +11,7 @@ import { exportTown, loadTowns, normalizeSource, normalizeTown, starterSources }
 import { sourceHealth, townColor, FEED_NAMES } from './health.js';
 import { geocodeTown } from './geocode.js';
 import { planClaudeSources } from './claude-town.js';
+import { suggestCdotSource } from './cdot-routes.js';
 import { ALL_TOWNS_KEY, normalizeNotice } from './notice.js';
 import { normalizeResource, planCsvImport, resourcesToCsv, RESOURCE_CATEGORIES, STALE_DAYS, sponsorState, townDay } from './resources.js';
 import { townUrl } from './brand.js';
@@ -63,6 +64,21 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
     return list.map((r) => ({ ...r, sponsorState: sponsorState(r, days.get(r.townId) || townDay(null)) }));
   };
   const changed = (what) => { log.info?.(`admin: ${what}`); onChange(); };
+  // Add a CDOT source with the highways near the town's map point: { routes } or { error }.
+  async function addCdotRoads(town) {
+    try {
+      const { source: input, error } = await (deps.suggestCdot || suggestCdotSource)(town, deps);
+      if (error) return { error };
+      const have = findTown(town.id)?.sources || [];
+      const { source, error: bad2 } = normalizeSource(input, town, have);
+      if (bad2) return { error: bad2 };
+      db.saveSource(town.id, source);
+      return { routes: source.settings.routes.map((r) => r.label) };
+    } catch (e) {
+      log.warn?.(`admin: CDOT roads for ${town.id} failed: ${e.message}`);
+      return { error: e.message };
+    }
+  }
   // Write a planned CSV import (planCsvImport): new rows go to the end of their town's list.
   function applyImport(plan) {
     db.raw.exec('BEGIN');
@@ -186,6 +202,9 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
         if (!/^[A-Z]{2}$/.test(town.state || '')) return bad('Add the two-letter state (like CO).');
         db.saveTown(town, town.status);
         if (body.create) for (const s of starterSources(town)) db.saveSource(town.id, s);
+        // A Colorado town gets CDOT roads right away, with the highways near its map point.
+        let roads = null;
+        if (body.create && town.state === 'CO') roads = await addCdotRoads(town);
         // Add a town with Claude: its suggested sources and starter resources come along.
         let fromClaude = null;
         if (body.create && body.fromClaude && typeof body.fromClaude === 'object') {
@@ -201,7 +220,7 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
           }
         }
         changed(`${body.create ? 'added' : 'saved'} town ${town.id} (${town.status})`);
-        return ok({ town: findTown(town.id), fromClaude });
+        return ok({ town: findTown(town.id), fromClaude, roads });
       }
       case 'POST /notice': {
         // The header message for every town (a town's own is in its Settings).
@@ -231,6 +250,15 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
         db.saveSource(t.id, source);
         changed(`${body.create ? 'added' : 'saved'} source ${t.id}/${source.key}`);
         return ok({ source });
+      }
+      case 'POST /source/cdot-auto': {
+        const t = all.find((x) => x.id === body.town);
+        if (!t) return bad('No such town', 404);
+        if (t.sources.some((x) => x.adapter === 'cdot')) return bad(`${t.name} already has CDOT roads. Edit that source to change its highways.`);
+        const roads = await addCdotRoads(t);
+        if (roads.error) return bad(`Couldn't add roads: ${roads.error}`);
+        changed(`added CDOT roads to ${t.id}`);
+        return ok({ roads });
       }
       case 'POST /source/test': {
         const t = all.find((x) => x.id === body.town);

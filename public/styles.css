@@ -767,3 +767,14 @@ a.prefs-btn { text-decoration: none; }
   .note strong { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .note > summary { padding: 8px; }
 }
+
+/* ---------- towns without roads or a ski resort (body class from brand.js tileGaps) ---------- */
+.no-roads [data-show="roads"], .no-roads .feed-pill[data-cat="roads"], .no-roads [data-toggle="roads"], .no-roads [data-toggle="feed-roads"],
+.no-lifts [data-show="lifts"], .no-lifts .feed-pill[data-cat="lifts"], .no-lifts [data-toggle="lifts"], .no-lifts [data-toggle="feed-lifts"] { display: none !important; }
+/* Phones: an odd number of tiles lets the last one take the full row. */
+.no-roads:not(.no-lifts) .tile-wrap[data-show="events"], .no-lifts:not(.no-roads) .tile-wrap[data-show="events"] { grid-column: 1 / -1; }
+@media (min-width: 720px) {
+  .no-roads .tiles, .no-lifts .tiles { grid-template-columns: repeat(3, 1fr); }
+  .no-roads.no-lifts .tiles { grid-template-columns: repeat(2, 1fr); }
+  .no-roads:not(.no-lifts) .tile-wrap[data-show="events"], .no-lifts:not(.no-roads) .tile-wrap[data-show="events"] { grid-column: auto; }
+}

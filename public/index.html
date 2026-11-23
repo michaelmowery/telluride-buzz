@@ -15,11 +15,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/styles.css?v=31">
-  <script src="/theme.js?v=31"></script>
-  <script src="/towns.js?v=31" defer></script>
+  <link rel="stylesheet" href="/styles.css?v=32">
+  <script src="/theme.js?v=32"></script>
+  <script src="/towns.js?v=32" defer></script>
 </head>
-<body>
+<body class="{{bodyClass}}">
   <header class="top">
     <div class="brand-wrap">
       <a class="brand" href="/" id="brand" aria-label="{{site}}: choose a town" aria-haspopup="true" aria-expanded="false" aria-controls="town-menu">
@@ -130,11 +130,11 @@
 
   <footer class="foot">
     <p class="mission">The real-time pulse of {{town}}: what's happening in our town, right now, from sources you can trust.</p>
-    <p id="disclaimer" class="disclaimer"><strong>Road data source:</strong> The data made available here has been modified for use from its original source, which is the State of Colorado, Department of Transportation (CDOT). THE STATE OF COLORADO AND CDOT MAKES NO REPRESENTATIONS OR WARRANTY AS TO THE COMPLETENESS, ACCURACY, TIMELINESS, OR CONTENT OF ANY DATA MADE AVAILABLE THROUGH THIS SITE. THE STATE OF COLORADO AND CDOT EXPRESSLY DISCLAIMS ALL WARRANTIES, WHETHER EXPRESS OR IMPLIED, INCLUDING ANY IMPLIED WARRANTIES OF MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE. The data is subject to change as modifications and updates are complete. It is understood that the information contained in the Web feed is being used at one&#39;s own risk.</p>
+    {{roadsDisclaimer}}
     <p class="fine">Local guide: <a href="/food-drink">Food &amp; drink</a> · <a href="/shops">Shops</a> · <a href="/lodging">Lodging</a> · <a href="/essentials">Essentials</a></p>
     <p class="fine">Every post links to its source. <a href="#essentials">Essentials</a> · <a href="/about">About &amp; sources</a> · <a href="#" id="prefs-link">Preferences</a> · Not for emergencies: call 911.</p>
   </footer>
 
-  <script src="/app.js?v=31" type="module"></script>
+  <script src="/app.js?v=32" type="module"></script>
 </body>
 </html>
