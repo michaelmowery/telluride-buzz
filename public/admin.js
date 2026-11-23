@@ -363,7 +363,7 @@ async function townPage(id) {
     ),
     h('datalist', { id: 'zones' }, ...['America/Denver', 'America/Phoenix', 'America/Boise', 'America/Los_Angeles', 'America/Chicago', 'America/New_York', 'America/Anchorage', 'Pacific/Honolulu'].map((z) => h('option', { value: z }))),
     field('Web addresses', h('textarea', { name: 'hostnames', rows: 2, placeholder: '[address name].thetown.buzz' }, (t?.hostnames || []).join('\n')),
-      'One per line. Leave blank for [address name].thetown.buzz. Each needs DNS pointing at the server.'),
+      'One per line. Leave blank for [address name].thetown.buzz, which works right away (the *.thetown.buzz wildcard covers it). Only your own domains, like fortcollins.buzz, need DNS pointed at the server and a Caddy entry.'),
     h('div', { class: 'grid2' },
       field('Feedback email', h('input', { name: 'feedbackEmail', type: 'email', value: b.feedbackEmail || '', placeholder: 'telluridebuzz@gmail.com' })),
       field('Status', h('select', { name: 'status' },
@@ -416,9 +416,11 @@ async function townPage(id) {
       const slug = n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '').slice(0, 40);
       f.elements.id.placeholder = slug || 'townname';
       f.elements.siteName.placeholder = n ? `${n} Buzz` : '[Town] Buzz';
-      f.elements.hostnames.placeholder = `${slug || '[address name]'}.thetown.buzz`;
+      // Web addresses shows exactly what a blank box becomes: the address name, as filled or as hinted.
+      f.elements.hostnames.placeholder = `${f.elements.id.value.trim() || slug || '[address name]'}.thetown.buzz`;
     };
-    f.elements.name.addEventListener('input', hint);
+    f.addEventListener('input', hint);
+    f.addEventListener('lookup-filled', hint);
     // Disabled selects aren't sent with the form, so turn them back on just before saving.
     f.addEventListener('submit', () => { for (const el of others) if (el.tagName === 'SELECT') el.disabled = false; }, true);
     // The Look up button sits right under the Town name box; its result shows under the fields.
@@ -462,7 +464,9 @@ function goLiveSteps(t, health) {
     item(has('snow-report'), 'Lifts & Snow: one snow report per nearby resort (skip if none).'),
     item(has('rss') || has('ical'), 'Town and news: town/county RSS, local paper, an events calendar.'),
     item(green > 0 && health.color !== 'red', `Health: ${green} of ${health?.sources.length || 0} sources green.`),
-    item(false, 'Address: ', h('code', {}, host), ' must point at the server. With the wildcard *.thetown.buzz set up, nothing to do; otherwise add a DNS A record and a Caddy entry.'),
+    host.endsWith('.thetown.buzz')
+      ? item(true, 'Address: ', h('code', {}, host), ' works on its own (the *.thetown.buzz wildcard covers it).')
+      : item(false, 'Address: ', h('code', {}, host), ' is your own domain: point its DNS at the server and add a Caddy entry.'),
     item(false, 'Check it at ', h('a', { href: t.url, target: '_blank', rel: 'noopener' }, t.url), ', then set Status to Live.'),
   );
 }
@@ -684,6 +688,7 @@ id,town,category,name,phone,phone2,website,address,hours,note,emergency,hidden,c
     const set = (name, val) => { const el = form.elements[name]; if (el && val != null && val !== '' && (!el.readOnly || 'autofill' in el.dataset)) el.value = String(val); };
     set('name', j.name); set('state', j.state); set('id', String(j.id || '').toLowerCase()); set('siteName', j.siteName);
     set('lat', j.lat ?? j.location?.lat); set('lon', j.lon ?? j.location?.lon); set('timezone', j.timezone); set('notAffiliated', j.notAffiliated);
+    form.dispatchEvent(new Event('lookup-filled'));
     const srcs = Array.isArray(j.suggestedSources) ? j.suggestedSources.filter((x) => x && x.url) : [];
     const csv = typeof j.resourcesCsv === 'string' ? j.resourcesCsv.trim() : '';
     const csvCopied = h('span', { class: 'ok-msg small', role: 'status' });
