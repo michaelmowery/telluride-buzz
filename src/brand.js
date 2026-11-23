@@ -94,6 +94,25 @@ export function logoSvg(town, { cls = 'logo', width = 110, height = 48 } = {}) {
 /** Public address of a town: config `url`, else its first hostname. */
 export const townUrl = (t) => t.url || `https://${t.hostnames[0]}`;
 
+/**
+ * A town's other addresses are shortcuts: a page asked for on any address that
+ * isn't the town's main one (its first web address, e.g. telluride.thetown.buzz)
+ * forwards there, path and query kept. Sign-ins live on .thetown.buzz, so every
+ * page has to end up there. /api/ stays put, so phones that turned alerts on at
+ * an old address keep getting them. Local test addresses never forward.
+ * Returns the address to forward to, or null.
+ */
+export function aliasRedirect(town, host, pathname, search = '') {
+  if (!town || !host) return null;
+  if (host === 'localhost' || host.endsWith('.localhost')) return null;
+  if (!(town.hostnames || []).includes(host)) return null;
+  if (pathname.startsWith('/api/') || pathname === '/healthz') return null;
+  let main;
+  try { main = new URL(townUrl(town)); } catch { return null; }
+  if (main.hostname === host) return null;
+  return `${main.origin}${pathname}${search}`;
+}
+
 /** Towns grouped by state: [{ state: 'Colorado', towns }], states A-Z (no state last), towns A-Z in each. */
 export function groupByState(towns) {
   const groups = new Map();

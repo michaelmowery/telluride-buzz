@@ -49,7 +49,7 @@ test('export round-trips through import', () => {
   const json = exportTown(tel, tel.sources);
   const back = importConfig(JSON.parse(JSON.stringify(json)));
   assert.deepEqual(back.sources.map((s) => [s.key, s.adapter, s.settings]), tel.sources.map((s) => [s.key, s.adapter, s.settings]));
-  assert.equal(back.town.hostnames[0], 'telluride.buzz');
+  assert.equal(back.town.hostnames[0], 'telluride.thetown.buzz');
 });
 
 test('a new town needs only a name, address name and map point', () => {

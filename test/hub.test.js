@@ -13,7 +13,7 @@ const hub = fs.readFileSync(path.join(root, 'public', 'hub.html'), 'utf8');
 test('hub page lists every town with its address and fills every placeholder', () => {
   const out = renderHub(hub, towns, () => []);
   assert.ok(!/\{\{\w+\}\}/.test(out));
-  assert.match(out, /href="https:\/\/telluride\.buzz"/);
+  assert.match(out, /href="https:\/\/telluride\.thetown\.buzz"/);
   assert.match(out, /href="https:\/\/durango\.thetown\.buzz"/);
   assert.ok(!/durango\.buzz/i.test(out), 'must not imply we own durango.buzz');
 });

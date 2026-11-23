@@ -61,3 +61,20 @@ test('thetown logo accents keep "thetown" in the circle and never imply [town].b
   assert.notEqual(a.match(/id="([^"]+)"/)[1], b.match(/id="([^"]+)"/)[1], 'clip ids are unique per logo');
   assert.doesNotMatch(logoSvg({ name: 'Durango', brand: { logo: 'bogus' } }), /logo-rock|logo-ridge|logo-rail/);
 });
+
+test('other addresses of a town forward to its main one; /api/ and local addresses stay put', async () => {
+  const { aliasRedirect } = await import('../src/brand.js');
+  const t = { id: 'telluride', url: 'https://telluride.thetown.buzz', hostnames: ['telluride.thetown.buzz', 'telluride.buzz', 'www.telluride.buzz', 'localhost'] };
+  assert.equal(aliasRedirect(t, 'telluride.buzz', '/food-drink', '?q=1'), 'https://telluride.thetown.buzz/food-drink?q=1');
+  assert.equal(aliasRedirect(t, 'www.telluride.buzz', '/', ''), 'https://telluride.thetown.buzz/');
+  assert.equal(aliasRedirect(t, 'telluride.buzz', '/admin', ''), 'https://telluride.thetown.buzz/admin');
+  assert.equal(aliasRedirect(t, 'telluride.thetown.buzz', '/', ''), null);
+  assert.equal(aliasRedirect(t, 'telluride.buzz', '/api/push/latest', ''), null);
+  assert.equal(aliasRedirect(t, 'telluride.buzz', '/healthz', ''), null);
+  assert.equal(aliasRedirect(t, 'localhost', '/', ''), null);
+  assert.equal(aliasRedirect(t, 'other.example', '/', ''), null); // unknown host: default town, no forward
+  // Main address still telluride.buzz (before the switch in admin): nothing forwards except www.
+  const before = { id: 'telluride', url: 'https://telluride.buzz', hostnames: ['telluride.buzz', 'www.telluride.buzz'] };
+  assert.equal(aliasRedirect(before, 'telluride.buzz', '/', ''), null);
+  assert.equal(aliasRedirect(before, 'www.telluride.buzz', '/x', ''), 'https://telluride.buzz/x');
+});
