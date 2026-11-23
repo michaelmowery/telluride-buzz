@@ -64,10 +64,76 @@ $('#login-form').addEventListener('submit', async (e) => {
 });
 $('#logout').addEventListener('click', async () => { await api('/logout', {}).catch(() => {}); showLogin(); });
 
+// ---------- town bar ----------
+// Pick a town once at the top (like the public site's town picker); Feeds, Resources
+// and Settings tabs underneath are all for that town. The town is remembered here.
+const TOWN_KEY = 'buzz-admin-town';
+let townsCache = null;
+async function adminTowns(fresh = false) {
+  if (!townsCache || fresh) townsCache = (await api('/towns')).towns;
+  return townsCache;
+}
+const townLabel = (t) => `${t.name}${t.state ? `, ${t.state}` : ''}`;
+async function currentTown(wanted) {
+  const towns = await adminTowns();
+  const ok = (id) => towns.some((t) => t.id === id);
+  const id = ok(wanted) ? wanted : ok(store.get(TOWN_KEY)) ? store.get(TOWN_KEY) : towns[0]?.id || '';
+  if (id) store.set(TOWN_KEY, id);
+  return id;
+}
+const TOWN_TABS = [['feeds', 'Feeds', (id) => `#feeds?town=${encodeURIComponent(id)}`],
+  ['resources', 'Resources', (id) => `#all-resources?town=${encodeURIComponent(id)}`],
+  ['settings', 'Settings', (id) => `#town/${encodeURIComponent(id)}`]];
+
+function townPicker(towns, current, onPick) {
+  const menu = h('div', { class: 'town-menu', id: 'town-menu', role: 'menu', hidden: true },
+    h('p', { class: 'town-menu-title' }, 'Choose a town'),
+    ...[...towns].sort((a, b) => a.name.localeCompare(b.name)).map((t) => h('a', {
+      href: '#', class: 'town-opt', role: 'menuitem', 'aria-current': t.id === current ? 'page' : null,
+      onclick: (e) => { e.preventDefault(); setMenu(false); if (t.id !== current) onPick(t.id); },
+    }, h('span', { class: 'town-txt' }, h('strong', {}, townLabel(t)),
+      h('small', {}, t.id === current ? 'Editing now' : (t.hostnames || [])[0] || '')),
+    h('span', { class: `pill ${t.status}` }, t.status))),
+    h('a', { href: '#towns', class: 'town-all', onclick: () => setMenu(false) }, 'All towns · Add a town'));
+  const picker = h('button', { type: 'button', class: 'town-picker', 'aria-haspopup': 'true', 'aria-expanded': 'false', 'aria-controls': 'town-menu',
+    onclick: () => setMenu(menu.hidden) },
+  h('span', {}, townLabel(towns.find((t) => t.id === current) || { name: 'Pick a town' })),
+  h('span', { class: 'caret', 'aria-hidden': 'true' }, '▾'));
+  function setMenu(open) {
+    menu.hidden = !open;
+    picker.setAttribute('aria-expanded', String(open));
+    if (open) menu.querySelector('.town-opt:not([aria-current])')?.focus();
+  }
+  const close = (e) => {
+    if (!document.body.contains(menu)) { document.removeEventListener('click', close); document.removeEventListener('keydown', close); return; }
+    if (menu.hidden) return;
+    if (e.type === 'keydown' ? e.key === 'Escape' : !menu.contains(e.target) && !picker.contains(e.target)) { setMenu(false); if (e.type === 'keydown') picker.focus(); }
+  };
+  document.addEventListener('click', close);
+  document.addEventListener('keydown', close);
+  return h('div', { class: 'town-pick' }, picker, menu);
+}
+
+/** The bar above every town page: picker, then the town's tabs. tab = feeds|resources|settings. */
+async function townBar(id, tab) {
+  const towns = await adminTowns();
+  const t = towns.find((x) => x.id === id);
+  if (!t) return null;
+  return h('div', { class: 'town-bar' },
+    h('div', { class: 'town-bar-top' }, townPicker(towns, id, (next) => {
+      store.set(TOWN_KEY, next);
+      location.hash = (TOWN_TABS.find(([k]) => k === tab) || TOWN_TABS[0])[2](next).slice(1);
+    }), h('a', { class: 'small', href: townUrlOf(t), target: '_blank', rel: 'noopener' }, 'View site ↗')),
+    h('nav', { class: 'town-tabs', 'aria-label': `${t.name} admin` },
+      ...TOWN_TABS.map(([k, label, href]) => h('a', { href: href(id), class: 'town-tab', 'aria-current': k === tab ? 'page' : null }, label))));
+}
+const townUrlOf = (t) => (t.url || `https://${t.hostnames?.[0] || `${t.id}.thetown.buzz`}`).replace(/\/$/, '');
+
 // ---------- router ----------
 let timer = null;
 async function route() {
   clearInterval(timer);
+  townsCache = null; // names, status and new towns show up right away
   const [path, query = ''] = (location.hash.slice(1) || 'feeds').split('?');
   const [page, a, b] = path.split('/').map(decodeURIComponent);
   try {
@@ -75,20 +141,37 @@ async function route() {
   } catch { return; }
   $('#login').hidden = true;
   $('#nav').hidden = false;
-  document.querySelectorAll('[data-nav]').forEach((n) => n.toggleAttribute('aria-current', n.dataset.nav === (page === 'feeds' || page === 'health' ? 'feeds' : /resource/.test(page) ? 'resources' : 'towns')));
+  document.querySelectorAll('[data-nav]').forEach((n) => n.toggleAttribute('aria-current', n.dataset.nav === 'towns' && /^(towns|new-town)$/.test(page)));
   try {
     if (page === 'health') { location.replace(`#feeds${query ? `?${query}` : ''}`); return; } // old bookmarks
-    if (page === 'feeds') { readFilters(query); await healthPage(); timer = setInterval(() => healthPage(true).catch(() => {}), 30e3); }
-    else if (page === 'towns') await townsPage();
+    // Town pages: work out the town, draw the page, then put the town bar on top.
+    let town = '';
+    let tab = '';
+    if (page === 'feeds') {
+      readFilters(query);
+      town = filters.town = await currentTown(new URLSearchParams(query).get('town'));
+      tab = 'feeds';
+      await healthPage();
+      timer = setInterval(() => healthPage(true).catch(() => {}), 30e3);
+    } else if (page === 'towns') await townsPage();
     else if (page === 'new-town') await townPage(null);
-    else if (page === 'town') await townPage(a);
-    else if (page === 'source') await sourcePage(a, b);
-    else if (page === 'new-source') await sourcePage(a, null);
-    else if (page === 'all-resources') { readResFilters(query); await allResourcesPage(); }
-    else if (page === 'resources') await resourcesPage(a);
-    else if (page === 'resource') await resourcePage(a, b);
-    else if (page === 'new-resource') await resourcePage(a, null, b);
+    else if (page === 'town') { town = a; tab = 'settings'; await townPage(a); }
+    else if (page === 'source') { town = a; tab = 'feeds'; await sourcePage(a, b); }
+    else if (page === 'new-source') { town = a; tab = 'feeds'; await sourcePage(a, null); }
+    else if (page === 'all-resources') {
+      readResFilters(query);
+      town = resFilters.town = await currentTown(new URLSearchParams(query).get('town'));
+      tab = 'resources';
+      await allResourcesPage();
+    } else if (page === 'resources') { location.replace(`#all-resources?town=${encodeURIComponent(a)}`); return; }
+    else if (page === 'resource') { town = a; tab = 'resources'; await resourcePage(a, b); }
+    else if (page === 'new-resource') { town = a; tab = 'resources'; await resourcePage(a, null, b); }
     else location.hash = 'feeds';
+    if (town) {
+      store.set(TOWN_KEY, town);
+      const bar = await townBar(town, tab);
+      if (bar) view.prepend(bar);
+    }
   } catch (err) {
     if (err.message !== 'Sign in first') view.replaceChildren(h('div', { class: 'card' }, h('p', { class: 'error' }, err.message)));
   }
@@ -168,12 +251,12 @@ let healthData = null;
 async function healthPage(refresh = false) {
   healthData = await api('/health');
   if (!refresh || !$('#health-results')) {
-    const all = healthData.towns.flatMap((t) => t.sources);
+    const all = healthData.towns.filter((t) => !filters.town || t.id === filters.town).flatMap((t) => t.sources);
     const towns = healthData.towns.map((t) => ({ id: t.id, name: `${t.name}${t.state ? `, ${t.state}` : ''}` }));
     if (filters.town && !towns.some((t) => t.id === filters.town)) filters.town = '';
     view.replaceChildren(
-      h('div', { class: 'row spread' }, h('h1', {}, 'Feeds'), h('span', { class: 'muted small', id: 'health-updated' })),
-      filterBar(filters, { towns, feeds: feedList(all, healthData.feeds || {}), feedNames: healthData.feeds || {} }, () => { saveFilters(); renderHealth(); }),
+      h('div', { class: 'row spread' }, h('h2', {}, 'Feeds'), h('span', {}, filters.town ? h('a', { class: 'button small', href: `#new-source/${filters.town}` }, 'Add a source') : null, ' ', h('span', { class: 'muted small', id: 'health-updated' }))),
+      filterBar(filters, { towns: null, feeds: feedList(all, healthData.feeds || {}), feedNames: healthData.feeds || {} }, () => { saveFilters(); renderHealth(); }),
       h('div', { id: 'health-results' }),
     );
   }
@@ -187,10 +270,10 @@ function renderHealth() {
   const towns = healthData.towns
     .filter((t) => !filters.town || t.id === filters.town)
     .map((t) => ({ ...t, shown: t.sources.filter((s) => matches(s, filters, t.name)) }));
-  const total = healthData.towns.reduce((n, t) => n + t.sources.length, 0);
+  const total = towns.reduce((n, t) => n + t.sources.length, 0);
   const shown = towns.flatMap((t) => t.shown);
   const count = (c) => shown.filter((s) => s.color === c).length;
-  const filtered = isFiltered(filters, true);
+  const filtered = isFiltered(filters, false);
   const visible = filtered ? towns.filter((t) => t.shown.length || (filters.town && !filters.feed && !filters.status && !filters.q)) : towns;
   box.replaceChildren(...[
     h('p', { class: 'summary' },
@@ -311,7 +394,7 @@ async function townPage(id) {
   });
 
   const kids = [h('p', {}, h('a', { href: '#towns' }, '← Towns')),
-    h('div', { class: 'town-head' }, health ? dot(health.color) : null, h('h1', {}, t ? `${t.name}${t.state ? `, ${t.state}` : ''}` : 'Add a town'), t ? h('span', { class: `pill ${t.status}` }, t.status) : null)];
+    h('div', { class: 'town-head' }, health ? dot(health.color) : null, h(t ? 'h2' : 'h1', {}, t ? 'Town settings' : 'Add a town'), t ? h('span', { class: `pill ${t.status}` }, t.status) : null)];
   if (!t) kids.push(fillTownWithClaude(f));
   if (!t) kids.push(h('p', { class: 'muted' }, 'A new town starts as a draft with National Weather Service alerts and forecast already added (they only need the map point). Then add its roads, resort, town and news sources.'));
   if (t) {
@@ -740,7 +823,6 @@ async function allResourcesPage() {
   const count = (id) => d.resources.filter((r) => r.townId === id).length;
   if (!townName.has(resFilters.town)) resFilters.town = [...d.towns].sort((a, b) => count(b.id) - count(a.id))[0]?.id || '';
   const f = resFilters;
-  const town = d.towns.find((t) => t.id === f.town);
   saveResFilters();
   const err = h('p', { class: 'error', role: 'alert' });
   const results = h('div');
@@ -760,34 +842,6 @@ async function allResourcesPage() {
       q.value = ''; saveResFilters(); render();
     } }, 'Clear'));
 
-  // Town picker, like the public site's: the current town as the page heading, with a
-  // dropdown of every town and its entry count.
-  const pickTown = (id) => { if (id === f.town) return; f.town = id; f.cat = ''; saveResFilters(); route(); };
-  const menu = h('div', { class: 'town-menu', id: 'res-town-menu', role: 'menu', hidden: true },
-    h('p', { class: 'town-menu-title' }, 'Choose a town'),
-    ...[...d.towns].sort((a, b) => a.name.localeCompare(b.name)).map((t) => h('a', {
-      href: `#all-resources?town=${encodeURIComponent(t.id)}`, class: 'town-opt', role: 'menuitem', 'aria-current': t.id === f.town ? 'page' : null,
-      onclick: (e) => { e.preventDefault(); setMenu(false); pickTown(t.id); },
-    }, h('span', { class: 'town-txt' }, h('strong', {}, townName.get(t.id)),
-      h('small', {}, t.id === f.town ? 'Editing now' : (t.url || '').replace(/^https?:\/\//, ''))),
-    h('span', { class: 'count' }, `${count(t.id)} entr${count(t.id) === 1 ? 'y' : 'ies'}`))));
-  const picker = h('button', { type: 'button', class: 'town-picker', 'aria-haspopup': 'true', 'aria-expanded': 'false', 'aria-controls': 'res-town-menu',
-    onclick: () => setMenu(menu.hidden) },
-  h('span', {}, townName.get(f.town) || 'Pick a town'),
-  h('span', { class: 'caret', 'aria-hidden': 'true' }, '▾'));
-  function setMenu(open) {
-    menu.hidden = !open;
-    picker.setAttribute('aria-expanded', String(open));
-    if (open) menu.querySelector('.town-opt:not([aria-current])')?.focus();
-  }
-  const closeMenu = (e) => {
-    if (!document.body.contains(menu)) { document.removeEventListener('click', closeMenu); document.removeEventListener('keydown', closeMenu); return; }
-    if (menu.hidden) return;
-    if (e.type === 'keydown' ? e.key === 'Escape' : !menu.contains(e.target) && !picker.contains(e.target)) { setMenu(false); if (e.type === 'keydown') picker.focus(); }
-  };
-  document.addEventListener('click', closeMenu);
-  document.addEventListener('keydown', closeMenu);
-  const townPick = h('div', { class: 'town-pick' }, h('h1', {}, picker), menu);
 
   function matches(r) {
     if (f.town && r.townId !== f.town) return false;
@@ -810,7 +864,7 @@ async function allResourcesPage() {
     const rows = d.resources.filter(matches);
     const staleN = rows.filter(stale).length;
     results.replaceChildren(
-      h('p', { class: 'summary' }, `${rows.length} of ${d.resources.length} resources`, staleN ? h('span', { class: 'err' }, ` · ${staleN} need checking`) : null,
+      h('p', { class: 'summary' }, `${rows.length} of ${count(f.town)} resources`, staleN ? h('span', { class: 'err' }, ` · ${staleN} need checking`) : null,
         rows.length && staleN ? h('button', { class: 'small secondary', onclick: async () => {
           const ids = rows.filter(stale).map((r) => r.id);
           const byTown = new Map();
@@ -831,7 +885,7 @@ async function allResourcesPage() {
           h('td', { class: 'small hide-sm' }, catName.get(r.category) || r.category),
           h('td', { class: 'small hide-sm' }, [r.phone, r.website && r.website.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')].filter(Boolean).join(' · ')),
           h('td', { class: 'small' }, stale(r) ? h('span', { class: 'err' }, r.checkedAt ? ago(r.checkedAt) : 'Never') : ago(r.checkedAt))))))) :
-        h('div', { class: 'card' }, h('p', { class: 'muted' }, d.resources.length ? 'No resources match the filters.' : 'No resources yet.')),
+        h('div', { class: 'card' }, h('p', { class: 'muted' }, count(f.town) ? 'No resources match the filters.' : 'No resources yet. Add one, or use Update with Claude below the filters.')),
     );
   }
 
@@ -964,11 +1018,10 @@ ${csv}
   }
 
   view.replaceChildren(
-    h('div', { class: 'row spread' }, townPick,
+    h('div', { class: 'row spread' }, h('h2', {}, 'Resources'),
       h('span', {},
         h('a', { class: 'button', href: `#new-resource/${f.town}/${f.cat || 'emergency'}` }, 'Add resource'), ' ',
-        h('a', { class: 'button secondary', href: `/api/admin/resources/export?town=${encodeURIComponent(f.town)}` }, 'Export CSV'),
-        town ? [' ', h('a', { class: 'button secondary', href: `${siteOf(town)}/#essentials`, target: '_blank', rel: 'noopener' }, 'View site')] : null)),
+        h('a', { class: 'button secondary', href: `/api/admin/resources/export?town=${encodeURIComponent(f.town)}` }, 'Export CSV'))),
     h('p', { class: 'muted' }, `What shows on ${townName.get(f.town)}'s Essentials, Food & drink, Shops and Lodging tabs. Entries not checked in ${d.staleDays} days show in red. `,
       h('a', { href: '/api/admin/resources/export', class: 'small' }, 'Export every town as one CSV')),
     bar, err, claudeCard(), results,
