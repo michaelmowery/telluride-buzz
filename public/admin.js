@@ -395,6 +395,23 @@ async function townPage(id) {
   // listings on the Resources tab. A draft town also gets the going-live checklist.
   const kids = t ? [] : [h('p', {}, h('a', { href: '#towns' }, '← All towns')), h('h1', {}, 'Add a town')];
   if (!t) {
+    // Only Town name and State are typed by hand. The rest is filled by Look up on the
+    // map or Fill with Claude, and stays greyed out until Edit the other fields.
+    const others = [...f.elements].filter((el) => el.name && !['name', 'state'].includes(el.name) && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName));
+    const lock = (on) => {
+      for (const el of others) {
+        if (el.tagName === 'SELECT') el.disabled = on; else el.readOnly = on;
+        el.classList.toggle('locked', on);
+        if (on) el.dataset.autofill = ''; else delete el.dataset.autofill;
+      }
+      editBtn.textContent = on ? 'Edit the other fields' : 'Lock them again';
+    };
+    const editBtn = h('button', { type: 'button', class: 'small secondary', onclick: () => lock(others[0].classList.contains('locked') ? false : true) });
+    f.querySelector('.grid2').before(h('div', { class: 'row lock-note' },
+      h('span', { class: 'muted small' }, 'Type the town name and state. Everything else is filled in for you by Look up on the map or Fill with Claude.'), editBtn));
+    lock(true);
+    // Disabled selects aren't sent with the form, so turn them back on just before saving.
+    f.addEventListener('submit', () => { for (const el of others) if (el.tagName === 'SELECT') el.disabled = false; }, true);
     // The Look up button sits right under the Town name box; its result shows under the fields.
     const { button, out } = townLookup(f);
     f.elements.name.after(button);
@@ -654,7 +671,8 @@ id,town,category,name,phone,phone2,website,address,hours,note,emergency,hidden,c
     const block = text.match(/```(?:json)?\s*\n([\s\S]*?)```/i);
     let j;
     try { j = JSON.parse(block ? block[1] : text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); } catch { err.textContent = 'That doesn\'t look like the JSON answer. Paste the whole ```json block.'; return; }
-    const set = (name, val) => { const el = form.elements[name]; if (el && val != null && val !== '' && !el.readOnly) el.value = String(val); };
+    // Greyed-out (autofill) fields are filled too; a field fixed for good (an existing town's address name) isn't.
+    const set = (name, val) => { const el = form.elements[name]; if (el && val != null && val !== '' && (!el.readOnly || 'autofill' in el.dataset)) el.value = String(val); };
     set('name', j.name); set('state', j.state); set('id', String(j.id || '').toLowerCase()); set('siteName', j.siteName);
     set('lat', j.lat ?? j.location?.lat); set('lon', j.lon ?? j.location?.lon); set('timezone', j.timezone); set('notAffiliated', j.notAffiliated);
     const srcs = Array.isArray(j.suggestedSources) ? j.suggestedSources.filter((x) => x && x.url) : [];
