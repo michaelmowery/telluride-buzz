@@ -718,3 +718,9 @@ a.prefs-btn { text-decoration: none; }
   .foot { max-width: 1400px; padding: 0 32px; }
   .foot .disclaimer, .foot .mission, .foot .fine { max-width: 1100px; }
 }
+
+/* Guide pages (/food-drink, /shops, /lodging, /essentials): links between them. */
+.guide-nav { display: flex; gap: 6px; overflow-x: auto; margin: 0 0 12px; scrollbar-width: none; }
+.guide-nav::-webkit-scrollbar { display: none; }
+.guide-nav a { flex: none; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--ink); background: var(--paper); text-decoration: none; white-space: nowrap; }
+.guide-nav a[aria-current="page"] { background: var(--forest); border-color: var(--forest); color: #f6efe2; }

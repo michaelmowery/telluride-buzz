@@ -113,11 +113,13 @@ export function brandValues(town, towns = [town]) {
     feedbackEmail: b.feedbackEmail || 'telluridebuzz@gmail.com',
     feedbackSubject: encodeURIComponent(`${site} feedback`),
     resources: '', eat: '', shop: '', stay: '', // filled per request by the server (index and resources pages)
+    seo: '', guideNav: '', feedSnapshot: '', // search tags, guide links and first-paint posts (see seo.js)
+    pageTitle: site, pageDescription: '', h1: town.name, lede: '',
   };
 }
 
 // Values that are already markup (or URL-encoded) and must not be escaped again.
-const RAW = new Set(['logo', 'townMenu', 'aboutSources', 'feedbackSubject', 'resources', 'eat', 'shop', 'stay']);
+const RAW = new Set(['logo', 'townMenu', 'aboutSources', 'feedbackSubject', 'resources', 'eat', 'shop', 'stay', 'seo', 'guideNav', 'feedSnapshot']);
 
 /** Fill {{name}} placeholders. HTML files get HTML escaping; JS and JSON files get string escaping. */
 export function renderTemplate(text, ext, town, towns = [town], extra = {}) {
@@ -130,4 +132,4 @@ export function renderTemplate(text, ext, town, towns = [town], extra = {}) {
   });
 }
 
-export const TEMPLATED = new Set(['/index.html', '/about.html', '/resources.html', '/manifest.webmanifest', '/sw.js']);
+export const TEMPLATED = new Set(['/index.html', '/about.html', '/resources.html', '/guide.html', '/manifest.webmanifest', '/sw.js']);

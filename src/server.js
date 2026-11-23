@@ -14,6 +14,7 @@ import { importConfigs, loadTowns } from './towns.js';
 import { createAdmin } from './admin.js';
 import { sourceHealth } from './health.js';
 import { importResources, renderResources } from './resources.js';
+import { baseUrl, feedSnapshot, guideDescription, guideEntries, guideFor, guideJsonLd, guideNav, homeJsonLd, robotsTxt, seoHead, sitemapXml, townSitemap } from './seo.js';
 import crypto from 'node:crypto';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -195,24 +196,57 @@ function serveStatic(req, res, urlPath, town) {
   });
 }
 
+const siteOf = (town) => town.brand?.siteName || `${town.name} Buzz`;
+
+/** Per-request values for a page template: listings, search tags, first-paint posts. */
+function pageExtras(file, town, guide) {
+  const name = path.basename(file);
+  const site = siteOf(town);
+  const now = Date.now();
+  if (guide) {
+    // /food-drink, /shops, /lodging, /essentials: one home page tab on its own address.
+    const list = db.listResources(town.id);
+    const title = guide.title(town);
+    const description = guideDescription(list, town, guide);
+    return {
+      resources: renderResources(list, town, now, guide.tab), pageTitle: title, pageDescription: description,
+      h1: guide.h1(town), lede: guide.lede, guideNav: guideNav(guide.path),
+      // An empty list is a thin page: kept out of search until it has listings.
+      seo: seoHead(town, { path: guide.path, title: `${title} · ${site}`, description, noindex: !guideEntries(list, guide.tab).length, jsonLd: guideJsonLd(list, town, guide, now) }),
+    };
+  }
+  if (name === 'resources.html') {
+    // The all-in-one page stays for old links; the guide pages are what search engines get.
+    return { resources: renderResources(db.listResources(town.id), town),
+      seo: seoHead(town, { path: '/resources', title: `Essentials · ${site}`, description: `Local guide for ${town.name}.`, noindex: true }) };
+  }
+  if (name === 'index.html') {
+    // Home page: one panel per tab (Essentials, Food & drink, Shops, Lodging).
+    const list = db.listResources(town.id);
+    return { resources: renderResources(list, town, now, 'essentials'), eat: renderResources(list, town, now, 'eat'),
+      shop: renderResources(list, town, now, 'shop'), stay: renderResources(list, town, now, 'stay'),
+      feedSnapshot: feedSnapshot(db.feed(town.id, { limit: 20 }), town),
+      seo: seoHead(town, { path: '/', title: `${site}: ${town.name} News, Weather, Roads & Snow Right Now`,
+        description: `The real-time pulse of ${town.name}: what's happening in our town, right now, from sources you can trust.`, jsonLd: homeJsonLd(town) }) };
+  }
+  if (name === 'about.html') {
+    return { seo: seoHead(town, { path: '/about', title: `About · ${site}`, description: `What ${site} is, where its information comes from, and how to report a problem.` }) };
+  }
+  return {};
+}
+
 // Pages, manifest and service worker are filled in per town (see brand.js).
-function serveTemplate(req, res, file, ext, st, town) {
-  const key = `${town.id}:${file}`;
+function serveTemplate(req, res, file, ext, st, town, guide = null) {
+  const key = `${town.id}:${file}:${guide?.path || ''}`;
   let c = templateCache.get(key);
   // Pages with resources are also re-rendered every 10 minutes, so a sponsorship
   // starts and ends on its dates without anyone touching the admin.
   if (!c || c.mtime !== st.mtimeMs || (c.expires && Date.now() > c.expires)) {
-    let extra = {};
-    if (/[\\/]resources\.html$/.test(file)) extra = { resources: renderResources(db.listResources(town.id), town) };
-    else if (/[\\/]index\.html$/.test(file)) {
-      // Home page: one panel per tab (Essentials, Food & drink, Shops, Lodging).
-      const list = db.listResources(town.id);
-      const now = Date.now();
-      extra = { resources: renderResources(list, town, now, 'essentials'), eat: renderResources(list, town, now, 'eat'),
-        shop: renderResources(list, town, now, 'shop'), stay: renderResources(list, town, now, 'stay') };
-    }
+    const extra = ext === '.html' ? pageExtras(file, town, guide) : {};
     const body = Buffer.from(renderTemplate(fs.readFileSync(file, 'utf8'), ext, town, pickerTowns(town), extra));
-    c = { mtime: st.mtimeMs, expires: extra.resources ? Date.now() + 10 * 60_000 : 0, body, etag: `"${crypto.createHash('sha1').update(body).digest('base64url').slice(0, 16)}"` };
+    // The home page carries a snapshot of the feed, so it is rebuilt every 2 minutes.
+    const ttl = extra.feedSnapshot !== undefined ? 2 * 60_000 : extra.resources ? 10 * 60_000 : 0;
+    c = { mtime: st.mtimeMs, expires: ttl ? Date.now() + ttl : 0, body, etag: `"${crypto.createHash('sha1').update(body).digest('base64url').slice(0, 16)}"` };
     templateCache.set(key, c);
   }
   const headers = { 'Cache-Control': 'no-cache', ETag: c.etag, Vary: 'Host', ...SECURITY_HEADERS };
@@ -316,10 +350,23 @@ const server = http.createServer((req, res) => {
       if (!path.extname(url.pathname) && !url.pathname.startsWith('/api/') && url.pathname !== '/healthz') {
         return send(res, 302, 'Moved', undefined, { Location: '/' });
       }
-    } else if (/^\/hub(\.html)?$/.test(url.pathname)) {
-      return send(res, 404, 'Not found'); // the hub template only renders on thetown.buzz
+    } else if (/^\/(hub|guide)(\.html)?$/.test(url.pathname)) {
+      return send(res, 404, 'Not found'); // hub renders only on thetown.buzz; guide only via its paths
+    }
+    const guide = !HUB_HOSTS.has(hostOf(req)) && guideFor(url.pathname);
+    if (guide) {
+      const file = path.join(PUBLIC, 'guide.html');
+      return serveTemplate(req, res, file, '.html', fs.statSync(file), town, guide);
     }
     switch (url.pathname) {
+      case '/robots.txt':
+        return send(res, 200, robotsTxt(HUB_HOSTS.has(hostOf(req)) ? 'https://thetown.buzz' : baseUrl(town)), TYPES['.txt'], { 'Cache-Control': 'public, max-age=3600' });
+      case '/sitemap.xml': {
+        const entries = HUB_HOSTS.has(hostOf(req))
+          ? [{ loc: 'https://thetown.buzz/', changefreq: 'hourly' }]
+          : townSitemap(town, db.listResources(town.id), { latestPost: db.feed(town.id, { limit: 1 })[0]?.publishedAt || null });
+        return send(res, 200, sitemapXml(entries), 'application/xml; charset=utf-8', { 'Cache-Control': 'public, max-age=3600' });
+      }
       case '/api/push/key':
         return vapid ? json(res, { publicKey: vapid.publicKey }, 3600) : send(res, 503, 'Push is off in demo mode');
       case '/api/push/latest':
