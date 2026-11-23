@@ -9,6 +9,7 @@
 
 import { ADAPTERS } from './adapters.js';
 import { DEFAULT_DISCLAIMER } from './sources/cdot.js';
+import { NM_DISCLAIMER } from './sources/nmroads.js';
 import { stateName } from './geocode.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -172,11 +173,18 @@ const on = (town, adapters) => (town.sources || []).some((x) => x.enabled !== fa
 /** "no-roads no-lifts" for a town without a roads or ski source (see styles.css). */
 export function tileGaps(town) {
   if (!Array.isArray(town.sources)) return '';
-  return [on(town, ['cdot']) ? '' : 'no-roads', on(town, ['snow-report', 'resort-alerts']) ? '' : 'no-lifts'].filter(Boolean).join(' ');
+  return [on(town, ROADS) ? '' : 'no-roads', on(town, ['snow-report', 'resort-alerts']) ? '' : 'no-lifts'].filter(Boolean).join(' ');
+}
+// Roads sources (one per state DOT) and the road-data fine print each one shows.
+const ROADS = ['cdot', 'nmroads'];
+const ROADS_FINE = { cdot: DEFAULT_DISCLAIMER, nmroads: NM_DISCLAIMER };
+function roadsFine(town) {
+  const s = (town.sources || []).find((x) => x.enabled !== false && ROADS.includes(x.adapter));
+  return s ? s.settings?.disclaimer || ROADS_FINE[s.adapter] : '';
 }
 function roadsDisclaimer(town) {
-  const s = (town.sources || []).find((x) => x.enabled !== false && x.adapter === 'cdot');
-  return s ? `<p id="disclaimer" class="disclaimer"><strong>Road data source:</strong> ${esc(s.settings?.disclaimer || DEFAULT_DISCLAIMER)}</p>` : '';
+  const text = roadsFine(town);
+  return text ? `<p id="disclaimer" class="disclaimer"><strong>Road data source:</strong> ${esc(text)}</p>` : '';
 }
 
 /** Values for one town. `site` is the name used in sentences ("Durango Buzz is in early testing"). */
@@ -194,10 +202,11 @@ export function brandValues(town, towns = [town]) {
     notAffiliated: b.notAffiliated || 'the agencies and businesses whose information it shows',
     feedbackEmail: b.feedbackEmail || 'telluridebuzz@gmail.com',
     feedbackSubject: encodeURIComponent(`${site} feedback`),
-    // Tiles with no source are left out (a town without CDOT or a ski resort), and
-    // CDOT's required disclaimer shows only where CDOT data does.
+    // Tiles with no source are left out (a town without state roads or a ski resort),
+    // and a DOT's disclaimer shows only where that DOT's data does.
     bodyClass: tileGaps(town),
     roadsDisclaimer: roadsDisclaimer(town),
+    aboutRoadsFine: roadsFine(town) ? `<p class="muted"><strong>Road data source:</strong> ${esc(roadsFine(town))}</p>` : '',
     resources: '', eat: '', shop: '', stay: '', // filled per request by the server (index and resources pages)
     seo: '', guideNav: '', feedSnapshot: '', notices: '', // search tags, guide links and first-paint posts (see seo.js)
     pageTitle: site, pageDescription: '', h1: town.name, lede: '',
@@ -205,7 +214,7 @@ export function brandValues(town, towns = [town]) {
 }
 
 // Values that are already markup (or URL-encoded) and must not be escaped again.
-const RAW = new Set(['logo', 'townMenu', 'aboutSources', 'feedbackSubject', 'resources', 'eat', 'shop', 'stay', 'seo', 'guideNav', 'feedSnapshot', 'notices', 'roadsDisclaimer']);
+const RAW = new Set(['logo', 'townMenu', 'aboutSources', 'feedbackSubject', 'resources', 'eat', 'shop', 'stay', 'seo', 'guideNav', 'feedSnapshot', 'notices', 'roadsDisclaimer', 'aboutRoadsFine']);
 
 /** Fill {{name}} placeholders. HTML files get HTML escaping; JS and JSON files get string escaping. */
 export function renderTemplate(text, ext, town, towns = [town], extra = {}) {
