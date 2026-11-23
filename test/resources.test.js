@@ -103,7 +103,7 @@ test('public page: emergency box first, categories collapsible, hidden left out,
   assert.doesNotMatch(html, /Secret/);
   assert.doesNotMatch(html, /id="utilities"/);
   const page = renderTemplate(fs.readFileSync(path.join(root, 'public', 'resources.html'), 'utf8'), '.html', town, [town], { resources: html });
-  assert.match(page, /<h1>Telluride resources<\/h1>/);
+  assert.match(page, /<h1>Telluride essentials<\/h1>/);
   assert.match(page, /href="tel:911"/);
   assert.match(html, /class="res-search"/);
   db.saveResource('telluride', normalizeResource({ name: 'Gondola', category: 'transit', website: 'https://x.org', hours: 'Daily 6:30 a.m. to midnight' }).resource);
@@ -235,4 +235,30 @@ test('sponsored listings: business only, first in category, labelled, end on the
   const after = db.listResources('telluride').find((r) => r.id === sid);
   assert.equal(after.name, 'Sponsor Bistro & Bar');
   assert.deepEqual([after.sponsored, after.sponsorUntil, after.sponsorTagline], [true, s.sponsorUntil, s.sponsorTagline]);
+});
+
+test('home page tabs: Essentials, Food & drink, Shops (shops + services), Lodging', () => {
+  const town = { id: 'telluride', name: 'Telluride', state: 'CO', timezone: 'America/Denver' };
+  const list = [
+    { id: 1, category: 'emergency', name: 'Dispatch', phone: '911', sort: 1 },
+    { id: 2, category: 'medical', name: 'Clinic', phone: '970-555-0100', sort: 2 },
+    { id: 3, category: 'food', name: 'Taco Spot', phone: '970-555-0101', sort: 3 },
+    { id: 4, category: 'shops', name: 'Ski Shop', phone: '970-555-0102', sort: 4 },
+    { id: 5, category: 'services', name: 'Plumber', phone: '970-555-0103', sort: 5 },
+    { id: 6, category: 'lodging', name: 'Inn', phone: '970-555-0104', sort: 6 },
+  ];
+  const tab = (t) => renderResources(list, town, Date.now(), t);
+  const ess = tab('essentials');
+  assert.match(ess, /res-emergency/);
+  assert.match(ess, /Clinic/);
+  assert.equal(/Taco|Ski Shop|Plumber|Inn/.test(ess), false);
+  const eat = tab('eat');
+  assert.match(eat, /Taco Spot/);
+  assert.equal(/Dispatch|res-emergency|res-subtabs|local-businesses/.test(eat), false, 'one section: no sub-tabs, no emergency box');
+  assert.match(eat, /<details class="res-cat" id="food" open>/);
+  const shop = tab('shop');
+  assert.match(shop, /Ski Shop[\s\S]*Plumber/);
+  assert.match(shop, /res-subtabs[\s\S]*data-cat="shops"[\s\S]*data-cat="services"/);
+  assert.match(tab('stay'), /Inn/);
+  assert.match(renderResources(list.slice(0, 2), town, Date.now(), 'stay'), /Places to stay are on the way/);
 });

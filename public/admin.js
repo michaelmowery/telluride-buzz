@@ -862,7 +862,7 @@ async function allResourcesPage() {
         ? `This category lists local businesses. Include established, currently open, locally relevant places in or right next to ${place}: the ones residents and visitors actually use. Keep it to the most useful 10 to 25. Skip chains unless they are the only option, and skip anything permanently closed.`
         : 'This category is essential civic information. Only include public agencies, utilities and essential services, not shops or restaurants.')
       : `Civic categories (${civicCats}) are essential public information: agencies, utilities and essential services only. Business categories (${bizCats}) list established, currently open local businesses residents and visitors actually use: the most useful 10 to 25 per category, no chains unless they are the only option, nothing permanently closed.`;
-    return `You are helping maintain the Resources page of ${t.url.replace(/^https?:\/\//, '')}, a local information site for ${place}. The page lists emergency numbers, medical care, town and county offices, transit and parking, utilities, roads and travel, trails and outdoors, schools and the library, and then local businesses: food and drink, shops, local services and lodging.
+    return `You are helping maintain the local guide of ${t.url.replace(/^https?:\/\//, '')}, a local information site for ${place}. Its Essentials tab lists emergency numbers, medical care, town and county offices, transit and parking, utilities, roads and travel, trails and outdoors, schools and the library. Its Food & drink, Shops (shops and local services) and Lodging tabs list local businesses.
 ${about}
 
 Task: review and improve the entries for ${scope} in ${place}.

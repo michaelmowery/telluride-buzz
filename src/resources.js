@@ -16,12 +16,21 @@ export const RESOURCE_CATEGORIES = [
   { id: 'roads', label: 'Roads & travel' },
   { id: 'outdoors', label: 'Trails & outdoors' },
   { id: 'schools', label: 'Schools & library' },
-  // Local businesses: shown after the civic list, under their own heading.
-  { id: 'food', label: 'Food & drink', group: 'business' },
-  { id: 'shops', label: 'Shops', group: 'business' },
-  { id: 'services', label: 'Local services', group: 'business' },
-  { id: 'lodging', label: 'Lodging', group: 'business' },
+  // Local businesses: each tab of the home page shows its own categories.
+  { id: 'food', label: 'Food & drink', group: 'business', tab: 'eat' },
+  { id: 'shops', label: 'Shops', group: 'business', tab: 'shop' },
+  { id: 'services', label: 'Local services', group: 'business', tab: 'shop' },
+  { id: 'lodging', label: 'Lodging', group: 'business', tab: 'stay' },
 ];
+
+/** Home page tabs after Live feed. Civic categories (no tab set) are Essentials. */
+export const RESOURCE_TABS = [
+  { id: 'essentials', label: 'Essentials', search: 'Search essentials', empty: 'Essentials for this town are on the way. In an emergency, call 911.' },
+  { id: 'eat', label: 'Food & drink', search: 'Search food & drink', empty: 'Restaurants, cafes and bars are on the way.' },
+  { id: 'shop', label: 'Shops', search: 'Search shops and services', empty: 'Shops and local services are on the way.' },
+  { id: 'stay', label: 'Lodging', search: 'Search lodging', empty: 'Places to stay are on the way.' },
+];
+const tabOf = (cat) => RESOURCE_CATEGORIES.find((c) => c.id === cat)?.tab || 'essentials';
 export const isBusiness = (cat) => RESOURCE_CATEGORIES.find((c) => c.id === cat)?.group === 'business';
 const CAT_IDS = new Set(RESOURCE_CATEGORIES.map((c) => c.id));
 
@@ -171,11 +180,16 @@ function card(r, town, sponsored = false) {
 }
 
 /** The body of /resources: an emergency box, then one collapsible section per category. */
-export function renderResources(list, town, now = Date.now()) {
+export function renderResources(list, town, now = Date.now(), tab = null) {
   const day = townDay(town, now);
-  const shown = list.filter((r) => !r.hidden);
-  if (!shown.length) return '<p class="muted">Resources for this town are on the way. In an emergency, call 911.</p>';
-  const top = shown.filter((r) => r.emergency || r.category === 'emergency');
+  // With a tab (home page), only that tab's categories; without (the /resources page), all.
+  const T = tab ? RESOURCE_TABS.find((t) => t.id === tab) : null;
+  const inTab = (cat) => !tab || tabOf(cat) === tab;
+  const cats = RESOURCE_CATEGORIES.filter((c) => inTab(c.id));
+  const shown = list.filter((r) => !r.hidden && inTab(r.category));
+  const withEmergency = !tab || tab === 'essentials';
+  if (!shown.length) return `<p class="muted">${esc(T ? T.empty : 'Resources for this town are on the way. In an emergency, call 911.')}</p>`;
+  const top = withEmergency ? list.filter((r) => !r.hidden && (r.emergency || r.category === 'emergency')) : [];
   const parts = [];
   if (top.length) {
     // Collapsed like the other sections, but red, with 911 one tap away even when closed.
@@ -187,17 +201,18 @@ export function renderResources(list, town, now = Date.now()) {
     </details>`);
   }
   let bizHeading = false;
-  for (const c of RESOURCE_CATEGORIES) {
+  for (const c of cats) {
     if (c.id === 'emergency') continue;
     const all = shown.filter((r) => r.category === c.id);
     if (!all.length) continue;
     // Active sponsors first (keeping their admin order), then everyone else.
     const rows = [...all.filter((r) => sponsorActive(r, day)), ...all.filter((r) => !sponsorActive(r, day))];
-    if (c.group === 'business' && !bizHeading) {
+    if (c.group === 'business' && !bizHeading && !tab) {
       bizHeading = true;
       parts.push(`<h2 class="res-group" id="local-businesses">Local businesses</h2>`);
     }
-    parts.push(`<details class="res-cat" id="${c.id}">
+    // Business tabs start open (there are only one or two sections); civic ones collapsed.
+    parts.push(`<details class="res-cat" id="${c.id}"${tab && tab !== 'essentials' ? ' open' : ''}>
       <summary><h2>${esc(c.label)}</h2><span class="res-count">${rows.length}</span></summary>
       <ul class="res-list">
         ${rows.map((r) => card(r, town, sponsorActive(r, day))).join('\n        ')}
@@ -206,13 +221,16 @@ export function renderResources(list, town, now = Date.now()) {
   }
   // Search box and category sub-tabs. Without JavaScript the sub-tabs are plain jump
   // links and the search box stays hidden (towns.js turns both on).
-  const cats = RESOURCE_CATEGORIES.filter((c) => (c.id === 'emergency' ? top.length : shown.some((r) => r.category === c.id)));
+  const subCats = cats.filter((c) => (c.id === 'emergency' ? top.length : shown.some((r) => r.category === c.id)));
+  const search = T ? T.search : 'Search resources';
+  // Sub-tabs only when there's more than one section to pick from.
+  const subtabs = subCats.length > 1 ? `
+      <nav class="res-subtabs" aria-label="${esc(T ? T.label : 'Resource')} categories">
+        <a href="#${tab === 'essentials' || !tab ? 'resources' : tab}" class="res-sub" data-cat="" aria-current="true" hidden>All</a>
+        ${subCats.map((c) => `<a href="#${c.id}" class="res-sub" data-cat="${c.id}">${esc(c.label)}</a>`).join('\n        ')}
+      </nav>` : '';
   parts.unshift(`<div class="res-tools">
-      <input type="search" class="res-search" placeholder="Search resources" aria-label="Search resources" autocomplete="off" hidden>
-      <nav class="res-subtabs" aria-label="Resource categories">
-        <a href="#resources" class="res-sub" data-cat="" aria-current="true" hidden>All</a>
-        ${cats.map((c) => `<a href="#${c.id}" class="res-sub" data-cat="${c.id}">${esc(c.label)}</a>`).join('\n        ')}
-      </nav>
+      <input type="search" class="res-search" placeholder="${esc(search)}" aria-label="${esc(search)}" autocomplete="off" hidden>${subtabs}
     </div>
     <p class="res-empty muted" hidden>Nothing matches. In an emergency, call 911.</p>`);
   const checked = shown.map((r) => r.checkedAt || r.updatedAt).filter(Boolean);
