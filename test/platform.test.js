@@ -296,7 +296,7 @@ test('town lookup: Nominatim results become town suggestions with state, slug an
   assert.deepEqual([m[0].name, m[0].state, m[0].id, m[0].lat, m[0].lon, m[0].timezone], ['Ouray', 'CO', 'ouray', 38.0227, -107.6714, 'America/Denver']);
   assert.match(m[0].maps, /google\.com\/maps.*38\.0227,-107\.6714/);
   assert.equal(m.find((x) => x.state === 'ID').timezone, 'America/Los_Angeles', 'north Idaho is Pacific');
-  assert.equal(m.find((x) => x.state === 'ID').id, 'coeur-d-alene');
+  assert.equal(m.find((x) => x.state === 'ID').id, 'coeurdalene');
   assert.equal(guessTimezone('AZ', 34, -111), 'America/Phoenix');
   // Open-Meteo answers first; "Fort Collins, CO" is split into name and state.
   const meteo = { results: [
@@ -307,7 +307,7 @@ test('town lookup: Nominatim results become town suggestions with state, slug an
   let got = await geocodeTown('Fort Collins, CO', '', { fetchJsonImpl: async (url) => { asked.push(url); return meteo; } });
   assert.equal(asked.length, 1);
   assert.match(asked[0], /geocoding-api\.open-meteo\.com\/v1\/search.*countryCode=US.*name=Fort%20Collins/);
-  assert.deepEqual([got.length, got[0].name, got[0].state, got[0].id, got[0].lat, got[0].timezone], [1, 'Fort Collins', 'CO', 'fort-collins', 40.5853, 'America/Denver']);
+  assert.deepEqual([got.length, got[0].name, got[0].state, got[0].id, got[0].lat, got[0].timezone], [1, 'Fort Collins', 'CO', 'fortcollins', 40.5853, 'America/Denver']);
   // Open-Meteo down: Nominatim answers.
   asked.length = 0;
   got = await geocodeTown('Ouray', 'CO', { fetchJsonImpl: async (url) => { asked.push(url); if (/open-meteo/.test(url)) throw new Error('HTTP 503'); return sample; } });

@@ -347,7 +347,7 @@ async function townPage(id) {
     h('div', { class: 'grid2' },
       field('Town name', h('input', { name: 'name', required: true, value: t?.name || '', placeholder: 'Town name' })),
       field('State', h('input', { name: 'state', value: t?.state || '', placeholder: 'CO', maxlength: 2 })),
-      field('Address name', h('input', { name: 'id', required: true, value: t?.id || '', placeholder: 'town-name', pattern: '[a-z][a-z0-9\\-]{1,39}', readonly: !!t }),
+      field('Address name', h('input', { name: 'id', required: true, value: t?.id || '', placeholder: 'townname', pattern: '[a-z][a-z0-9\\-]{1,39}', readonly: !!t }),
         t ? 'Fixed once the town exists.' : 'Becomes [address name].thetown.buzz. Lowercase letters, numbers, dashes.'),
       field('Site name', h('input', { name: 'siteName', value: b.siteName || '', placeholder: '[Town] Buzz' }), 'Used in sentences and the browser tab.'),
       field('Latitude', h('input', { name: 'lat', required: true, inputmode: 'decimal', value: t?.location?.lat ?? '', placeholder: 'Filled by Look up' }), 'Right-click the town on Google Maps to copy its point.'),
@@ -413,8 +413,8 @@ async function townPage(id) {
     // Placeholders follow the typed town name, so nothing looks like another town's data.
     const hint = () => {
       const n = f.elements.name.value.trim();
-      const slug = n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
-      f.elements.id.placeholder = slug || 'town-name';
+      const slug = n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '').slice(0, 40);
+      f.elements.id.placeholder = slug || 'townname';
       f.elements.siteName.placeholder = n ? `${n} Buzz` : '[Town] Buzz';
       f.elements.hostnames.placeholder = `${slug || '[address name]'}.thetown.buzz`;
     };
@@ -652,7 +652,7 @@ function fillTownWithClaude(form) {
 {
   "name": "Town name as locals write it",
   "state": "Two-letter state",
-  "id": "address name: lowercase letters, numbers and dashes, usually the town name (like crested-butte)",
+  "id": "address name: lowercase letters, numbers and dashes, usually the town name with spaces and punctuation removed (like crestedbutte)",
   "siteName": "[Town] Buzz",
   "lat": 0.0000,
   "lon": 0.0000,

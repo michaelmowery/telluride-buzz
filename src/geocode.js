@@ -33,7 +33,7 @@ export function guessTimezone(state, lat, lon) {
 }
 
 const PLACE_TYPES = new Set(['city', 'town', 'village', 'hamlet', 'municipality', 'locality', 'suburb']);
-const slug = (s) => String(s).toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+const slug = (s) => String(s).toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '').slice(0, 40); // Fort Collins -> fortcollins (Michael: no dashes for spaces)
 
 /** Turn Nominatim results into town suggestions, towns and cities first. */
 export function townsFromNominatim(results) {
