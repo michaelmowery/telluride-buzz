@@ -80,6 +80,26 @@ CREATE TABLE IF NOT EXISTS source_status (
 
 -- Web push: browser subscriptions, which alerts were already pushed, and the latest
 -- pushed alert (what the service worker shows when a payload-less push arrives).
+-- Town resources: phone numbers, offices and links kept by hand in /admin (see resources.js).
+CREATE TABLE IF NOT EXISTS resources (
+  id          INTEGER PRIMARY KEY,
+  town_id     TEXT NOT NULL,
+  category    TEXT NOT NULL,
+  name        TEXT NOT NULL,
+  phone       TEXT,
+  phone2      TEXT,
+  website     TEXT,
+  address     TEXT,
+  hours       TEXT,
+  note        TEXT,
+  emergency   INTEGER NOT NULL DEFAULT 0,  -- also shown in the Emergency box at the top
+  hidden      INTEGER NOT NULL DEFAULT 0,
+  sort        INTEGER NOT NULL DEFAULT 0,
+  checked_at  INTEGER,                     -- last time someone confirmed it is right
+  updated_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS resources_town ON resources (town_id, category, sort);
+
 CREATE TABLE IF NOT EXISTS push_subs (
   endpoint    TEXT PRIMARY KEY,
   town_id     TEXT NOT NULL,
@@ -154,7 +174,7 @@ function wrap(db) {
       db.exec('BEGIN');
       try {
         for (const t of ['towns']) db.prepare(`DELETE FROM ${t} WHERE id = ?`).run(id);
-        for (const t of ['sources', 'source_status', 'tiles', 'items', 'push_subs', 'pushed_alerts', 'latest_push']) db.prepare(`DELETE FROM ${t} WHERE town_id = ?`).run(id);
+        for (const t of ['sources', 'source_status', 'tiles', 'items', 'push_subs', 'pushed_alerts', 'latest_push', 'resources']) db.prepare(`DELETE FROM ${t} WHERE town_id = ?`).run(id);
         db.exec('COMMIT');
       } catch (e) { db.exec('ROLLBACK'); throw e; }
     },
@@ -194,6 +214,50 @@ function wrap(db) {
     pruneStatus(townId, keys) {
       const ph = keys.map(() => '?').join(',');
       db.prepare(`DELETE FROM source_status WHERE town_id = ?${keys.length ? ` AND source NOT IN (${ph})` : ''}`).run(townId, ...keys);
+    },
+
+    // ---------- resources ----------
+    listResources(townId) {
+      return db.prepare('SELECT * FROM resources WHERE town_id = ? ORDER BY sort, id').all(townId).map((r) => ({
+        id: r.id, townId: r.town_id, category: r.category, name: r.name, phone: r.phone || '', phone2: r.phone2 || '',
+        website: r.website || '', address: r.address || '', hours: r.hours || '', note: r.note || '',
+        emergency: !!r.emergency, hidden: !!r.hidden, sort: r.sort, checkedAt: r.checked_at, updatedAt: r.updated_at,
+      }));
+    },
+
+    /** Insert (no id) or update one resource. Returns its id, or null when the id isn't in that town. */
+    saveResource(townId, r) {
+      const now = Date.now();
+      const vals = [r.category, r.name, r.phone || null, r.phone2 || null, r.website || null, r.address || null,
+        r.hours || null, r.note || null, r.emergency ? 1 : 0, r.hidden ? 1 : 0, r.sort ?? 0];
+      if (r.id) {
+        const res = db.prepare(`UPDATE resources SET category = ?, name = ?, phone = ?, phone2 = ?, website = ?, address = ?,
+                    hours = ?, note = ?, emergency = ?, hidden = ?, sort = ?, checked_at = COALESCE(?, checked_at), updated_at = ?
+                    WHERE id = ? AND town_id = ?`).run(...vals, r.checkedAt ?? null, now, r.id, townId);
+        return res.changes ? r.id : null;
+      }
+      const res = db.prepare(`INSERT INTO resources (town_id, category, name, phone, phone2, website, address, hours, note,
+                  emergency, hidden, sort, checked_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(townId, ...vals, r.checkedAt ?? null, now);
+      return Number(res.lastInsertRowid);
+    },
+
+    deleteResource(townId, id) {
+      return db.prepare('DELETE FROM resources WHERE id = ? AND town_id = ?').run(id, townId).changes > 0;
+    },
+
+    /** Set many sort values at once (reorder). */
+    sortResources(townId, ids) {
+      db.exec('BEGIN');
+      try {
+        ids.forEach((id, i) => db.prepare('UPDATE resources SET sort = ? WHERE id = ? AND town_id = ?').run((i + 1) * 10, id, townId));
+        db.exec('COMMIT');
+      } catch (e) { db.exec('ROLLBACK'); throw e; }
+    },
+
+    markResourcesChecked(townId, ids) {
+      const now = Date.now();
+      for (const id of ids) db.prepare('UPDATE resources SET checked_at = ? WHERE id = ? AND town_id = ?').run(now, id, townId);
     },
 
     getMeta(key) { return db.prepare('SELECT value FROM meta WHERE key = ?').get(key)?.value ?? null; },
