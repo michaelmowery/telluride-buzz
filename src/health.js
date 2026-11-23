@@ -9,7 +9,7 @@ export const RED_AFTER_MS = 3600e3;
 
 /** Which part of the site a source feeds, for the admin's feed filter. */
 const FEED_BY_ADAPTER = {
-  'nws-alerts': 'weather', 'nws-forecast': 'weather', cdot: 'roads',
+  'nws-alerts': 'weather', 'nws-forecast': 'weather', cdot: 'roads', nmroads: 'roads',
   'snow-report': 'lifts', 'resort-alerts': 'lifts', ical: 'events', meander: 'news', rss: 'news',
 };
 export const FEED_NAMES = {

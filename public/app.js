@@ -72,6 +72,7 @@ function tileAge(name, tile) {
   const source = tile?.sourceAt || null;
   tileMeta[name] = { checked: at, source, stale: false };
   if (srcEl) {
+    if (tile?.shortName) { SRC_SHORT[name] = tile.shortName; SRC_LONG[name] = tile.shortName; } // e.g. NMDOT for New Mexico roads
     srcEl.innerHTML = source && SRC_SHORT[name] ? `${esc(SRC_SHORT[name])} updated<b>${esc(clock(source))}</b>` : '';
     srcEl.title = source ? `Last updated by ${SRC_LONG[name]}: ${new Date(source).toLocaleString('en-US', { timeZone: TZ })}` : '';
   }
@@ -300,7 +301,7 @@ function panelRoads(r) {
   return `<div class="roads-map-wrap"><div class="roads-map" id="roads-map-slot"></div>
       <div class="map-legend"><span><i class="lg ok"></i>Open</span><span><i class="lg caution"></i>Caution</span><span><i class="lg closed"></i>Closed</span><span class="muted">Tap a line or dot for details</span></div></div>
     ${r.error ? `<div class="p-card tile-error">${esc(r.error)}</div>` : ''}${routes}
-    <div class="p-actions">${srcLink(r.link, 'Live map at COtrip')}<button data-filter="roads">Road posts</button></div>
+    <div class="p-actions">${srcLink(r.link, r.linkText || 'Live map at COtrip')}<button data-filter="roads">Road posts</button></div>
     ${r.disclaimer ? `<p class="p-fine"><strong>Road data source:</strong> ${esc(r.disclaimer)}</p>` : ''}`;
 }
 
@@ -388,7 +389,7 @@ async function drawRoadsMap(r) {
   const el = $('#roads-map');
   if (!el || !r) return;
   let L;
-  try { L = await loadLeaflet(); } catch { el.innerHTML = '<div class="tile-error map-err">The map could not load. Use the COtrip link below.</div>'; return; }
+  try { L = await loadLeaflet(); } catch { el.innerHTML = '<div class="tile-error map-err">The map could not load. Use the live map link below.</div>'; return; }
   if (!roadsMap || roadsMap.getContainer() !== el) {
     roadsMap?.remove();
     roadsMap = L.map(el, { scrollWheelZoom: false, zoomSnap: 0.5 }).setView(r.center || [37.94, -107.81], 9);

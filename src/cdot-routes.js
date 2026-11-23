@@ -6,7 +6,7 @@ import { featuresOf } from './sources/cdot.js';
 
 const BASE = process.env.CDOT_BASE || 'https://data.cotrip.org/api/v1';
 
-/** "I 25", "I-25", "Interstate 25" -> I-25; "US 287" -> US-287; "CO 14", "SH 14" -> CO-14. */
+/** "I 25", "I-25", "Interstate 25" -> I-25; "US 287" -> US-287; "CO 14", "SH 14" -> CO-14; "NM-371" -> NM-371. */
 export function routeLabel(name) {
   const s = String(name || '').toUpperCase().replace(/\s+/g, ' ').trim();
   let m = s.match(/^(?:I|INTERSTATE)[ -]?(\d{1,3})\b/);
@@ -15,6 +15,8 @@ export function routeLabel(name) {
   if (m) return { label: `US-${+m[1]}`, num: String(+m[1]), rank: 1 };
   m = s.match(/^(?:CO|SH|STATE HIGHWAY|CO-?SH)[ -]?(\d{1,3})\b/);
   if (m) return { label: `CO-${+m[1]}`, num: String(+m[1]), rank: 2 };
+  m = s.match(/^NM[ -]?(\d{1,3})\b/); // New Mexico state roads (NMRoads)
+  if (m) return { label: `NM-${+m[1]}`, num: String(+m[1]), rank: 2 };
   return null;
 }
 

@@ -35,7 +35,7 @@ export function planClaudeSources(suggested, town, existing = []) {
     const type = String(x.type || 'other').trim().toLowerCase();
     const why = String(x.why || '').trim().slice(0, 240);
     const skip = (reason) => skipped.push({ label, url, type, reason });
-    if (type === 'cdot' || /\b(dot|roads?|cotrip|511)\b/i.test(type)) { skip(town.state === 'CO' ? 'Roads come from CDOT automatically (or Add CDOT roads on Feeds).' : 'No roads feed for this state yet.'); continue; }
+    if (type === 'cdot' || /\b(dot|roads?|cotrip|nmroads|511)\b/i.test(type)) { skip(town.state === 'CO' ? 'Roads come from CDOT automatically (or Add CDOT roads on Feeds).' : town.state === 'NM' ? 'Roads come from NMRoads automatically (or Add NMRoads roads on Feeds).' : 'No roads feed for this state yet.'); continue; }
     if (BY_HAND[type]) { skip(BY_HAND[type]); continue; }
     if (!/^(https?|webcal):\/\/\S+$/i.test(url)) { skip('No usable web address.'); continue; }
     if (seen.has(url.toLowerCase())) { skip('Already added.'); continue; }

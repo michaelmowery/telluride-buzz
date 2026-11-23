@@ -274,20 +274,23 @@ const feedList = (sources, feedNames) => {
   return [...Object.keys(feedNames).filter((k) => have.has(k)), ...[...have].filter((k) => !(k in feedNames))];
 };
 
-// A Colorado town without CDOT roads: one click adds them, highways picked from its map point.
-// Other states have no roads feed yet, so their Roads tile is simply left off the site.
+// A Colorado (CDOT) or New Mexico (NMRoads) town without roads: one click adds them,
+// highways picked from its map point. Other states have no roads feed yet, so their
+// Roads tile is simply left off the site.
+const ROAD_DOTS = { CO: { adapter: 'cdot', name: 'CDOT' }, NM: { adapter: 'nmroads', name: 'NMRoads' } };
 function roadsCard(t) {
-  if (t.sources.some((s) => s.adapter === 'cdot')) return null;
-  if (t.state !== 'CO') return null;
+  const dot = ROAD_DOTS[t.state];
+  if (!dot) return null;
+  if (t.sources.some((s) => s.adapter === dot.adapter)) return null;
   const msg = h('span', { class: 'small', role: 'status' });
   const btn = h('button', { type: 'button', class: 'small', onclick: async () => {
-    btn.disabled = true; msg.className = 'small muted'; msg.textContent = 'Asking CDOT for the highways near the map point…';
+    btn.disabled = true; msg.className = 'small muted'; msg.textContent = `Asking ${dot.name} for the highways near the map point…`;
     try {
       const r = await api('/source/cdot-auto', { town: t.id });
-      msg.className = 'small ok-msg'; msg.textContent = `Added: ${r.roads.routes.join(', ')}. Edit the CDOT source to change them.`;
+      msg.className = 'small ok-msg'; msg.textContent = `Added: ${r.roads.routes.join(', ')}. Edit the ${dot.name} source to change them.`;
       setTimeout(() => healthPage(), 1500);
     } catch (err) { btn.disabled = false; msg.className = 'small error'; msg.textContent = err.message; }
-  } }, 'Add CDOT roads');
+  } }, `Add ${dot.name} roads`);
   return h('div', { class: 'card' }, h('div', { class: 'row spread' },
     h('span', {}, h('strong', {}, `${t.name} has no roads yet. `), h('span', { class: 'muted small' }, 'The Roads tile stays hidden until it does.')), btn), msg);
 }
@@ -540,7 +543,7 @@ function goLiveSteps(t, health) {
   return h('ol', { class: 'steps' },
     item(true, 'Town created (draft).'),
     item(has('nws-forecast') && has('nws-alerts'), 'Weather: NWS alerts and forecast.'),
-    t.state === 'CO' ? item(has('cdot'), 'Roads: CDOT with the town\'s highways (Add CDOT roads on the Feeds tab picks them from the map point).')
+    ROAD_DOTS[t.state] ? item(has(ROAD_DOTS[t.state].adapter), `Roads: ${ROAD_DOTS[t.state].name} with the town's highways (Add ${ROAD_DOTS[t.state].name} roads on the Feeds tab picks them from the map point).`)
       : item(true, `Roads: no roads feed for ${t.state || 'this state'} yet, so the Roads tile is left off.`),
     item(has('snow-report'), 'Lifts & Snow: one snow report per nearby resort (skip if none).'),
     item(has('rss') || has('ical'), 'Town and news: town/county RSS, local paper, an events calendar.'),
@@ -658,8 +661,8 @@ async function sourcePage(townId, key) {
   ].filter(Boolean));
 }
 
-// The highways on a roads source (CDOT now; any state DOT adapter with nearbyRoutes
-// later): the current list, each with a note and Remove, and the highways the DOT
+// The highways on a roads source (CDOT, NMRoads; any state DOT adapter with nearbyRoutes):
+// the current list, each with a note and Remove, and the highways the DOT
 // lists near the town to add. A hidden textarea carries the JSON the form saves.
 const ROUTE_RE = [[/^(?:I|INTERSTATE)[ -]?(\d{1,3})\b/, 'I'], [/^(?:US|U\.S\.)[ -]?(\d{1,3})\b/, 'US'], [/^(?:CO|SH|STATE HIGHWAY|[A-Z]{2})[ -]?(\d{1,3})\b/, null]];
 function parseRoute(text, state) {
@@ -687,16 +690,16 @@ function routeEditor(fd, initial, t, adapter) {
       const btn = (label, title, fn, disabled) => h('button', { type: 'button', class: 'secondary small', title, 'aria-label': `${title} ${r.label}`, disabled: !!disabled, onclick: fn }, label);
       return h('li', { class: 'route-row' },
         h('strong', { class: 'route-label' }, r.label),
-        h('span', { class: 'muted small route-match', title: 'Route number as CDOT writes it' }, `#${r.match.join(', #')}`),
+        r.match.join() === r.label ? null : h('span', { class: 'muted small route-match', title: 'Route number as the DOT writes it' }, `#${r.match.join(', #')}`),
         note,
         btn('↑', 'Move up', () => { [routes[i - 1], routes[i]] = [routes[i], routes[i - 1]]; render(); }, i === 0),
         btn('Remove', 'Remove', () => { routes.splice(i, 1); render(); }));
     }) : [h('li', { class: 'muted' }, 'No highways yet. Add one from the list below.')]));
     renderNear();
   };
-  const add = (r) => { if (!has(r.label)) routes.push({ label: r.label, match: [...r.match] }); render(); };
+  const add = (r) => { if (!has(r.label)) routes.push({ label: r.label, match: adapter.type === 'nmroads' ? [r.label] : [...r.match] }); render(); };
 
-  const hand = h('input', { type: 'text', placeholder: 'US 550, I-70, CO 145…', 'aria-label': 'Highway to add' });
+  const hand = h('input', { type: 'text', placeholder: t.state === 'NM' ? 'US 491, US 64, NM 371…' : 'US 550, I-70, CO 145…', 'aria-label': 'Highway to add' });
   const handErr = h('span', { class: 'error small' });
   const addHand = () => {
     const r = parseRoute(hand.value, t.state);
@@ -729,7 +732,7 @@ function routeEditor(fd, initial, t, adapter) {
 
   return h('fieldset', { class: 'route-editor' },
     h('legend', {}, 'Highways on the Roads tile'),
-    h('p', { class: 'help' }, 'In the order the Roads tile shows them. Press Test below to see what CDOT reports on them now.'),
+    h('p', { class: 'help' }, `In the order the Roads tile shows them. Press Test below to see what ${adapter.type === 'nmroads' ? 'NMRoads' : 'CDOT'} reports on them now.`),
     list, store,
     adapter.nearbyRoutes ? h('h3', { class: 'route-sub' }, `Highways near ${t.name}`) : null,
     nearBox,
@@ -832,7 +835,7 @@ function showCreated(town, fc, roads) {
       h('h2', {}, 'What was added'),
       h('ul', {},
         h('li', {}, 'National Weather Service alerts and forecast.'),
-        roads ? h('li', {}, roads.routes ? `Roads from CDOT: ${roads.routes.join(', ')}.` : `No roads yet: ${roads.error} Use Add CDOT roads on Feeds to try again.`)
+        roads ? h('li', {}, roads.routes ? `Roads from ${roads.dot || 'CDOT'}: ${roads.routes.join(', ')}.` : `No roads yet: ${roads.error} Use Add ${roads.dot || 'CDOT'} roads on Feeds to try again.`)
           : h('li', { class: 'muted' }, `No roads feed for ${town.state || 'this state'} yet, so the Roads tile is left off the site.`),
         h('li', {}, `${running.length} feed${running.length === 1 ? '' : 's'} running now.`),
         paused.length ? h('li', {}, `${paused.length} source${paused.length === 1 ? '' : 's'} saved paused, to check.`) : null,

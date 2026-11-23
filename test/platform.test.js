@@ -427,7 +427,7 @@ test('roads: CDOT highways picked from the map point; tiles and disclaimer follo
   assert.match((await suggestCdotSource({ name: 'Shiprock', state: 'NM', location: { lat: 36.79, lon: -108.69 } }, { json, cdotKey: 'k' })).error, /Colorado/);
   assert.match((await suggestCdotSource({ name: 'Fort Collins', state: 'CO', location: fc }, { json, cdotKey: '' })).error, /API key/);
 
-  // Admin: a Colorado town gets roads on Create town; one click adds them later; New Mexico gets none.
+  // Admin: a Colorado town gets roads on Create town; one click adds them later. (New Mexico: see the NMRoads test.)
   const db = openDb(':memory:');
   importConfigs(db, configs);
   const admin = createAdmin({ db, password: 'correct horse battery', log: quiet, deps: { json, cdotKey: 'k' } });
@@ -441,7 +441,7 @@ test('roads: CDOT highways picked from the map point; tiles and disclaimer follo
   assert.match(r.body.error, /already has CDOT/);
   r = await call('POST', '/api/admin/town', { create: true, town: { id: 'shiprock', name: 'Shiprock', state: 'NM', location: { lat: 36.79, lon: -108.69 } } });
   assert.equal(r.status, 200, r.body.error);
-  assert.equal(r.body.roads, null);
+  assert.match(r.body.roads.error, /NMRoads lists no highway/); // this fake feed has no NM events
   assert.equal(db.listSources('shiprock').some((s) => s.adapter === 'cdot'), false);
 
   // Route editor: the highways CDOT lists near the town, with distances, to add.
@@ -456,7 +456,7 @@ test('roads: CDOT highways picked from the map point; tiles and disclaimer follo
   assert.equal(nr.body.adapters.find((a) => a.type === 'cdot').nearbyRoutes, true);
   assert.equal(r.body.town.timezone, 'America/Denver');
   r = await call('POST', '/api/admin/source/cdot-auto', { town: 'shiprock' });
-  assert.match(r.body.error, /Colorado/);
+  assert.match(r.body.error, /NMRoads lists no highway/);
 
   const towns = loadTowns(db);
   const ship = towns.find((t) => t.id === 'shiprock');
@@ -479,4 +479,75 @@ test('town picker and hub: grouped by state A-Z, towns A-Z, searchable', async (
   assert.match(html, /data-town-search/);
   assert.ok(html.indexOf('>Colorado<') < html.indexOf('>New Mexico<') && html.indexOf('>New Mexico<') < html.indexOf('>Utah<'));
   assert.ok(html.indexOf('Durango, CO') < html.indexOf('Telluride, CO'));
+});
+
+test('roads: NMRoads (New Mexico) feeds the Roads tile, picks highways and shows its fine print', async () => {
+  const { nmroadsToItems, nmLevel, suggestNmroadsSource, NM_FEED } = await import('../src/sources/nmroads.js');
+  const { tileGaps, renderTemplate } = await import('../src/brand.js');
+  // A trimmed copy of nmroads.com/nmroads.json (Nov 23 2026); the US-491 roadwork is made up for the test.
+  const feed = JSON.parse(fx('nmroads.json'));
+  const shiprock = { lat: 36.7856, lon: -108.687 };
+  const now = Date.parse('2026-11-23T22:00:00Z');
+
+  assert.equal(nmLevel({ event_type: 'Closure', name: 'Closure' }), 'closed');
+  assert.equal(nmLevel({ event_type: 'Seasonal Closure' }), 'closed');
+  assert.equal(nmLevel({ event_type: 'Difficult Driving Conditions' }), 'caution');
+  assert.equal(nmLevel({ event_type: 'work-zone', name: 'Lane Closure', vehicle_impact: 'unknown' }), 'caution');
+  assert.equal(nmLevel({ event_type: 'work-zone', name: 'Roadwork', vehicle_impact: 'unknown' }), 'ok');
+  assert.equal(nmLevel({ event_type: 'work-zone', name: 'Roadwork', vehicle_impact: 'Right lane closed.' }), 'caution');
+
+  const town = { id: 'shiprock', bbox: { minLat: 36.43, maxLat: 37.14, minLon: -109.14, maxLon: -108.24 },
+    cdot: { routes: [{ label: 'US-491', match: ['US-491'] }, { label: 'US-64', match: ['US-64'] }], keyPlaces: ['Shiprock'] } };
+  const items = nmroadsToItems(feed, town, now);
+  assert.deepEqual(items.map((i) => i._route).sort(), ['US-491', 'US-64']); // NM-134 and US-550 are outside the box
+  const lane = items.find((i) => i._route === 'US-64');
+  assert.equal(lane._level, 'caution');
+  assert.equal(lane.sourceLabel, 'NMDOT NMRoads');
+  assert.equal(lane.expiresAt, null); // NMRoads' 2099 "until further notice"
+  assert.match(lane.title, /^US-64: Lane Closure, US 64/);
+  assert.ok(items.find((i) => i._route === 'US-491').expiresAt > now);
+
+  // Highways picked from the map point: the ones NMRoads has events on nearby.
+  const asked = [];
+  const json = async (url) => { asked.push(url); return feed; };
+  const ok = await suggestNmroadsSource({ name: 'Shiprock', state: 'NM', location: shiprock }, { json });
+  assert.equal(ok.source.adapter, 'nmroads');
+  assert.deepEqual(JSON.parse(ok.source.settings.routes), [{ match: ['US-64'], label: 'US-64' }, { match: ['US-491'], label: 'US-491' }]);
+  assert.deepEqual(asked, [NM_FEED]);
+  assert.match((await suggestNmroadsSource({ name: 'Durango', state: 'CO', location: shiprock }, { json })).error, /New Mexico/);
+
+  // Admin: a New Mexico town gets NMRoads on Create town; the source runs and fills the tile.
+  const db = openDb(':memory:');
+  importConfigs(db, configs);
+  const admin = createAdmin({ db, password: 'correct horse battery', log: quiet, deps: { json } });
+  const login = fakeReq('POST', '/api/admin/login', { body: { password: 'correct horse battery' } });
+  const cookie = (await admin.handle(login.req, login.url, login.read)).headers['Set-Cookie'].split(';')[0];
+  const call = async (method, p, body) => { const r = fakeReq(method, p, { cookie, body }); return admin.handle(r.req, r.url, r.read); };
+  let r = await call('POST', '/api/admin/town', { create: true, town: { id: 'shiprock', name: 'Shiprock', state: 'NM', location: shiprock } });
+  assert.equal(r.status, 200, r.body.error);
+  assert.deepEqual(r.body.roads, { routes: ['US-64', 'US-491'], dot: 'NMRoads' });
+  r = await call('POST', '/api/admin/source/cdot-auto', { town: 'shiprock' });
+  assert.match(r.body.error, /already has NMRoads/);
+  let nr = await call('POST', '/api/admin/source/nearby-routes', { town: 'shiprock', adapter: 'nmroads' });
+  assert.deepEqual(nr.body.routes.map((x) => x.label).slice(0, 2), ['US-64', 'US-491']);
+  assert.deepEqual(nr.body.routes[0].match, ['US-64']);
+
+  const towns = loadTowns(db);
+  const ship = towns.find((t) => t.id === 'shiprock');
+  const src = ship.sources.find((s) => s.adapter === 'nmroads');
+  await jobFor(ship, src, { json }).run(db);
+  const tile = db.getTiles('shiprock').roads;
+  assert.equal(tile.shortName, 'NMDOT');
+  assert.equal(tile.link, 'https://nmroads.com/');
+  assert.deepEqual(tile.routes.map((x) => [x.label, x.level]), [['US-64', 'caution'], ['US-491', 'ok']]);
+  assert.ok(db.feed('shiprock').some((i) => i.source === 'nmroads-events'));
+  assert.equal(tileGaps(ship), 'no-lifts');
+  assert.match(renderTemplate('{{roadsDisclaimer}}', '.html', ship, towns), /Road data source:<\/strong> Road information comes from the New Mexico Department of Transportation/);
+  assert.match(renderTemplate('{{aboutRoadsFine}}', '.html', ship, towns), /NMRoads/);
+  assert.doesNotMatch(renderTemplate('{{aboutRoadsFine}}', '.html', ship, towns), /CDOT/);
+  const tel = towns.find((t) => t.id === 'telluride');
+  assert.match(renderTemplate('{{aboutRoadsFine}}', '.html', tel, towns), /Department of Transportation \(CDOT\)/);
+
+  // A failed fetch keeps the tile honest.
+  await assert.rejects(jobFor(ship, src, { json: async () => { throw new Error('HTTP 403'); } }).run(openDb(':memory:')), /403/);
 });

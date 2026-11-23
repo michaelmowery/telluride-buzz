@@ -226,7 +226,11 @@ export function workZonesToItems(data, town) {
 
 // ---------- tile ----------
 
+export const CDOT_ROADS_META = { sourceLabel: LABEL, shortName: 'CDOT', link: MAP_LINK, linkText: 'Live map at COtrip' };
+
+/** The Roads tile. town.roadsMeta names another state's DOT (default CDOT). */
 export function buildRoadsTile(town, { incidents = [], workZones = [], conditions = {}, error = null, okAt = Date.now() }) {
+  const meta = { ...CDOT_ROADS_META, ...(town.roadsMeta || {}) };
   const rank = { ok: 0, caution: 1, closed: 2 };
   const routes = town.cdot.routes.map((r) => {
     const evts = [...incidents, ...workZones].filter((i) => i._route === r.label);
@@ -257,11 +261,13 @@ export function buildRoadsTile(town, { incidents = [], workZones = [], condition
     ok: !!okAt,
     dataAt: okAt || null,
     sourceAt: stamps.length ? Math.max(...stamps) : null,
-    error: error ? (okAt ? 'Latest update failed; showing the last good data.' : 'Road data is unavailable right now. Check COtrip.') : null,
+    error: error ? (okAt ? 'Latest update failed; showing the last good data.' : `Road data is unavailable right now. Check ${meta.linkText.replace(/^Live map at /, '')}.`) : null,
     routes,
-    link: MAP_LINK,
+    link: meta.link,
+    linkText: meta.linkText,
+    shortName: meta.shortName,
     center: town.location ? [town.location.lat, town.location.lon] : null,
-    sourceLabel: LABEL,
+    sourceLabel: meta.sourceLabel,
     disclaimer: town.cdot.disclaimer || DEFAULT_DISCLAIMER,
   };
 }

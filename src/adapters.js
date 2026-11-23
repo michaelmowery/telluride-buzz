@@ -11,6 +11,7 @@ import { feedJobs } from './sources/feeds.js';
 import { nwsJobs } from './sources/nws.js';
 import { cdotJobs } from './sources/cdot.js';
 import { nearbyCdotRoutes } from './cdot-routes.js';
+import { nmroadsJobs, nearbyNmRoutes } from './sources/nmroads.js';
 import { liftsJobs } from './sources/lifts.js';
 import { resortAlertsJobs } from './sources/resort-alerts.js';
 import { meanderJobs } from './sources/meander.js';
@@ -142,6 +143,33 @@ export const ADAPTERS = {
           if (errs.length) throw new Error(errs.join('; '));
         },
       };
+    },
+  },
+
+  nmroads: {
+    name: 'NMRoads roads (New Mexico)',
+    description: 'Closures, difficult driving conditions, alerts and roadwork from NMDOT\'s NMRoads. Fills the Roads tile. One statewide feed serves every New Mexico town.',
+    defaultEvery: 5,
+    single: true,
+    tile: 'roads',
+    fields: [
+      { key: 'routes', label: 'Routes', type: 'json', editor: 'routes', required: true,
+        placeholder: '[{ "match": ["US-491"], "label": "US-491", "note": "Shiprock to Gallup" }]',
+        help: 'The highways on the Roads tile, in order, named as NMRoads writes them (US-64, NM-371).' },
+      { key: 'keyPlaces', label: 'Key places', type: 'list', help: 'Place names that mark a nearby event when NMRoads gives no highway. One per line.' },
+    ],
+    keyFor: () => 'nmroads',
+    itemSources: () => ['nmroads-events'],
+    nearbyRoutes: (town, deps) => nearbyNmRoutes(town, deps),
+    validate(settings) {
+      if (!Array.isArray(settings.routes) || !settings.routes.length) return 'Add at least one route.';
+      for (const r of settings.routes) if (!r?.label) return 'Each route needs a "label" like US-64.';
+      return null;
+    },
+    job(town, s, deps) {
+      const routes = (s.settings.routes || []).map((r) => ({ ...r, match: Array.isArray(r.match) && r.match.length ? r.match : [r.label] }));
+      const view = { ...town, cdot: { routes, keyPlaces: s.settings.keyPlaces || [], disclaimer: s.settings.disclaimer } };
+      return nmroadsJobs(view, { get: deps.json })[0];
     },
   },
 

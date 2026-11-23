@@ -1,0 +1,30 @@
+{
+  "feed_info": { "publisher": "NMDOT", "version": "4.2", "license": "https://creativecommons.org/publicdomain/zero/1.0/" },
+  "type": "FeatureCollection",
+  "features": [
+    { "id": "3a22bcf0-98cf-48a6-96de-312a11a87cd2", "type": "Feature",
+      "properties": { "start_date": "2026-11-23T01:46:17-07:00", "end_date": "2099-12-31T00:00:00-07:00",
+        "core_details": { "event_type": "Difficult Driving Conditions", "road_names": ["NM-134"], "description": "Difficult Driving Conditions, NM 134 eastbound and westbound from mile marker 15 , 3 miles north of Crystal to mile marker 22.47, merges with Indian Service Route 12.", "update_date": "2026-11-23T01:46:17-07:00", "vehicle_impact": "unknown", "name": "Difficult Driving Conditions" } },
+      "geometry": { "type": "LineString", "coordinates": [[-108.9307, 36.071], [-108.9772, 36.0391], [-109.0171, 35.9983]] } },
+    { "id": "a89fec74-a80e-4578-9a12-e61ed5ec4aa8", "type": "Feature",
+      "properties": { "start_date": "2026-10-26T05:33:02-06:00", "end_date": "2099-12-30T17:00:00-07:00",
+        "core_details": { "event_type": "work-zone", "road_names": ["US-64"], "description": "Lane Closure, US 64 eastbound and westbound from mile marker 21, 2 miles west of Shiprock to mile marker 23 Shiprock.", "update_date": "2026-11-23T00:30:34.791-07:00", "vehicle_impact": "unknown", "name": "Lane Closure" } },
+      "geometry": { "type": "LineString", "coordinates": [[-108.7033, 36.7778], [-108.69, 36.781], [-108.6837, 36.7852]] } },
+    { "id": "f30c9adf-01ff-4d08-960f-5a9973fa1b6c", "type": "Feature",
+      "properties": { "start_date": "2026-04-29T02:46:02-06:00", "end_date": "2099-12-30T17:00:00-07:00",
+        "core_details": { "event_type": "work-zone", "road_names": ["US-550"], "description": "Lane Closure, US 550 northbound and southbound from mile marker 163, 3 miles north of Aztec to mile marker 165.", "update_date": "2026-11-23T00:30:34.791-07:00", "vehicle_impact": "unknown", "name": "Lane Closure" } },
+      "geometry": { "type": "LineString", "coordinates": [[-107.9588, 36.8572], [-107.9365, 36.879]] } },
+    { "id": "b1c2d3e4-0000-4000-8000-000000000001", "type": "Feature",
+      "properties": { "start_date": "2026-11-20T08:00:00-07:00", "end_date": "2026-12-20T17:00:00-07:00",
+        "core_details": { "event_type": "work-zone", "road_names": ["US-491"], "description": "Roadwork, US 491 northbound and southbound from mile marker 88 to mile marker 90, Shiprock.", "update_date": "2026-11-23T00:30:34.791-07:00", "vehicle_impact": "unknown", "name": "Roadwork" } },
+      "geometry": { "type": "LineString", "coordinates": [[-108.69, 36.76], [-108.689, 36.78]] } },
+    { "id": "a3aecbdc-2c0a-45ae-9090-86aacfd204f5", "type": "Feature",
+      "properties": { "start_date": "2026-10-22T05:30:29-06:00", "end_date": "2099-12-30T17:00:00-07:00",
+        "core_details": { "event_type": "Closure", "road_names": ["NM-539"], "description": "Closure, NM 539 northbound and southbound from mile marker 0 Navajo City to mile marker 5 Navajo Dam.", "update_date": "2026-10-22T05:56:39-06:00", "vehicle_impact": "unknown", "name": "Closure" } },
+      "geometry": { "type": "LineString", "coordinates": [[-107.6024, 36.7522], [-107.6158, 36.7992]] } },
+    { "id": "0d732b92-291e-4bdd-9224-d0e814d02cb3", "type": "Feature",
+      "properties": { "start_date": "2024-11-06T17:00:00-07:00", "end_date": "2099-12-30T17:00:00-07:00",
+        "core_details": { "event_type": "Alert", "road_names": ["NM-247"], "description": "Alert, NM 247 eastbound and westbound from mile marker 0 Corona to mile marker 48.", "update_date": "2025-08-06T09:26:12-06:00", "vehicle_impact": "unknown", "name": "Alert" } },
+      "geometry": { "type": "LineString", "coordinates": [[-105.6, 34.25], [-105.1, 34.1]] } }
+  ]
+}

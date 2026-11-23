@@ -12,6 +12,7 @@ import { sourceHealth, townColor, FEED_NAMES } from './health.js';
 import { geocodeTown } from './geocode.js';
 import { planClaudeSources } from './claude-town.js';
 import { suggestCdotSource } from './cdot-routes.js';
+import { suggestNmroadsSource } from './sources/nmroads.js';
 import { ALL_TOWNS_KEY, normalizeNotice } from './notice.js';
 import { normalizeResource, planCsvImport, resourcesToCsv, RESOURCE_CATEGORIES, STALE_DAYS, sponsorState, townDay } from './resources.js';
 import { townUrl } from './brand.js';
@@ -64,10 +65,17 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
     return list.map((r) => ({ ...r, sponsorState: sponsorState(r, days.get(r.townId) || townDay(null)) }));
   };
   const changed = (what) => { log.info?.(`admin: ${what}`); onChange(); };
-  // Add a CDOT source with the highways near the town's map point: { routes } or { error }.
+  // The state DOT roads source for a town's state, if there is one: CDOT (Colorado), NMRoads (New Mexico).
+  const roadsFor = (state) => ({
+    CO: { adapter: 'cdot', name: 'CDOT', suggest: deps.suggestCdot || suggestCdotSource },
+    NM: { adapter: 'nmroads', name: 'NMRoads', suggest: deps.suggestNmroads || suggestNmroadsSource },
+  })[String(state || '').toUpperCase()] || null;
+  // Add the state's roads source with the highways near the town's map point: { routes } or { error }.
   async function addCdotRoads(town) {
+    const dot = roadsFor(town.state);
+    if (!dot) return { error: `No roads feed for ${town.state || 'this state'} yet.` };
     try {
-      const { source: input, error } = await (deps.suggestCdot || suggestCdotSource)(town, deps);
+      const { source: input, error } = await dot.suggest(town, deps);
       if (error) return { error };
       const have = findTown(town.id)?.sources || [];
       const { source, error: bad2 } = normalizeSource(input, town, have);
@@ -75,7 +83,7 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
       db.saveSource(town.id, source);
       return { routes: source.settings.routes.map((r) => r.label) };
     } catch (e) {
-      log.warn?.(`admin: CDOT roads for ${town.id} failed: ${e.message}`);
+      log.warn?.(`admin: ${dot.name} roads for ${town.id} failed: ${e.message}`);
       return { error: e.message };
     }
   }
@@ -202,9 +210,9 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
         if (!/^[A-Z]{2}$/.test(town.state || '')) return bad('Add the two-letter state (like CO).');
         db.saveTown(town, town.status);
         if (body.create) for (const s of starterSources(town)) db.saveSource(town.id, s);
-        // A Colorado town gets CDOT roads right away, with the highways near its map point.
+        // A Colorado or New Mexico town gets roads right away, with the highways near its map point.
         let roads = null;
-        if (body.create && town.state === 'CO') roads = await addCdotRoads(town);
+        if (body.create && roadsFor(town.state)) roads = { ...(await addCdotRoads(town)), dot: roadsFor(town.state).name };
         // Add a town with Claude: its suggested sources and starter resources come along.
         let fromClaude = null;
         if (body.create && body.fromClaude && typeof body.fromClaude === 'object') {
@@ -254,11 +262,13 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
       case 'POST /source/cdot-auto': {
         const t = all.find((x) => x.id === body.town);
         if (!t) return bad('No such town', 404);
-        if (t.sources.some((x) => x.adapter === 'cdot')) return bad(`${t.name} already has CDOT roads. Edit that source to change its highways.`);
+        const dot = roadsFor(t.state);
+        if (!dot) return bad(`Roads feeds are for Colorado (CDOT) and New Mexico (NMRoads) towns. ${t.name} is in ${t.state || 'no state'}.`);
+        if (t.sources.some((x) => x.adapter === dot.adapter)) return bad(`${t.name} already has ${dot.name} roads. Edit that source to change its highways.`);
         const roads = await addCdotRoads(t);
         if (roads.error) return bad(`Couldn't add roads: ${roads.error}`);
-        changed(`added CDOT roads to ${t.id}`);
-        return ok({ roads });
+        changed(`added ${dot.name} roads to ${t.id}`);
+        return ok({ roads: { ...roads, dot: dot.name } });
       }
       case 'POST /source/nearby-routes': {
         const t = all.find((x) => x.id === body.town);
