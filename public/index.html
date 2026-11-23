@@ -15,11 +15,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/styles.css?v=35">
-  <script src="/theme.js?v=35"></script>
-  <script src="/towns.js?v=35" defer></script>
+  <link rel="stylesheet" href="/styles.css?v=36">
+  <script src="/theme.js?v=36"></script>
+  <script src="/towns.js?v=36" defer></script>
 </head>
-<body class="{{bodyClass}}">
+<body class="{{bodyClass}}" data-feedback-url="{{feedbackUrl}}" data-support-url="{{supportUrl}}">
   <header class="top">
     <div class="brand-wrap">
       <a class="brand" href="/" id="brand" aria-label="{{site}}: choose a town" aria-haspopup="true" aria-expanded="false" aria-controls="town-menu">
@@ -100,19 +100,23 @@
       </div>
       <div id="res-panel" class="resources res-tab" role="tabpanel" aria-labelledby="tab-essentials" hidden>
         {{resources}}
-        <p class="muted">Tap a number to call it, or Map for directions. Something wrong or missing? <a href="mailto:{{feedbackEmail}}?subject={{feedbackSubject}}">Tell us</a>.</p>
+        <p class="suggest-row"><a class="push-btn suggest-btn" href="{{suggestUrl}}" target="_blank" rel="noopener">+ Suggest a resource</a></p>
+        <p class="muted">Tap a number to call it, or Map for directions. Something wrong? <a href="{{feedbackUrl}}" target="_blank" rel="noopener">Tell us</a>.</p>
       </div>
       <div id="eat-panel" class="resources res-tab" role="tabpanel" aria-labelledby="tab-eat" hidden>
         {{eat}}
-        <p class="muted">Tap a number to call it, or Map for directions. Something wrong or missing? <a href="mailto:{{feedbackEmail}}?subject={{feedbackSubject}}">Tell us</a>.</p>
+        <p class="suggest-row"><a class="push-btn suggest-btn" href="{{suggestUrl}}" target="_blank" rel="noopener">+ Suggest a resource</a></p>
+        <p class="muted">Tap a number to call it, or Map for directions. Something wrong? <a href="{{feedbackUrl}}" target="_blank" rel="noopener">Tell us</a>.</p>
       </div>
       <div id="shop-panel" class="resources res-tab" role="tabpanel" aria-labelledby="tab-shop" hidden>
         {{shop}}
-        <p class="muted">Tap a number to call it, or Map for directions. Something wrong or missing? <a href="mailto:{{feedbackEmail}}?subject={{feedbackSubject}}">Tell us</a>.</p>
+        <p class="suggest-row"><a class="push-btn suggest-btn" href="{{suggestUrl}}" target="_blank" rel="noopener">+ Suggest a resource</a></p>
+        <p class="muted">Tap a number to call it, or Map for directions. Something wrong? <a href="{{feedbackUrl}}" target="_blank" rel="noopener">Tell us</a>.</p>
       </div>
       <div id="stay-panel" class="resources res-tab" role="tabpanel" aria-labelledby="tab-stay" hidden>
         {{stay}}
-        <p class="muted">Tap a number to call it, or Map for directions. Something wrong or missing? <a href="mailto:{{feedbackEmail}}?subject={{feedbackSubject}}">Tell us</a>.</p>
+        <p class="suggest-row"><a class="push-btn suggest-btn" href="{{suggestUrl}}" target="_blank" rel="noopener">+ Suggest a resource</a></p>
+        <p class="muted">Tap a number to call it, or Map for directions. Something wrong? <a href="{{feedbackUrl}}" target="_blank" rel="noopener">Tell us</a>.</p>
       </div>
     </section>
   </main>
@@ -131,9 +135,9 @@
     <p class="mission">The real-time pulse of {{town}}: what's happening in our town, right now, from sources you can trust.</p>
     {{roadsDisclaimer}}
     <p class="fine">Local guide: <a href="/food-drink">Food &amp; drink</a> · <a href="/shops">Shops</a> · <a href="/lodging">Lodging</a> · <a href="/essentials">Essentials</a></p>
-    <p class="fine">Every post links to its source. <a href="#essentials">Essentials</a> · <a href="/about">About &amp; sources</a> · <a href="#" id="prefs-link">Preferences</a> · Not for emergencies: call 911.</p>
+    <p class="fine">Every post links to its source. <a href="#essentials">Essentials</a> · <a href="/about">About &amp; sources</a> · <a href="#" id="prefs-link">Preferences</a> · <a href="{{feedbackUrl}}" target="_blank" rel="noopener">Feedback</a> · <a href="{{supportUrl}}" target="_blank" rel="noopener">Report a problem</a> · Not for emergencies: call 911.</p>
   </footer>
 
-  <script src="/app.js?v=35" type="module"></script>
+  <script src="/app.js?v=36" type="module"></script>
 </body>
 </html>

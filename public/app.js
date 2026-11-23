@@ -451,7 +451,11 @@ function panelPrefs() {
     <div class="toggles">${SHOW_OPTS.map(toggleHtml).join('')}</div>
     <h3>Topics in the live feed</h3>
     <div class="toggles">${FEED_OPTS.map(toggleHtml).join('')}</div>
-    <p class="prefs-note">Emergency and weather warnings in the red banner always show. Everything here is saved on this device only.</p>`;
+    <p class="prefs-note">Emergency and weather warnings in the red banner always show. Everything here is saved on this device only.</p>
+    <h3>Feedback</h3>
+    <p class="prefs-links"><a class="push-btn" href="${esc(document.body.dataset.feedbackUrl || '')}" target="_blank" rel="noopener">Send feedback</a>
+      <a class="res-btn" href="${esc(document.body.dataset.supportUrl || '')}" target="_blank" rel="noopener">Report a problem</a></p>
+    <p class="prefs-note">Ideas, a missing place or something that bugs you: we read every one. Opens in a new tab.</p>`;
 }
 const SHOW_OPTS = [
   ['weather', 'Weather tile'], ['roads', 'Roads tile'], ['lifts', 'Lifts & Snow tile'], ['events', 'Events tile'],

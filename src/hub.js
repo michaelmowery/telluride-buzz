@@ -6,6 +6,7 @@
 // addresses (telluride.buzz, durango.thetown.buzz); thetown.buzz/<town> redirects
 // there, per the subdomain-per-town decision (2026-11-21).
 import { groupByState, logoSvg, townSearchText, townUrl } from './brand.js';
+import { formLinks } from './forms.js';
 
 export const HUB_HOSTS = new Set(['thetown.buzz', 'www.thetown.buzz', 'thetown.localhost']);
 
@@ -65,6 +66,10 @@ export function renderHub(text, towns, snapFor) {
       </section>`).join('\n      '),
     feedbackEmail: esc(list.find((t) => t.brand?.feedbackEmail)?.brand.feedbackEmail || 'telluridebuzz@gmail.com'),
     feedbackSubject: encodeURIComponent('Buzz for my town'),
+    // ClickUp forms (src/forms.js); the hub has no town, so nothing to pre-fill but the kind.
+    suggestTownUrl: esc(formLinks().suggestTownUrl),
+    feedbackUrl: esc(formLinks().feedbackUrl),
+    supportUrl: esc(formLinks().supportUrl),
   };
   return text.replace(/\{\{(\w+)\}\}/g, (m, k) => (k in v ? v[k] : m));
 }

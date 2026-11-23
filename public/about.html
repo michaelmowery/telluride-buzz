@@ -13,9 +13,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/styles.css?v=35">
-  <script src="/theme.js?v=35"></script>
-  <script src="/towns.js?v=35" defer></script>
+  <link rel="stylesheet" href="/styles.css?v=36">
+  <script src="/theme.js?v=36"></script>
+  <script src="/towns.js?v=36" defer></script>
 </head>
 <body>
   <header class="top">
@@ -52,8 +52,9 @@
 
     <h2>Spot a problem?</h2>
     <p>If something is wrong, missing or out of date, please tell us. Include what you saw and roughly when.</p>
-    <!-- Feedback address: brand.feedbackEmail in config/<town>.json. -->
-    <p><a class="push-btn feedback" id="feedback" href="mailto:{{feedbackEmail}}?subject={{feedbackSubject}}">Send feedback</a></p>
+    <!-- Form links: src/forms.js. Email: brand.feedbackEmail in town Settings. -->
+    <p class="suggest-row"><a class="push-btn feedback" id="feedback" href="{{feedbackUrl}}" target="_blank" rel="noopener">Send feedback</a> <a class="res-btn" href="{{supportUrl}}" target="_blank" rel="noopener">Report a problem</a></p>
+    <p class="muted">Or email <a href="mailto:{{feedbackEmail}}?subject={{feedbackSubject}}">{{feedbackEmail}}</a>.</p>
 
     <h2>Fine print</h2>
     {{aboutRoadsFine}}
@@ -61,7 +62,7 @@
   </main>
 
   <footer class="foot">
-    <p class="fine"><a href="/">Home</a> · <a href="/essentials">Essentials</a> · <a href="/food-drink">Food &amp; drink</a> · <a href="/shops">Shops</a> · <a href="/lodging">Lodging</a> · Not for emergencies: call 911.</p>
+    <p class="fine"><a href="/">Home</a> · <a href="/essentials">Essentials</a> · <a href="/food-drink">Food &amp; drink</a> · <a href="/shops">Shops</a> · <a href="/lodging">Lodging</a> · <a href="{{feedbackUrl}}" target="_blank" rel="noopener">Feedback</a> · <a href="{{supportUrl}}" target="_blank" rel="noopener">Report a problem</a> · Not for emergencies: call 911.</p>
   </footer>
 </body>
 </html>

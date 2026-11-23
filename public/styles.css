@@ -86,6 +86,16 @@ button { font: inherit; color: inherit; }
 .town-all strong { color: var(--forest-2); font-weight: 600; }
 @media (prefers-color-scheme: dark) { .town-all strong { color: var(--amber); } }
 .town-all:hover strong, .town-all:focus-visible strong { text-decoration: underline; }
+.town-suggest { display: block; padding: 6px 8px 2px; font-size: 13.5px; color: var(--ink-2); text-decoration: none; }
+.town-suggest strong { color: var(--forest-2); font-weight: 600; }
+@media (prefers-color-scheme: dark) { .town-suggest strong { color: var(--amber); } }
+.town-suggest:hover strong, .town-suggest:focus-visible strong { text-decoration: underline; }
+.hub-suggest { margin: 4px 2px 0; font-size: 14px; color: var(--ink-2); }
+/* Feedback form links (src/forms.js): suggest a resource, send feedback, report a problem. */
+a.push-btn { display: inline-block; text-decoration: none; }
+.suggest-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0 6px; }
+.suggest-btn { padding: 9px 16px; font-size: 14px; }
+.prefs-links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; }
 .town-txt { display: grid; gap: 2px; line-height: 1.25; min-width: 0; }
 .town-txt strong { font-weight: 600; }
 .town-txt small { color: var(--ink-2); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
