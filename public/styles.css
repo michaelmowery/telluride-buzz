@@ -507,3 +507,39 @@ a.prefs-btn { text-decoration: none; }
 .res-cat summary h2 { margin: 0 !important; font-size: 17px !important; }
 .res-count { font-size: 12px; color: var(--ink-2); background: var(--paper); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
 .resources .small { font-size: 12.5px; }
+
+/* ---------- wide desktop layout ----------
+   Phones and tablets keep the single column above. On a wide screen the page fills the
+   window: alerts and the four tiles run across the top, the Live feed takes the main
+   column, and Resources sits beside it in its own column (so the tab is not needed).
+   No markup changes: .feed-wrap becomes display: contents so its parts join this grid. */
+.side-title { display: none; }
+@media (min-width: 1100px) {
+  main {
+    max-width: 1640px; padding: 20px 32px 8px;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 30%); column-gap: 32px;
+    grid-template-areas: "alerts alerts" "tiles tiles" "head push" "feed push" "feed res";
+    grid-template-rows: auto auto auto auto 1fr;
+    align-items: start;
+  }
+  .alerts { grid-area: alerts; margin-bottom: 14px; }
+  .tiles { grid-area: tiles; gap: 14px; }
+  .tile { min-height: 180px; padding: 14px 16px; }
+  .tile-body { font-size: 15px; }
+  .feed-wrap { display: contents; }
+  .feed-head { grid-area: head; margin: 22px 0 6px; }
+  .tab#tab-resources { display: none; }
+  #feed-panel, #feed-panel[hidden] { grid-area: feed; display: block !important; }
+  #res-panel, #res-panel[hidden] {
+    grid-area: res; display: block !important; padding-top: 0;
+    position: sticky; top: 84px; max-height: calc(100vh - 100px); overflow-y: auto;
+    overscroll-behavior: contain; padding-right: 4px;
+  }
+  .push { grid-area: push; margin: 22px 0 10px; }
+  .side-title { display: block; font: 700 18px var(--slab); margin: 22px 0 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  /* When the alerts prompt is showing it already gives the column its top margin. */
+  .push:not([hidden]) ~ .feed-wrap .side-title { margin-top: 0; }
+  html[data-hide~="push"] .push ~ .feed-wrap .side-title { margin-top: 22px; }
+  .foot { max-width: 1640px; padding: 0 32px; }
+  .foot .disclaimer, .foot .mission, .foot .fine { max-width: 1100px; }
+}
