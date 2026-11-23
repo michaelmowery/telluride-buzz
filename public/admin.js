@@ -736,8 +736,12 @@ async function allResourcesPage() {
   const townName = new Map(d.towns.map((t) => [t.id, `${t.name}${t.state ? `, ${t.state}` : ''}`]));
   const catName = new Map(d.categories.map((c) => [c.id, c.label]));
   const stale = (r) => !r.checkedAt || Date.now() - r.checkedAt > d.staleDays * DAY;
-  if (resFilters.town && !townName.has(resFilters.town)) resFilters.town = '';
+  // One town at a time: the last one used, else the town with the most entries.
+  const count = (id) => d.resources.filter((r) => r.townId === id).length;
+  if (!townName.has(resFilters.town)) resFilters.town = [...d.towns].sort((a, b) => count(b.id) - count(a.id))[0]?.id || '';
   const f = resFilters;
+  const town = d.towns.find((t) => t.id === f.town);
+  saveResFilters();
   const err = h('p', { class: 'error', role: 'alert' });
   const results = h('div');
 
@@ -747,15 +751,19 @@ async function allResourcesPage() {
   const q = h('input', { type: 'search', value: f.q, placeholder: 'Name, phone, address, note', autocomplete: 'off' });
   q.addEventListener('input', () => { f.q = q.value.trim(); saveResFilters(); render(); });
   const bar = h('div', { class: 'filters card', role: 'search' },
-    sel('town', 'Town', [['', 'All towns'], ...d.towns.map((t) => [t.id, townName.get(t.id)])]),
     sel('cat', 'Category', [['', 'All categories'], ...d.categories.map((c) => [c.id, c.label])]),
     sel('status', 'Status', RES_STATUS),
     h('label', { class: 'filter grow' }, 'Search', q),
     h('button', { type: 'button', class: 'small secondary', onclick: () => {
-      Object.assign(f, { town: '', cat: '', status: '', q: '' });
+      Object.assign(f, { cat: '', status: '', q: '' });
       bar.querySelectorAll('select').forEach((x) => { x.value = ''; });
       q.value = ''; saveResFilters(); render();
     } }, 'Clear'));
+
+  const townTabs = h('nav', { class: 'town-tabs', 'aria-label': 'Town' },
+    ...d.towns.map((t) => h('a', { href: `#all-resources?town=${encodeURIComponent(t.id)}`, class: 'town-tab', 'aria-current': t.id === f.town ? 'page' : null,
+      onclick: (e) => { e.preventDefault(); if (t.id === f.town) return; f.town = t.id; f.cat = ''; saveResFilters(); route(); } },
+    townName.get(t.id), h('span', { class: 'count' }, String(count(t.id))))));
 
   function matches(r) {
     if (f.town && r.townId !== f.town) return false;
@@ -808,19 +816,14 @@ async function allResourcesPage() {
   // import box below, preview, then import. No API call: copy and paste only.
   function claudeCard() {
     const box = h('div', { hidden: true });
-    // Its own town and category pickers, starting from the page filter (or the town
-    // with the most resources), so it works without touching the filters above.
-    const count = (id) => d.resources.filter((r) => r.townId === id).length;
-    const startTown = f.town || [...d.towns].sort((a, b) => count(b.id) - count(a.id))[0]?.id || '';
-    const townSel = h('select', { name: 'claude-town' }, ...d.towns.map((t) => h('option', { value: t.id, selected: t.id === startTown }, `${townName.get(t.id)} (${count(t.id)})`)));
+    // For the town picked at the top; its own category picker starts from the filter.
     const catSel = h('select', { name: 'claude-cat' }, h('option', { value: '' }, 'All categories'), ...d.categories.map((c) => h('option', { value: c.id, selected: c.id === f.cat }, c.label)));
     const refresh = () => { if (!box.hidden) { box.hidden = true; btn.click(); } };
-    townSel.addEventListener('change', refresh);
     catSel.addEventListener('change', refresh);
     const btn = h('button', { type: 'button', onclick: () => {
       if (!box.hidden) { box.hidden = true; btn.textContent = 'Update with Claude'; return; }
       err.textContent = '';
-      const prompt = claudePrompt(townSel.value, catSel.value);
+      const prompt = claudePrompt(f.town, catSel.value);
       const ta = h('textarea', { rows: 14, readonly: true, class: 'mono' }, prompt);
       const copied = h('span', { class: 'ok-msg small', role: 'status' });
       box.replaceChildren(
@@ -837,8 +840,8 @@ async function allResourcesPage() {
     } }, 'Update with Claude');
     return h('div', { class: 'card' },
       h('h2', {}, 'Update with Claude'),
-      h('p', { class: 'muted small' }, 'Pick a town and, if you like, one category. You get a research prompt with the current entries included. Claude checks them against official sources, fixes and adds entries, and answers in the import format.'),
-      h('div', { class: 'row claude-pick' }, h('label', { class: 'filter' }, 'Town', townSel), h('label', { class: 'filter' }, 'Category', catSel), btn),
+      h('p', { class: 'muted small' }, `Pick a category, or all of ${townName.get(f.town)}. You get a research prompt with the current entries included. Claude checks them against official sources, fixes and adds entries, and answers in the import format.`),
+      h('div', { class: 'row claude-pick' }, h('label', { class: 'filter' }, 'Category', catSel), btn),
       box);
   }
 
@@ -914,7 +917,7 @@ ${csv}
       pending = pasted ? (block ? block[1] : pasted) : await fl.text();
     }
     try {
-      const r = await api('/resources/import', { csv: pending, town: f.town, apply });
+      const r = await api('/resources/import', { csv: pending, town: f.town, only: true, apply });
       const problems = (list) => h('ul', {}, ...list.map((e) => h('li', { class: 'err' }, `Row ${e.line}${e.name ? ` (${e.name})` : ''}: ${e.error}`)));
       if (apply) {
         file.value = ''; paste.value = '';
@@ -937,14 +940,17 @@ ${csv}
   }
 
   view.replaceChildren(
-    h('div', { class: 'row spread' }, h('h1', {}, 'Resources'),
+    townTabs,
+    h('div', { class: 'row spread' }, h('h1', {}, `${townName.get(f.town) || 'Resources'}`),
       h('span', {},
-        f.town ? h('a', { class: 'button', href: `#new-resource/${f.town}/${f.cat || 'emergency'}` }, 'Add resource') : null, ' ',
-        h('a', { class: 'button secondary', href: `/api/admin/resources/export${f.town ? `?town=${encodeURIComponent(f.town)}` : ''}` }, f.town ? 'Export CSV' : 'Export all as CSV'))),
-    h('p', { class: 'muted' }, `Phone numbers, offices and links shown on each town's Resources tab. Entries not checked in ${d.staleDays} days show in red.`, f.town ? null : ' Pick a town in the filter to add a resource.'),
+        h('a', { class: 'button', href: `#new-resource/${f.town}/${f.cat || 'emergency'}` }, 'Add resource'), ' ',
+        h('a', { class: 'button secondary', href: `/api/admin/resources/export?town=${encodeURIComponent(f.town)}` }, 'Export CSV'),
+        town ? [' ', h('a', { class: 'button secondary', href: `${siteOf(town)}/#essentials`, target: '_blank', rel: 'noopener' }, 'View site')] : null)),
+    h('p', { class: 'muted' }, `What shows on ${townName.get(f.town)}'s Essentials, Food & drink, Shops and Lodging tabs. Entries not checked in ${d.staleDays} days show in red. `,
+      h('a', { href: '/api/admin/resources/export', class: 'small' }, 'Export every town as one CSV')),
     bar, err, claudeCard(), results,
     h('div', { class: 'card' }, h('h2', {}, 'Import from a spreadsheet'),
-      h('p', { class: 'muted small' }, 'Export a CSV, edit it in Excel, Numbers or Google Sheets, then import it here. Rows with an id update that resource; rows without one are added. The town column says which town each row goes to', f.town ? `; blank means ${townName.get(f.town)}.` : '.', ' Category can be the id (medical) or the name (Medical). Nothing changes until you press Import; rows with problems are skipped.'),
+      h('p', { class: 'muted small' }, `Export a CSV, edit it in Excel, Numbers or Google Sheets, then import it here. Rows with an id update that resource; rows without one are added. Rows go to ${townName.get(f.town)} (rows for another town are skipped).`, ' Category can be the id (medical) or the name (Medical). Nothing changes until you press Import; rows with problems are skipped.'),
       h('div', { class: 'row' }, file, h('button', { type: 'button', class: 'secondary', onclick: () => runImport(false) }, 'Preview')),
       paste,
       h('div', { class: 'row' }, h('button', { type: 'button', class: 'secondary', onclick: () => runImport(false) }, 'Preview pasted CSV')),

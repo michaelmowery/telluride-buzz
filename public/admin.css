@@ -103,3 +103,8 @@ span.err { color: var(--red); }
 .sponsor-box { border: 1px solid var(--line); border-radius: var(--radius); padding: .5rem .9rem .8rem; margin: .8rem 0; }
 .sponsor-box legend { font-weight: 600; padding: 0 .3rem; }
 .import-summary { align-items: center; gap: .75rem; flex-wrap: wrap; } .import-summary p { margin: 0; }
+/* Resources admin: one town at a time. */
+.town-tabs { display: flex; gap: .4rem; flex-wrap: wrap; margin: 0 0 1rem; }
+.town-tab { display: inline-flex; align-items: center; gap: .4rem; padding: .35rem .8rem; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink); text-decoration: none; font-weight: 600; }
+.town-tab[aria-current] { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
+.town-tab .count { font-size: .75rem; font-weight: 500; opacity: .75; }

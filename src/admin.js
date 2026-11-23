@@ -242,7 +242,7 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
       }
       case 'POST /resources/import': {
         // Preview first (nothing written), then the same call with apply: true.
-        const plan = planCsvImport(body.csv || '', { towns: all, existing: db.listResources(null), defaultTown: body.town || '' });
+        const plan = planCsvImport(body.csv || '', { towns: all, existing: db.listResources(null), defaultTown: body.town || '', onlyTown: body.only ? body.town || '' : '' });
         if (plan.error) return bad(plan.error);
         const summary = { rows: plan.rows, adds: plan.adds.length, updates: plan.updates.length, errors: plan.errors,
           preview: [...plan.adds.map((x) => ({ ...x, action: 'add' })), ...plan.updates.map((x) => ({ ...x, action: 'update' }))]

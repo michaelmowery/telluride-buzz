@@ -168,6 +168,10 @@ test('CSV export round-trips through import, and import previews before writing'
   assert.equal((await call('POST', '/resources/import', { csv: 'town,category,name\ndurango,nope,Bad', town: 'durango', apply: true }, cookie)).status, 400);
   const dur = db.listResources('durango');
   assert.deepEqual(dur.map((x) => [x.name, x.category, x.emergency, x.hours]), [['Mercy Hospital', 'medical', true, '24/7'], ['Durango Library', 'schools', false, '']]);
+  // Scoped to one town (the admin's town tabs): other towns' rows are skipped.
+  const scoped = planCsvImport('town,category,name,phone\ndurango,medical,A,911\ntelluride,medical,B,911\n', { towns, existing: [], onlyTown: 'durango' });
+  assert.deepEqual([scoped.adds.length, scoped.errors.length], [1, 1]);
+  assert.match(scoped.errors[0].error, /Switch to that town/);
   // An id from another town is refused, not moved.
   plan = planCsvImport(`id,town,category,name,phone\n${dur[0].id},telluride,medical,X,911\n`, { towns, existing: db.listResources(null) });
   assert.match(plan.errors[0].error, /No resource/);
