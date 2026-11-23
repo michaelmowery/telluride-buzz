@@ -401,3 +401,58 @@ test('logo: long town names wrap to two lines or shrink so they never run off th
   assert.deepEqual(names(breck), ['breckenridge']);
   assert.ok(Number(breck.match(/scale\(([\d.]+)\)/)[1]) < 0.7);
 });
+
+test('roads: CDOT highways picked from the map point; tiles and disclaimer follow the sources', async () => {
+  const { routeLabel, routesNear, suggestCdotSource } = await import('../src/cdot-routes.js');
+  const { tileGaps, renderTemplate } = await import('../src/brand.js');
+  assert.deepEqual(['I 25', 'I-25', 'Interstate 25', 'US 287', 'US-287', 'CO 14', 'SH 14', 'County Road 5'].map((x) => routeLabel(x)?.label),
+    ['I-25', 'I-25', 'I-25', 'US-287', 'US-287', 'CO-14', 'CO-14', undefined]);
+  const line = (name, coords) => ({ type: 'Feature', properties: { routeName: name }, geometry: { type: 'LineString', coordinates: coords } });
+  const fc = { lat: 40.5853, lon: -105.0844 }; // Fort Collins
+  const feats = [
+    line('I 25', [[-105.0, 40.4], [-105.0, 40.7]]), // ~7 km east
+    line('US 287', [[-105.08, 40.5], [-105.08, 40.7]]), // through town
+    line('CO 14', [[-105.2, 40.586], [-104.9, 40.586]]), // through town
+    line('I 70', [[-105.5, 39.7], [-105.0, 39.7]]), // Denver area, ~100 km
+    { type: 'Feature', properties: { routeName: 'CO 1' }, geometry: { type: 'Point', coordinates: [-105.06, 40.66] } }, // ~8 km
+  ];
+  assert.deepEqual(routesNear(feats, fc).map((r) => r.label), ['US-287', 'CO-14', 'I-25', 'CO-1']);
+  assert.deepEqual(routesNear(feats, fc)[0].match, ['287']);
+
+  const asked = [];
+  const json = async (url) => { asked.push(url); return url.includes('roadConditions') ? { features: feats } : []; };
+  const ok = await suggestCdotSource({ name: 'Fort Collins', state: 'CO', location: fc }, { json, cdotKey: 'k' });
+  assert.equal(ok.source.adapter, 'cdot');
+  assert.deepEqual(JSON.parse(ok.source.settings.routes).map((r) => r.label), ['US-287', 'CO-14', 'I-25', 'CO-1']);
+  assert.match((await suggestCdotSource({ name: 'Shiprock', state: 'NM', location: { lat: 36.79, lon: -108.69 } }, { json, cdotKey: 'k' })).error, /Colorado/);
+  assert.match((await suggestCdotSource({ name: 'Fort Collins', state: 'CO', location: fc }, { json, cdotKey: '' })).error, /API key/);
+
+  // Admin: a Colorado town gets roads on Create town; one click adds them later; New Mexico gets none.
+  const db = openDb(':memory:');
+  importConfigs(db, configs);
+  const admin = createAdmin({ db, password: 'correct horse battery', log: quiet, deps: { json, cdotKey: 'k' } });
+  const login = fakeReq('POST', '/api/admin/login', { body: { password: 'correct horse battery' } });
+  const cookie = (await admin.handle(login.req, login.url, login.read)).headers['Set-Cookie'].split(';')[0];
+  const call = async (method, p, body) => { const r = fakeReq(method, p, { cookie, body }); return admin.handle(r.req, r.url, r.read); };
+  let r = await call('POST', '/api/admin/town', { create: true, town: { id: 'fortcollins', name: 'Fort Collins', state: 'CO', location: fc } });
+  assert.deepEqual(r.body.roads.routes, ['US-287', 'CO-14', 'I-25', 'CO-1']);
+  assert.equal(db.listSources('fortcollins').find((s) => s.adapter === 'cdot').settings.routes[0].label, 'US-287');
+  r = await call('POST', '/api/admin/source/cdot-auto', { town: 'fortcollins' });
+  assert.match(r.body.error, /already has CDOT/);
+  r = await call('POST', '/api/admin/town', { create: true, town: { id: 'shiprock', name: 'Shiprock', state: 'NM', location: { lat: 36.79, lon: -108.69 } } });
+  assert.equal(r.status, 200, r.body.error);
+  assert.equal(r.body.roads, null);
+  assert.equal(db.listSources('shiprock').some((s) => s.adapter === 'cdot'), false);
+  assert.equal(r.body.town.timezone, 'America/Denver');
+  r = await call('POST', '/api/admin/source/cdot-auto', { town: 'shiprock' });
+  assert.match(r.body.error, /Colorado/);
+
+  const towns = loadTowns(db);
+  const ship = towns.find((t) => t.id === 'shiprock');
+  const fcol = towns.find((t) => t.id === 'fortcollins');
+  assert.equal(tileGaps(ship), 'no-roads no-lifts');
+  assert.equal(tileGaps(fcol), 'no-lifts');
+  const page = '<body class="{{bodyClass}}">{{roadsDisclaimer}}</body>';
+  assert.equal(renderTemplate(page, '.html', ship, towns), '<body class="no-roads no-lifts"></body>');
+  assert.match(renderTemplate(page, '.html', fcol, towns), /Road data source:<\/strong> The data made available here/);
+});

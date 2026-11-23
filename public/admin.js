@@ -246,6 +246,24 @@ const feedList = (sources, feedNames) => {
   return [...Object.keys(feedNames).filter((k) => have.has(k)), ...[...have].filter((k) => !(k in feedNames))];
 };
 
+// A Colorado town without CDOT roads: one click adds them, highways picked from its map point.
+// Other states have no roads feed yet, so their Roads tile is simply left off the site.
+function roadsCard(t) {
+  if (t.sources.some((s) => s.adapter === 'cdot')) return null;
+  if (t.state !== 'CO') return null;
+  const msg = h('span', { class: 'small', role: 'status' });
+  const btn = h('button', { type: 'button', class: 'small', onclick: async () => {
+    btn.disabled = true; msg.className = 'small muted'; msg.textContent = 'Asking CDOT for the highways near the map point…';
+    try {
+      const r = await api('/source/cdot-auto', { town: t.id });
+      msg.className = 'small ok-msg'; msg.textContent = `Added: ${r.roads.routes.join(', ')}. Edit the CDOT source to change them.`;
+      setTimeout(() => healthPage(), 1500);
+    } catch (err) { btn.disabled = false; msg.className = 'small error'; msg.textContent = err.message; }
+  } }, 'Add CDOT roads');
+  return h('div', { class: 'card' }, h('div', { class: 'row spread' },
+    h('span', {}, h('strong', {}, `${t.name} has no roads yet. `), h('span', { class: 'muted small' }, 'The Roads tile stays hidden until it does.')), btn), msg);
+}
+
 // ---------- health board ----------
 let healthData = null;
 async function healthPage(refresh = false) {
@@ -280,6 +298,7 @@ function renderHealth() {
       ...['green', 'amber', 'red', 'paused'].map((c) => h('span', {}, dot(c), `${count(c)} ${COLOR_WORD[c].toLowerCase()}`)),
       filtered ? h('span', { class: 'muted' }, `Showing ${shown.length} of ${total} sources`) : null),
     h('p', { class: 'muted small' }, 'Red means a source has failed for over an hour. Amber means failing for under an hour, overdue, or waiting for its first run.'),
+    ...visible.map((t) => roadsCard(t)),
     ...visible.map((t) => h('div', { class: 'card' },
       t.shown.length ? sourceTable(t, t.shown) : h('p', { class: 'muted' }, t.sources.length ? 'No sources match the filters.' : 'No sources yet. Add a source above.'))),
     visible.length ? null : h('div', { class: 'card' }, h('p', { class: 'muted' }, 'No sources match the filters.')),
@@ -418,7 +437,7 @@ async function townPage(id) {
     if (t && t.hostnames?.join('\n') !== v.hostnames.trim()) town.url = '';
     try {
       const r = await api('/town', { create: !t, town, ...(!t && f._claude ? { fromClaude: f._claude } : {}) });
-      if (r.fromClaude) { showCreated(r.town, r.fromClaude); return; }
+      if (r.fromClaude) { showCreated(r.town, r.fromClaude, r.roads); return; }
       location.hash = `town/${r.town.id}`;
       if (t) route();
     } catch (err) { $('#town-error').textContent = err.message; }
@@ -493,7 +512,8 @@ function goLiveSteps(t, health) {
   return h('ol', { class: 'steps' },
     item(true, 'Town created (draft).'),
     item(has('nws-forecast') && has('nws-alerts'), 'Weather: NWS alerts and forecast.'),
-    item(has('cdot'), 'Roads: CDOT with the town\'s highways (Colorado towns).'),
+    t.state === 'CO' ? item(has('cdot'), 'Roads: CDOT with the town\'s highways (Add CDOT roads on the Feeds tab picks them from the map point).')
+      : item(true, `Roads: no roads feed for ${t.state || 'this state'} yet, so the Roads tile is left off.`),
     item(has('snow-report'), 'Lifts & Snow: one snow report per nearby resort (skip if none).'),
     item(has('rss') || has('ical'), 'Town and news: town/county RSS, local paper, an events calendar.'),
     item(green > 0 && health.color !== 'red', `Health: ${green} of ${health?.sources.length || 0} sources green.`),
@@ -676,7 +696,7 @@ function townLookup(form) {
 }
 
 // After Create town with Claude's answer: what was saved, and what still needs a person.
-function showCreated(town, fc) {
+function showCreated(town, fc, roads) {
   const feeds = `#feeds?town=${encodeURIComponent(town.id)}`;
   const running = fc.sources.filter((s) => s.enabled);
   const paused = fc.sources.filter((s) => !s.enabled);
@@ -691,6 +711,8 @@ function showCreated(town, fc) {
       h('h2', {}, 'What was added'),
       h('ul', {},
         h('li', {}, 'National Weather Service alerts and forecast.'),
+        roads ? h('li', {}, roads.routes ? `Roads from CDOT: ${roads.routes.join(', ')}.` : `No roads yet: ${roads.error} Use Add CDOT roads on Feeds to try again.`)
+          : h('li', { class: 'muted' }, `No roads feed for ${town.state || 'this state'} yet, so the Roads tile is left off the site.`),
         h('li', {}, `${running.length} feed${running.length === 1 ? '' : 's'} running now.`),
         paused.length ? h('li', {}, `${paused.length} source${paused.length === 1 ? '' : 's'} saved paused, to check.`) : null,
         res ? h('li', {}, `${res.added} resource${res.added === 1 ? '' : 's'} added${res.errors.length ? `, ${res.errors.length} row${res.errors.length === 1 ? '' : 's'} skipped` : ''}.`) : null),
@@ -732,14 +754,14 @@ function fillTownWithClaude(form) {
   "timezone": "IANA time zone, like America/Denver",
   "notAffiliated": "short list of the main agencies whose info the site will show, like: the City of [Town], CDOT or the National Weather Service",
   "suggestedSources": [
-    { "label": "Who publishes it", "type": "rss | ical | snow-report | resort-alerts | cdot | other", "url": "https://...", "why": "what it would add (town news, county alerts, events, ski resort snow report, local paper)" }
+    { "label": "Who publishes it", "type": "rss | ical | snow-report | resort-alerts | other", "url": "https://...", "why": "what it would add (town news, county alerts, events, ski resort snow report, local paper)" }
   ],
   "resourcesCsv": "CSV text, see below"
 }
 
 Rules:
 - lat and lon: the center of town (town hall or main street), as numbers with 4 decimals.
-- suggestedSources: official RSS or iCal feeds for the town/city and county (news, alerts, calendar), the local newspaper or radio station feed, the nearest ski resort's snow report page, and anything else that publishes timely local information. Only include URLs you actually found. Say in "why" if a feed needs checking.
+- suggestedSources: official RSS or iCal feeds for the town/city and county (news, alerts, calendar), the local newspaper or radio station feed, the nearest ski resort's snow report page, and anything else that publishes timely local information. Skip state road and highway sites: roads are added separately. Only include URLs you actually found. Say in "why" if a feed needs checking.
 - resourcesCsv: starter entries for the Resources page as CSV text (use \\n for new lines inside the JSON string), header first:
 id,town,category,name,phone,phone2,website,address,hours,note,emergency,hidden,checked,source
   Leave id blank. town is the id above. category is one of emergency, medical, government, transit, utilities, roads, outdoors, schools. Include 911, the non-emergency dispatch or police line, the nearest hospital or clinic, town hall, the county, transit, the electric/gas/water utilities, the state road conditions line, the local forest or park office, and the school district and library. emergency is "yes" only for emergency lines and the ER. checked is today's date (${new Date().toISOString().slice(0, 10)}) for rows you verified on an official site. source is the URL you used.

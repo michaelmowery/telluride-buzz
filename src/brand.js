@@ -8,6 +8,7 @@
 // inside it, so no logo implies we own that town's .buzz domain.
 
 import { ADAPTERS } from './adapters.js';
+import { DEFAULT_DISCLAIMER } from './sources/cdot.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const jsStr = (s) => JSON.stringify(String(s ?? '')).slice(1, -1);
@@ -125,6 +126,17 @@ export function aboutRows(town) {
   return rows;
 }
 
+const on = (town, adapters) => (town.sources || []).some((x) => x.enabled !== false && adapters.includes(x.adapter));
+/** "no-roads no-lifts" for a town without a roads or ski source (see styles.css). */
+export function tileGaps(town) {
+  if (!Array.isArray(town.sources)) return '';
+  return [on(town, ['cdot']) ? '' : 'no-roads', on(town, ['snow-report', 'resort-alerts']) ? '' : 'no-lifts'].filter(Boolean).join(' ');
+}
+function roadsDisclaimer(town) {
+  const s = (town.sources || []).find((x) => x.enabled !== false && x.adapter === 'cdot');
+  return s ? `<p id="disclaimer" class="disclaimer"><strong>Road data source:</strong> ${esc(s.settings?.disclaimer || DEFAULT_DISCLAIMER)}</p>` : '';
+}
+
 /** Values for one town. `site` is the name used in sentences ("Durango Buzz is in early testing"). */
 export function brandValues(town, towns = [town]) {
   const b = town.brand || {};
@@ -140,6 +152,10 @@ export function brandValues(town, towns = [town]) {
     notAffiliated: b.notAffiliated || 'the agencies and businesses whose information it shows',
     feedbackEmail: b.feedbackEmail || 'telluridebuzz@gmail.com',
     feedbackSubject: encodeURIComponent(`${site} feedback`),
+    // Tiles with no source are left out (a town without CDOT or a ski resort), and
+    // CDOT's required disclaimer shows only where CDOT data does.
+    bodyClass: tileGaps(town),
+    roadsDisclaimer: roadsDisclaimer(town),
     resources: '', eat: '', shop: '', stay: '', // filled per request by the server (index and resources pages)
     seo: '', guideNav: '', feedSnapshot: '', notices: '', // search tags, guide links and first-paint posts (see seo.js)
     pageTitle: site, pageDescription: '', h1: town.name, lede: '',
@@ -147,7 +163,7 @@ export function brandValues(town, towns = [town]) {
 }
 
 // Values that are already markup (or URL-encoded) and must not be escaped again.
-const RAW = new Set(['logo', 'townMenu', 'aboutSources', 'feedbackSubject', 'resources', 'eat', 'shop', 'stay', 'seo', 'guideNav', 'feedSnapshot', 'notices']);
+const RAW = new Set(['logo', 'townMenu', 'aboutSources', 'feedbackSubject', 'resources', 'eat', 'shop', 'stay', 'seo', 'guideNav', 'feedSnapshot', 'notices', 'roadsDisclaimer']);
 
 /** Fill {{name}} placeholders. HTML files get HTML escaping; JS and JSON files get string escaping. */
 export function renderTemplate(text, ext, town, towns = [town], extra = {}) {
