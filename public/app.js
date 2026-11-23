@@ -586,50 +586,85 @@ async function pushState(reg) {
   return sub && Notification.permission === 'granted' ? sub : null;
 }
 
-function showPush(mode) {
+const PUSH_TEXT = {
+  off: 'Get a notification for winter storm warnings, road closures and county emergencies.',
+  on: 'Alerts are on for this device.',
+  ios: 'To get alerts on iPhone: tap Share, then "Add to Home Screen", and open Buzz from your home screen.',
+  blocked: 'Notifications are blocked for this site. To turn them on, click the icon at the left of the address bar, set Notifications to Allow, then press Check again.',
+  dismissed: 'Your browser did not turn notifications on. If you see a bell or "Notifications blocked" in the address bar, click it and choose Allow, then press the button again.',
+  unsupported: 'This browser cannot show alerts. Try Chrome, Edge, Firefox or Safari.',
+  error: 'Could not turn on alerts. Please try again.',
+};
+
+function showPush(mode, detail) {
   const box = $('#push'), text = $('#push-text'), btn = $('#push-btn');
   box.hidden = false;
   box.classList.toggle('on', mode === 'on');
-  btn.hidden = mode === 'ios' || mode === 'blocked';
+  btn.hidden = mode === 'ios' || mode === 'unsupported';
   btn.disabled = false;
-  if (mode === 'on') { text.textContent = 'Alerts are on for this device.'; btn.textContent = 'Turn off'; }
-  else if (mode === 'ios') text.textContent = 'To get alerts on iPhone: tap Share, then "Add to Home Screen", and open Buzz from your home screen.';
-  else if (mode === 'blocked') text.textContent = 'Notifications are blocked for this site. Allow them in your browser settings to get alerts.';
-  else { text.textContent = 'Get a notification for winter storm warnings, road closures and county emergencies.'; btn.textContent = 'Turn on alerts'; }
+  text.textContent = PUSH_TEXT[mode] + (detail ? ` (${detail})` : '');
+  btn.textContent = mode === 'on' ? 'Turn off' : mode === 'blocked' ? 'Check again' : mode === 'error' || mode === 'dismissed' ? 'Try again' : 'Turn on alerts';
+}
+
+// Chrome can hold the permission prompt behind a small address-bar chip, leaving
+// requestPermission() pending; tell the person where to look instead of going quiet.
+function askPermission() {
+  const hint = setTimeout(() => {
+    $('#push-text').textContent = 'Waiting for your browser. Look for a notification prompt or a bell icon in the address bar and choose Allow.';
+  }, 1500);
+  return Promise.resolve(Notification.requestPermission()).finally(() => clearTimeout(hint));
+}
+
+let pushReg = null;
+
+async function onPushClick() {
+  const btn = $('#push-btn'), text = $('#push-text');
+  btn.disabled = true;
+  text.textContent = 'Turning on alerts…';
+  try {
+    if (Notification.permission === 'denied') return showPush('blocked');
+    const reg = pushReg || await navigator.serviceWorker.ready;
+    const existing = await pushState(reg);
+    if (existing) {
+      text.textContent = 'Turning off alerts…';
+      await fetch('/api/push/unsubscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: existing }) });
+      await existing.unsubscribe();
+      return showPush('off');
+    }
+    const perm = await askPermission();
+    if (perm === 'denied') return showPush('blocked');
+    if (perm !== 'granted') return showPush('dismissed');
+    text.textContent = 'Turning on alerts…';
+    const kr = await fetch('/api/push/key');
+    if (!kr.ok) throw new Error(`server ${kr.status}`);
+    const { publicKey } = await kr.json();
+    const old = await reg.pushManager.getSubscription();
+    if (old) await old.unsubscribe().catch(() => {}); // stale sub from another key
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) });
+    const r = await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub }) });
+    if (!r.ok) throw new Error(`server ${r.status}`);
+    showPush('on');
+  } catch (e) {
+    console.warn('[push]', e);
+    showPush('error', e?.message ? String(e.message).slice(0, 80) : '');
+  }
 }
 
 async function setupPush(reg) {
-  if (!('PushManager' in window) || !('Notification' in window)) {
+  pushReg = reg;
+  if (Notification.permission === 'denied') return showPush('blocked');
+  showPush((await pushState(reg)) ? 'on' : 'off');
+}
+
+(function initPush() {
+  const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  if (!supported) {
     if (isIOS && !standalone) showPush('ios');
     return;
   }
-  if (Notification.permission === 'denied') return showPush('blocked');
-  showPush((await pushState(reg)) ? 'on' : 'off');
-
-  $('#push-btn').addEventListener('click', async () => {
-    const btn = $('#push-btn');
-    btn.disabled = true;
-    try {
-      const existing = await pushState(reg);
-      if (existing) {
-        await fetch('/api/push/unsubscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: existing }) });
-        await existing.unsubscribe();
-        return showPush('off');
-      }
-      const perm = await Notification.requestPermission();
-      if (perm !== 'granted') return showPush(perm === 'denied' ? 'blocked' : 'off');
-      const { publicKey } = await (await fetch('/api/push/key')).json();
-      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) });
-      const r = await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub }) });
-      if (!r.ok) throw new Error(await r.text());
-      showPush('on');
-    } catch (e) {
-      $('#push-text').textContent = 'Could not turn on alerts. Please try again.';
-      btn.disabled = false;
-    }
-  });
-}
-
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').then(() => navigator.serviceWorker.ready).then(setupPush).catch(() => {});
-}
+  $('#push-btn').addEventListener('click', onPushClick);
+  navigator.serviceWorker.register('/sw.js')
+    .then(() => navigator.serviceWorker.ready)
+    .then(setupPush)
+    .catch((e) => { console.warn('[push] service worker', e); showPush('error', 'service worker did not start'); });
+})();
