@@ -230,7 +230,8 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
           preview: [...plan.adds.map((x) => ({ ...x, action: 'add' })), ...plan.updates.map((x) => ({ ...x, action: 'update' }))]
             .sort((a, b) => a.line - b.line).slice(0, 200).map((x) => ({ line: x.line, action: x.action, town: x.town, name: x.resource.name, category: x.resource.category })) };
         if (!body.apply) return ok(summary);
-        if (plan.errors.length) return bad(`Fix the ${plan.errors.length} row${plan.errors.length === 1 ? '' : 's'} with problems first.`);
+        // Rows with problems are skipped; the good rows go in (summary.errors lists the skipped ones).
+        if (!plan.adds.length && !plan.updates.length) return bad('Nothing to import: every row has a problem.');
         db.raw.exec('BEGIN');
         try {
           const ends = new Map();

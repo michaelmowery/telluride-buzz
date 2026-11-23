@@ -30,6 +30,11 @@ test('phone numbers become tel: links; junk is refused', () => {
   assert.match(normalizeResource({ name: 'X', category: 'medical', phone: 'call us' }).error, /phone/);
   assert.match(normalizeResource({ name: 'X', category: 'nope', phone: '911' }).error, /category/);
   assert.match(normalizeResource({ name: 'X', category: 'medical' }).error, /at least/);
+  // Emergency entries can be a note only; others can't.
+  assert.equal(normalizeResource({ name: 'Mountain Rescue', category: 'emergency', note: 'Call 911 and ask for Mountain Rescue.' }).error, undefined);
+  assert.equal(normalizeResource({ name: 'X', category: 'medical', emergency: true, note: 'Call 911.' }).error, undefined);
+  assert.match(normalizeResource({ name: 'X', category: 'medical', note: 'Call 911.' }).error, /at least/);
+  assert.match(normalizeResource({ name: 'X', category: 'emergency' }).error, /note/);
   assert.equal(normalizeResource({ name: 'X', category: 'medical', website: 'tellmed.org' }).resource.website, 'https://tellmed.org/');
   assert.match(normalizeResource({ name: 'X', category: 'medical', website: 'javascript:alert(1)' }).error, /web address/);
 });
@@ -155,9 +160,12 @@ test('CSV export round-trips through import, and import previews before writing'
   assert.equal(r.body.errors.length, 1);
   assert.equal(r.body.errors[0].line, 4);
   assert.equal(db.listResources('durango').length, 0, 'preview writes nothing');
-  assert.equal((await call('POST', '/resources/import', { csv: upload, town: 'durango', apply: true }, cookie)).status, 400);
-  r = await call('POST', '/resources/import', { csv: upload.split('\n').slice(0, 3).join('\n'), town: 'durango', apply: true }, cookie);
+  // Apply imports the good rows and skips (and reports) the bad one.
+  r = await call('POST', '/resources/import', { csv: upload, town: 'durango', apply: true }, cookie);
   assert.equal(r.status, 200);
+  assert.equal(r.body.adds, 2);
+  assert.equal(r.body.errors.length, 1);
+  assert.equal((await call('POST', '/resources/import', { csv: 'town,category,name\ndurango,nope,Bad', town: 'durango', apply: true }, cookie)).status, 400);
   const dur = db.listResources('durango');
   assert.deepEqual(dur.map((x) => [x.name, x.category, x.emergency, x.hours]), [['Mercy Hospital', 'medical', true, '24/7'], ['Durango Library', 'schools', false, '']]);
   // An id from another town is refused, not moved.
