@@ -2,7 +2,7 @@
   "id": "telluride",
   "name": "Telluride",
   "state": "CO",
-  "url": "https://telluride.buzz",
+  "url": "https://telluride.thetown.buzz",
   "default": true,
   "brand": {
     "siteName": "Telluride.Buzz",
@@ -21,7 +21,7 @@
       ["Meander.me", "Telluride stories from the meander.me blog, tagged for Telluride.Buzz", "Every 15 min"]
     ]
   },
-  "hostnames": ["telluride.buzz", "www.telluride.buzz", "localhost"],
+  "hostnames": ["telluride.thetown.buzz", "telluride.buzz", "www.telluride.buzz", "localhost"],
   "timezone": "America/Denver",
   "location": { "lat": 37.9375, "lon": -107.8123 },
   "bbox": { "minLat": 37.55, "maxLat": 38.25, "minLon": -108.25, "maxLon": -107.55 },

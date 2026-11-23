@@ -9,7 +9,7 @@ import { ALL_TOWNS_KEY, noticesFor, renderNotices } from './notice.js';
 import { startScheduler } from './scheduler.js';
 import { seedDemo } from './demo.js';
 import { loadVapid, validSubscription, pushNewAlerts } from './push.js';
-import { renderTemplate, TEMPLATED, townUrl } from './brand.js';
+import { aliasRedirect, renderTemplate, TEMPLATED, townUrl } from './brand.js';
 import { HUB_HOSTS, renderHub, snapshot, townForPath } from './hub.js';
 import { importConfigs, loadTowns } from './towns.js';
 import { createAdmin } from './admin.js';
@@ -342,6 +342,9 @@ const server = http.createServer((req, res) => {
         .then((r) => sendAdmin(res, r))
         .catch((e) => { log.warn(`admin failed: ${e.stack || e.message}`); sendAdmin(res, { status: 500, body: { ok: false, error: 'Server error' } }); });
     }
+    // Other addresses of a town forward to its main one (pages only; /api/ stays put).
+    const moved = (req.method === 'GET' || req.method === 'HEAD') && aliasRedirect(town, hostOf(req), url.pathname, url.search);
+    if (moved) return send(res, 301, `Moved to ${moved}`, undefined, { Location: moved, 'Cache-Control': 'public, max-age=3600' });
     if (/^\/admin(\.html|\.js|\.css|\/.*)?$/.test(url.pathname)) {
       if (!admin.enabled) return send(res, 404, 'Not found');
       if (url.pathname === '/admin.js' || url.pathname === '/admin.css') return serveStatic(req, res, url.pathname, town);
