@@ -50,3 +50,13 @@ npm test
 ## Deploy (Hetzner, behind the existing Caddy)
 
 See [deploy/DEPLOY.md](deploy/DEPLOY.md).
+
+## Analytics
+
+Visit counts go to the self-hosted Umami on the same server (no cookies, honors Do Not Track).
+Set `UMAMI_WEBSITE_ID` in `.env` to turn them on (see `src/analytics.js`). Pages load Umami's
+script from their own address at `/stats/script.js` and report to `/stats/api/send`, which the
+app passes to Umami with the visitor's address. One Umami website covers every town: filter by
+hostname, or by the tag (the town id; `hub` for thetown.buzz). Custom events, each with `town`:
+`tab`, `feed-click` (source), `listing-click` and `sponsored-click` (business, action),
+`suggest-click`, `feedback-click`, `town-switch`, `alerts-on`, `alerts-off`.

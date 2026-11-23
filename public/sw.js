@@ -16,6 +16,7 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
+  if (url.pathname.startsWith('/stats/')) return; // visit counts: never cached
   if (url.pathname.startsWith('/api/')) {
     e.respondWith(fetch(e.request).then((res) => {
       if (res.ok && url.pathname === '/api/home') {

@@ -17,6 +17,7 @@ import { sourceHealth } from './health.js';
 import { importResources, renderResources } from './resources.js';
 import { baseUrl, feedSnapshot, guideDescription, guideEntries, guideFor, guideJsonLd, guideNav, homeJsonLd, robotsTxt, seoHead, sitemapXml, townSitemap } from './seo.js';
 import crypto from 'node:crypto';
+import { createAnalytics } from './analytics.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -32,6 +33,7 @@ const log = {
 };
 
 // ---------- data ----------
+const analytics = createAnalytics(process.env, { log });
 const db = openDb(DEMO ? ':memory:' : path.join(DATA_DIR, 'buzz.db'));
 
 // ---------- towns ----------
@@ -153,7 +155,7 @@ function health(town) {
     error: s.error,
     failures: s.failures,
   }));
-  return { ok: true, demo: DEMO, pushSubscribers: db.countSubscriptions(), uptimeSec: Math.round(process.uptime()), rssMb: Math.round(process.memoryUsage().rss / 1048576), sources };
+  return { ok: true, demo: DEMO, pushSubscribers: db.countSubscriptions(), analytics: analytics.enabled, uptimeSec: Math.round(process.uptime()), rssMb: Math.round(process.memoryUsage().rss / 1048576), sources };
 }
 
 // ---------- static ----------
@@ -251,7 +253,8 @@ function serveTemplate(req, res, file, ext, st, town, guide = null) {
   // starts and ends on its dates without anyone touching the admin.
   if (!c || c.mtime !== st.mtimeMs || (c.expires && Date.now() > c.expires)) {
     const extra = ext === '.html' ? { ...pageExtras(file, town, guide), notices: siteNotices(town) } : {};
-    const body = Buffer.from(renderTemplate(fs.readFileSync(file, 'utf8'), ext, town, pickerTowns(town), extra));
+    const text = renderTemplate(fs.readFileSync(file, 'utf8'), ext, town, pickerTowns(town), extra);
+    const body = Buffer.from(ext === '.html' ? analytics.inject(text, town.id) : text);
     // The home page carries a snapshot of the feed, so it is rebuilt every 2 minutes.
     // Messages with an end date, and sponsorships, need the page rebuilt now and then too.
     const ttl = extra.feedSnapshot !== undefined ? 2 * 60_000 : extra.resources || extra.notices ? 10 * 60_000 : 0;
@@ -269,7 +272,7 @@ function serveHub(req, res) {
   const file = path.join(PUBLIC, 'hub.html');
   const st = fs.statSync(file);
   if (!hubCache || hubCache.mtime !== st.mtimeMs || Date.now() - hubCache.at > 60e3) {
-    const body = Buffer.from(renderHub(fs.readFileSync(file, 'utf8'), publicTowns, (t) => snapshot(db.getTiles(t.id), db.alerts(t.id))));
+    const body = Buffer.from(analytics.inject(renderHub(fs.readFileSync(file, 'utf8'), publicTowns, (t) => snapshot(db.getTiles(t.id), db.alerts(t.id))), 'hub'));
     hubCache = { at: Date.now(), mtime: st.mtimeMs, body, etag: `"${crypto.createHash('sha1').update(body).digest('base64url').slice(0, 16)}"` };
   }
   const headers = { 'Cache-Control': 'no-cache', ETag: hubCache.etag, Vary: 'Host', ...SECURITY_HEADERS };
@@ -348,7 +351,14 @@ const server = http.createServer((req, res) => {
     if (/^\/admin(\.html|\.js|\.css|\/.*)?$/.test(url.pathname)) {
       if (!admin.enabled) return send(res, 404, 'Not found');
       if (url.pathname === '/admin.js' || url.pathname === '/admin.css') return serveStatic(req, res, url.pathname, town);
+      // The nav's Analytics link: opens the Umami dashboard.
+      if (url.pathname === '/admin/analytics') return send(res, 302, 'Moved', undefined, { Location: analytics.dashboardUrl, 'Cache-Control': 'no-store' });
       return serveStatic(req, res, '/admin.html', town);
+    }
+    if (url.pathname.startsWith('/stats/')) {
+      return analytics.handle(req, url.pathname)
+        .then((r) => send(res, r.status, req.method === 'HEAD' ? undefined : r.body, r.headers['Content-Type'], r.headers))
+        .catch((e) => { log.warn(`stats failed: ${e.message}`); send(res, 502, ''); });
     }
     if (req.method === 'POST' && url.pathname.startsWith('/api/push/')) {
       return handlePost(req, res, url, town).catch((e) => { log.warn(`post failed: ${e.message}`); send(res, 500, 'Server error'); });
