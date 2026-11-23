@@ -440,7 +440,8 @@ function setTheme(t) {
 }
 function panelPrefs() {
   const cur = currentTheme();
-  return `<h3>Color theme</h3>
+  return `${pushPrefsHtml()}
+    <h3>Color theme</h3>
     <div class="themes" role="radiogroup" aria-label="Color theme">${THEME_INFO.map(([id, name, desc]) => `
       <button class="theme-opt" role="radio" aria-checked="${id === cur}" data-theme="${id}">
         <span class="swatch sw-${id}"><i></i><i></i><i></i></span><b>${esc(name)}</b><small>${esc(desc)}</small></button>`).join('')}</div>
@@ -453,7 +454,7 @@ function panelPrefs() {
 }
 const SHOW_OPTS = [
   ['weather', 'Weather tile'], ['roads', 'Roads tile'], ['lifts', 'Lifts & Snow tile'], ['events', 'Events tile'],
-  ['push', 'Phone alerts box'], ['feed', 'Live feed'],
+  ['feed', 'Live feed'],
 ];
 const FEED_OPTS = [
   ['feed-weather', 'Weather'], ['feed-roads', 'Roads'], ['feed-lifts', 'Snow report'], ['feed-events', 'Events'],
@@ -531,6 +532,7 @@ panel.addEventListener('click', (e) => {
   if (e.target === panel) return closePanel(); // tap on the backdrop
   const f = e.target.closest('[data-filter]');
   if (f) { closePanel(); if (state.filter !== f.dataset.filter) setFilter(f.dataset.filter); return; }
+  if (e.target.closest('[data-push]')) return togglePush();
   const tg = e.target.closest('[data-toggle]');
   if (tg) {
     const key = tg.dataset.toggle;
@@ -591,53 +593,64 @@ async function pushState(reg) {
 
 const PUSH_TEXT = {
   off: 'Get a notification for winter storm warnings, road closures and county emergencies.',
-  on: 'Alerts are on for this device.',
-  ios: 'To get alerts on iPhone: tap Share, then "Add to Home Screen", and open Buzz from your home screen.',
-  blocked: 'Notifications are blocked for this site. To turn them on, click the icon at the left of the address bar, set Notifications to Allow, then press Check again.',
-  dismissed: 'Your browser did not turn notifications on. If you see a bell or "Notifications blocked" in the address bar, click it and choose Allow, then press the button again.',
+  on: 'On for this device. You will get winter storm warnings, road closures and county emergencies.',
+  ios: 'On iPhone, alerts need the app on your home screen: tap Share, then "Add to Home Screen", and open Buzz from there.',
+  blocked: 'Blocked in your browser. Click the icon at the left of the address bar, set Notifications to Allow, then tap this switch again.',
+  dismissed: 'Your browser did not turn notifications on. If you see a bell or "Notifications blocked" in the address bar, click it and choose Allow, then tap the switch again.',
   unsupported: 'This browser cannot show alerts. Try Chrome, Edge, Firefox or Safari.',
-  error: 'Could not turn on alerts. Please try again.',
+  error: 'Could not change alerts. Please try again.',
+  loading: 'Checking…',
 };
 
-function showPush(mode, detail) {
-  const box = $('#push'), text = $('#push-text'), btn = $('#push-btn');
-  box.hidden = false;
-  box.classList.toggle('on', mode === 'on');
-  btn.hidden = mode === 'ios' || mode === 'unsupported';
-  btn.disabled = false;
-  text.textContent = PUSH_TEXT[mode] + (detail ? ` (${detail})` : '');
-  btn.textContent = mode === 'on' ? 'Turn off' : mode === 'blocked' ? 'Check again' : mode === 'error' || mode === 'dismissed' ? 'Try again' : 'Turn on alerts';
+// Push state lives here and is shown in Preferences (gear icon).
+const push = { mode: 'loading', detail: '', busy: '' };
+function setPush(mode, detail = '') {
+  Object.assign(push, { mode, detail, busy: '' });
+  if (openTile === 'prefs') renderPanel();
+}
+function setPushBusy(msg) {
+  push.busy = msg;
+  if (openTile === 'prefs') renderPanel();
+}
+function pushPrefsHtml() {
+  const { mode, detail, busy } = push;
+  const note = busy || PUSH_TEXT[mode] + (detail ? ` (${detail})` : '');
+  if (mode === 'ios' || mode === 'unsupported') {
+    return `<h3>Alerts</h3><p class="prefs-note push-note">${esc(note)}</p>`;
+  }
+  const on = mode === 'on';
+  const cls = ['blocked', 'dismissed', 'error'].includes(mode) && !busy ? ' warn' : '';
+  return `<h3>Alerts</h3>
+    <div class="toggles"><button class="toggle" role="switch" aria-checked="${on}" data-push${busy || mode === 'loading' ? ' disabled' : ''}>
+      <span>Push alerts on this device<small class="push-status${cls}" aria-live="polite">${esc(note)}</small></span><i class="switch" aria-hidden="true"></i></button></div>`;
 }
 
 // Chrome can hold the permission prompt behind a small address-bar chip, leaving
 // requestPermission() pending; tell the person where to look instead of going quiet.
 function askPermission() {
-  const hint = setTimeout(() => {
-    $('#push-text').textContent = 'Waiting for your browser. Look for a notification prompt or a bell icon in the address bar and choose Allow.';
-  }, 1500);
+  const hint = setTimeout(() => setPushBusy('Waiting for your browser. Look for a notification prompt or a bell icon in the address bar and choose Allow.'), 1500);
   return Promise.resolve(Notification.requestPermission()).finally(() => clearTimeout(hint));
 }
 
 let pushReg = null;
 
-async function onPushClick() {
-  const btn = $('#push-btn'), text = $('#push-text');
-  btn.disabled = true;
-  text.textContent = 'Turning on alerts…';
+async function togglePush() {
+  if (push.busy) return;
   try {
-    if (Notification.permission === 'denied') return showPush('blocked');
+    if (Notification.permission === 'denied') return setPush('blocked');
     const reg = pushReg || await navigator.serviceWorker.ready;
     const existing = await pushState(reg);
     if (existing) {
-      text.textContent = 'Turning off alerts…';
+      setPushBusy('Turning off alerts…');
       await fetch('/api/push/unsubscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: existing }) });
       await existing.unsubscribe();
-      return showPush('off');
+      return setPush('off');
     }
+    setPushBusy('Turning on alerts…');
     const perm = await askPermission();
-    if (perm === 'denied') return showPush('blocked');
-    if (perm !== 'granted') return showPush('dismissed');
-    text.textContent = 'Turning on alerts…';
+    if (perm === 'denied') return setPush('blocked');
+    if (perm !== 'granted') return setPush('dismissed');
+    setPushBusy('Turning on alerts…');
     const kr = await fetch('/api/push/key');
     if (!kr.ok) throw new Error(`server ${kr.status}`);
     const { publicKey } = await kr.json();
@@ -646,30 +659,24 @@ async function onPushClick() {
     const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(publicKey) });
     const r = await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub }) });
     if (!r.ok) throw new Error(`server ${r.status}`);
-    showPush('on');
+    setPush('on');
   } catch (e) {
     console.warn('[push]', e);
-    showPush('error', e?.message ? String(e.message).slice(0, 80) : '');
+    setPush('error', e?.message ? String(e.message).slice(0, 80) : '');
   }
-}
-
-async function setupPush(reg) {
-  pushReg = reg;
-  if (Notification.permission === 'denied') return showPush('blocked');
-  showPush((await pushState(reg)) ? 'on' : 'off');
 }
 
 (function initPush() {
   const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-  if (!supported) {
-    if (isIOS && !standalone) showPush('ios');
-    return;
-  }
-  $('#push-btn').addEventListener('click', onPushClick);
+  if (!supported) return setPush(isIOS && !standalone ? 'ios' : 'unsupported');
   navigator.serviceWorker.register('/sw.js')
     .then(() => navigator.serviceWorker.ready)
-    .then(setupPush)
-    .catch((e) => { console.warn('[push] service worker', e); showPush('error', 'service worker did not start'); });
+    .then(async (reg) => {
+      pushReg = reg;
+      if (Notification.permission === 'denied') return setPush('blocked');
+      setPush((await pushState(reg)) ? 'on' : 'off');
+    })
+    .catch((e) => { console.warn('[push] service worker', e); setPush('error', 'service worker did not start'); });
 })();
 
 // ---------- tabs: Live feed | Resources ----------
