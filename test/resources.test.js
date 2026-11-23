@@ -100,6 +100,10 @@ test('public page: emergency box first, categories collapsible, hidden left out,
   const page = renderTemplate(fs.readFileSync(path.join(root, 'public', 'resources.html'), 'utf8'), '.html', town, [town], { resources: html });
   assert.match(page, /<h1>Telluride resources<\/h1>/);
   assert.match(page, /href="tel:911"/);
+  assert.match(html, /class="res-search"/);
+  assert.match(html, /data-cat="emergency">Emergency</);
+  assert.match(html, /data-cat="schools">Schools &amp; library</);
+  assert.doesNotMatch(html, /data-cat="utilities"/); // only hidden entries there
   assert.match(renderResources([], town), /on the way/);
 });
 
