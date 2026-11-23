@@ -482,8 +482,11 @@ a.prefs-btn { text-decoration: none; }
 .res-btn:hover { border-color: var(--forest-2); }
 .res-call { background: var(--forest); border-color: var(--forest); color: #f6efe2; }
 .res-call::before { content: "☎ "; }
-.res-emergency { background: var(--rust-soft); border-radius: var(--radius); padding: 12px 12px 2px; margin: 16px 0; }
-.res-emergency h2 { margin: 0 0 10px !important; color: var(--rust); }
+.res-emergency { background: var(--rust-soft); border: 0; border-radius: var(--radius); padding: 0 12px; margin: 16px 0; }
+.res-emergency[open] { padding-bottom: 2px; }
+.res-emergency summary h2 { color: var(--rust); }
+.res-emergency summary::before { color: var(--rust); }
+.res-911 { margin-left: auto; padding: 5px 14px; }
 .res-emergency .res-call { background: var(--rust); border-color: var(--rust); }
 .res-jump { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 14px; margin: 6px 0 14px; }
 .res-cat { border-top: 1px solid var(--line); }
