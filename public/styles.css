@@ -167,11 +167,7 @@ main { max-width: 720px; margin: 0 auto; padding: 12px 16px 8px; }
 @keyframes sk { to { background-position: -200% 0; } }
 
 /* ---------- push ---------- */
-.push { margin-top: 12px; display: flex; align-items: center; gap: 12px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; font-size: 13.5px; }
-.push-text { flex: 1; color: var(--ink-2); }
 .push-btn { flex: none; border: 0; border-radius: 999px; padding: 8px 14px; background: var(--forest); color: #fff; font-weight: 600; font-size: 13.5px; cursor: pointer; }
-.push.on .push-btn { background: transparent; color: var(--ink-2); border: 1px solid var(--line); font-weight: 500; }
-.push-btn:disabled { opacity: .6; cursor: default; }
 
 /* ---------- feed ---------- */
 .feed-wrap { margin-top: 18px; }
@@ -416,7 +412,6 @@ html[data-hide~="weather"] [data-show="weather"],
 html[data-hide~="roads"] [data-show="roads"],
 html[data-hide~="lifts"] [data-show="lifts"],
 html[data-hide~="events"] [data-show="events"],
-html[data-hide~="push"] [data-show="push"],
 html[data-hide~="feed"] [data-show="feed"] { display: none !important; }
 html[data-hide~="weather"][data-hide~="roads"][data-hide~="lifts"][data-hide~="events"] .tiles { display: none; }
 .toggles { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
@@ -429,6 +424,8 @@ html[data-hide~="weather"][data-hide~="roads"][data-hide~="lifts"][data-hide~="e
 .toggle[aria-checked="true"] .switch { background: var(--forest-2); }
 @media (prefers-color-scheme: dark) { .toggle[aria-checked="true"] .switch { background: var(--amber); } }
 .toggle[aria-checked="true"] .switch::after { transform: translateX(18px); }
+.toggle:disabled { cursor: default; opacity: .75; }
+.push-status.warn { color: var(--alert, #b3261e); }
 .toggle:focus-visible { outline: 3px solid var(--amber); outline-offset: -3px; }
 
 /* ---------- thetown.buzz home (hub.html) ---------- */
@@ -681,7 +678,6 @@ a.prefs-btn { text-decoration: none; }
   .tile-body { font-size: 15px; }
   .tile-src { left: 16px; }
   .tile .stats { max-width: 260px; }
-  .push { margin-top: 14px; }
   .feed-head .tabs { margin-right: 0; }
   .post-sum { max-width: 110ch; }
   .res-subtabs, .feed-pills { flex-wrap: wrap; overflow: visible; }
