@@ -525,6 +525,150 @@ a.prefs-btn { text-decoration: none; }
 .feed-pill[data-cat="alerts"] { color: var(--rust); border-color: var(--rust); }
 .feed-pill[data-cat="alerts"][aria-current="true"] { background: var(--rust); color: #f6efe2; }
 
+/* ---------- icons ----------
+   One small line-icon set, drawn in CSS masks so each icon takes the colour of its text
+   (light, dark and every theme). Hooks are existing ids, classes and data-cat values. */
+:root {
+  --i-live: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%222%22/%3E%3Cpath d=%22M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19.1 4.9a10 10 0 0 1 0 14.2M4.9 19.1a10 10 0 0 1 0-14.2%22/%3E%3C/svg%3E");
+  --i-phone: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z%22/%3E%3C/svg%3E");
+  --i-all: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Crect x=%223%22 y=%223%22 width=%227%22 height=%227%22 rx=%221.5%22/%3E%3Crect x=%2214%22 y=%223%22 width=%227%22 height=%227%22 rx=%221.5%22/%3E%3Crect x=%223%22 y=%2214%22 width=%227%22 height=%227%22 rx=%221.5%22/%3E%3Crect x=%2214%22 y=%2214%22 width=%227%22 height=%227%22 rx=%221.5%22/%3E%3C/svg%3E");
+  --i-alert: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z%22/%3E%3Cpath d=%22M12 9v4M12 17h.01%22/%3E%3C/svg%3E");
+  --i-road: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M5 21 9 3M19 21 15 3M12 5v2M12 11v2M12 17v2%22/%3E%3C/svg%3E");
+  --i-weather: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M17.5 17H7a5 5 0 1 1 .9-9.9A6 6 0 0 1 19 9a4 4 0 0 1-1.5 8z%22/%3E%3Cpath d=%22M8 21h.01M12 21h.01M16 21h.01%22/%3E%3C/svg%3E");
+  --i-mountain: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22m8 4 4 7 3-3 7 12H2z%22/%3E%3Cpath d=%22m6.2 8 2.3 2.5L10 9%22/%3E%3C/svg%3E");
+  --i-calendar: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Crect x=%223%22 y=%224%22 width=%2218%22 height=%2218%22 rx=%222%22/%3E%3Cpath d=%22M16 2v4M8 2v4M3 10h18%22/%3E%3C/svg%3E");
+  --i-news: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0v-9c0-1.1.9-2 2-2h2%22/%3E%3Cpath d=%22M18 14h-8M15 18h-5M10 6h8v4h-8z%22/%3E%3C/svg%3E");
+  --i-town: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M3 22h18M5 18v-7M9.7 18v-7M14.3 18v-7M19 18v-7M12 2l9 5H3z%22/%3E%3C/svg%3E");
+  --i-siren: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M7 18v-6a5 5 0 0 1 10 0v6%22/%3E%3Cpath d=%22M5 21h14v-3H5zM12 2v2M4.2 5.2l1.4 1.4M19.8 5.2l-1.4 1.4%22/%3E%3C/svg%3E");
+  --i-medical: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M9 3h6v6h6v6h-6v6H9v-6H3V9h6z%22/%3E%3C/svg%3E");
+  --i-bus: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Crect x=%224%22 y=%223%22 width=%2216%22 height=%2215%22 rx=%222%22/%3E%3Cpath d=%22M4 11h16M7 21v-3M17 21v-3M8 15h.01M16 15h.01%22/%3E%3C/svg%3E");
+  --i-bolt: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M13 2 3 14h9l-1 8 10-12h-9z%22/%3E%3C/svg%3E");
+  --i-tree: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M12 2 5 12h4l-3 5h12l-3-5h4zM12 17v5%22/%3E%3C/svg%3E");
+  --i-book: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23000%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5zM4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5%22/%3E%3C/svg%3E");
+}
+#tab-feed { --ico: var(--i-live); }
+#tab-resources { --ico: var(--i-phone); }
+.feed-pill[data-cat=""] { --ico: var(--i-all); }
+.feed-pill[data-cat="alerts"] { --ico: var(--i-alert); }
+.feed-pill[data-cat="roads"] { --ico: var(--i-road); }
+.feed-pill[data-cat="weather"] { --ico: var(--i-weather); }
+.feed-pill[data-cat="lifts"] { --ico: var(--i-mountain); }
+.feed-pill[data-cat="events"] { --ico: var(--i-calendar); }
+.feed-pill[data-cat="news"] { --ico: var(--i-news); }
+.feed-pill[data-cat="town"] { --ico: var(--i-town); }
+.cat-alerts { --ico: var(--i-alert); }
+.cat-roads { --ico: var(--i-road); }
+.cat-weather { --ico: var(--i-weather); }
+.cat-lifts { --ico: var(--i-mountain); }
+.cat-events { --ico: var(--i-calendar); }
+.cat-news { --ico: var(--i-news); }
+.cat-town { --ico: var(--i-town); }
+[data-tile="weather"] .tile-title { --ico: var(--i-weather); }
+[data-tile="roads"] .tile-title { --ico: var(--i-road); }
+[data-tile="lifts"] .tile-title { --ico: var(--i-mountain); }
+[data-tile="events"] .tile-title { --ico: var(--i-calendar); }
+.res-sub[data-cat=""] { --ico: var(--i-all); }
+.res-sub[data-cat="emergency"] { --ico: var(--i-siren); }
+#emergency summary h2 { --ico: var(--i-siren); }
+.res-sub[data-cat="medical"] { --ico: var(--i-medical); }
+#medical summary h2 { --ico: var(--i-medical); }
+.res-sub[data-cat="government"] { --ico: var(--i-town); }
+#government summary h2 { --ico: var(--i-town); }
+.res-sub[data-cat="transit"] { --ico: var(--i-bus); }
+#transit summary h2 { --ico: var(--i-bus); }
+.res-sub[data-cat="utilities"] { --ico: var(--i-bolt); }
+#utilities summary h2 { --ico: var(--i-bolt); }
+.res-sub[data-cat="roads"] { --ico: var(--i-road); }
+#roads summary h2 { --ico: var(--i-road); }
+.res-sub[data-cat="outdoors"] { --ico: var(--i-tree); }
+#outdoors summary h2 { --ico: var(--i-tree); }
+.res-sub[data-cat="schools"] { --ico: var(--i-book); }
+#schools summary h2 { --ico: var(--i-book); }
+#tab-feed,
+#tab-resources,
+.feed-pill[data-cat=""],
+.feed-pill[data-cat="alerts"],
+.feed-pill[data-cat="roads"],
+.feed-pill[data-cat="weather"],
+.feed-pill[data-cat="lifts"],
+.feed-pill[data-cat="events"],
+.feed-pill[data-cat="news"],
+.feed-pill[data-cat="town"],
+.cat-alerts,
+.cat-roads,
+.cat-weather,
+.cat-lifts,
+.cat-events,
+.cat-news,
+.cat-town,
+[data-tile="weather"] .tile-title,
+[data-tile="roads"] .tile-title,
+[data-tile="lifts"] .tile-title,
+[data-tile="events"] .tile-title,
+.res-sub[data-cat=""],
+.res-sub[data-cat="emergency"],
+#emergency summary h2,
+.res-sub[data-cat="medical"],
+#medical summary h2,
+.res-sub[data-cat="government"],
+#government summary h2,
+.res-sub[data-cat="transit"],
+#transit summary h2,
+.res-sub[data-cat="utilities"],
+#utilities summary h2,
+.res-sub[data-cat="roads"],
+#roads summary h2,
+.res-sub[data-cat="outdoors"],
+#outdoors summary h2,
+.res-sub[data-cat="schools"],
+#schools summary h2 { display: inline-flex; align-items: center; gap: .4em; }
+#tab-feed::before,
+#tab-resources::before,
+.feed-pill[data-cat=""]::before,
+.feed-pill[data-cat="alerts"]::before,
+.feed-pill[data-cat="roads"]::before,
+.feed-pill[data-cat="weather"]::before,
+.feed-pill[data-cat="lifts"]::before,
+.feed-pill[data-cat="events"]::before,
+.feed-pill[data-cat="news"]::before,
+.feed-pill[data-cat="town"]::before,
+.cat-alerts::before,
+.cat-roads::before,
+.cat-weather::before,
+.cat-lifts::before,
+.cat-events::before,
+.cat-news::before,
+.cat-town::before,
+[data-tile="weather"] .tile-title::before,
+[data-tile="roads"] .tile-title::before,
+[data-tile="lifts"] .tile-title::before,
+[data-tile="events"] .tile-title::before,
+.res-sub[data-cat=""]::before,
+.res-sub[data-cat="emergency"]::before,
+#emergency summary h2::before,
+.res-sub[data-cat="medical"]::before,
+#medical summary h2::before,
+.res-sub[data-cat="government"]::before,
+#government summary h2::before,
+.res-sub[data-cat="transit"]::before,
+#transit summary h2::before,
+.res-sub[data-cat="utilities"]::before,
+#utilities summary h2::before,
+.res-sub[data-cat="roads"]::before,
+#roads summary h2::before,
+.res-sub[data-cat="outdoors"]::before,
+#outdoors summary h2::before,
+.res-sub[data-cat="schools"]::before,
+#schools summary h2::before {
+  content: ""; flex: none; width: 1.15em; height: 1.15em; background: currentColor;
+  -webkit-mask: var(--ico) center / contain no-repeat; mask: var(--ico) center / contain no-repeat;
+}
+.tab::before { opacity: .85; }
+.post-meta .cat::before { width: 1.2em; height: 1.2em; opacity: .8; }
+.res-cat summary h2::before { width: .95em; height: .95em; color: var(--ink-2); }
+.res-emergency summary h2::before { color: var(--rust); }
+.tile-title::before { width: 1.25em; height: 1.25em; }
+
 /* ---------- wide desktop layout ----------
    Phones and tablets keep the single column above. On a wide screen the page widens to
    1400px: alerts and the four tiles run across the top, then the alerts prompt, then the

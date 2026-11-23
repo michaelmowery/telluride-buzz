@@ -145,7 +145,7 @@ function postHtml(p) {
   const link = safeUrl(p.link);
   const when = p.category === 'events' && p.startsAt ? eventTime(p.startsAt) : ago(p.publishedAt);
   return `<li class="post sev-${p.severity}" data-id="${p.id}">
-    <div class="post-meta"><span class="src ${esc(p.category)}">${esc(p.sourceLabel)}</span><span>${esc(CATEGORY_LABEL[p.category] || '')}</span><span>·</span><time>${esc(when)}</time></div>
+    <div class="post-meta"><span class="src ${esc(p.category)}">${esc(p.sourceLabel)}</span><span class="cat cat-${esc(p.category)}">${esc(CATEGORY_LABEL[p.category] || '')}</span><span>·</span><time>${esc(when)}</time></div>
     <h3 class="post-title">${link ? `<a href="${esc(link)}" target="_blank" rel="noopener">${esc(p.title)}</a>` : esc(p.title)}</h3>
     ${p.summary ? `<p class="post-sum">${esc(p.summary)}</p>` : ''}
     <div class="post-actions">
