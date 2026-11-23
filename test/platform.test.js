@@ -270,3 +270,14 @@ test('every adapter has a name, fields and a job builder', () => {
     assert.equal(typeof a.job, 'function', type);
   }
 });
+
+test('health rows say which feed a source fills, for the admin filter', async () => {
+  const { sourceHealth, feedOf } = await import('../src/health.js');
+  assert.equal(feedOf({ adapter: 'rss', settings: { category: 'alerts' } }), 'alerts');
+  assert.equal(feedOf({ adapter: 'cdot', settings: {} }), 'roads');
+  assert.equal(feedOf({ adapter: 'nws-forecast' }), 'weather');
+  assert.equal(feedOf({ adapter: 'snow-report' }), 'lifts');
+  assert.equal(feedOf({ adapter: 'meander', settings: {} }), 'news');
+  const [row] = sourceHealth({ sources: [{ key: 'ical-x', adapter: 'ical', label: 'X', settings: {} }] });
+  assert.equal(row.feed, 'events');
+});

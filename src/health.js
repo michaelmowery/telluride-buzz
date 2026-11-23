@@ -7,6 +7,18 @@ import { ADAPTERS } from './adapters.js';
 
 export const RED_AFTER_MS = 3600e3;
 
+/** Which part of the site a source feeds, for the admin's feed filter. */
+const FEED_BY_ADAPTER = {
+  'nws-alerts': 'weather', 'nws-forecast': 'weather', cdot: 'roads',
+  'snow-report': 'lifts', 'resort-alerts': 'lifts', ical: 'events', meander: 'news', rss: 'news',
+};
+export const FEED_NAMES = {
+  alerts: 'Alerts', town: 'Town', news: 'News', events: 'Events', weather: 'Weather', roads: 'Roads', lifts: 'Lifts & snow', other: 'Other',
+};
+export function feedOf(s) {
+  return s.settings?.category || FEED_BY_ADAPTER[s.adapter] || 'other';
+}
+
 export function sourceHealth(town, statusRows = [], now = Date.now()) {
   const byKey = new Map(statusRows.map((r) => [r.source, r]));
   return (town.sources || []).map((s) => {
@@ -14,7 +26,7 @@ export function sourceHealth(town, statusRows = [], now = Date.now()) {
     const a = ADAPTERS[s.adapter];
     const every = Number(s.everyMin) || a?.defaultEvery || 15;
     const base = {
-      key: s.key, label: s.label, adapter: s.adapter, adapterName: a?.name || s.adapter, everyMin: every, enabled: s.enabled !== false,
+      key: s.key, label: s.label, adapter: s.adapter, adapterName: a?.name || s.adapter, feed: feedOf(s), everyMin: every, enabled: s.enabled !== false,
       lastRun: st?.last_run ?? null, lastOk: st?.last_ok ?? null, error: st?.last_error ?? null,
       failures: st?.error_count ?? 0, failingSince: st?.failing_since ?? null, items: st?.last_items ?? null,
     };

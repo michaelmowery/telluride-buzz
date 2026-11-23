@@ -68,7 +68,8 @@ $('#logout').addEventListener('click', async () => { await api('/logout', {}).ca
 let timer = null;
 async function route() {
   clearInterval(timer);
-  const [page, a, b] = (location.hash.slice(1) || 'health').split('/').map(decodeURIComponent);
+  const [path, query = ''] = (location.hash.slice(1) || 'health').split('?');
+  const [page, a, b] = path.split('/').map(decodeURIComponent);
   try {
     await api('/me');
   } catch { return; }
@@ -76,7 +77,7 @@ async function route() {
   $('#nav').hidden = false;
   document.querySelectorAll('[data-nav]').forEach((n) => n.toggleAttribute('aria-current', n.dataset.nav === (page === 'health' ? 'health' : 'towns')));
   try {
-    if (page === 'health') { await healthPage(); timer = setInterval(() => healthPage().catch(() => {}), 30e3); }
+    if (page === 'health') { readFilters(query); await healthPage(); timer = setInterval(() => healthPage(true).catch(() => {}), 30e3); }
     else if (page === 'towns') await townsPage();
     else if (page === 'new-town') await townPage(null);
     else if (page === 'town') await townPage(a);
@@ -90,21 +91,113 @@ async function route() {
 }
 window.addEventListener('hashchange', route);
 
+// ---------- filters ----------
+// Health board filters live in the address (#health?town=durango&feed=roads&status=problems)
+// so a filtered view can be bookmarked, and the last one is remembered on this device.
+const FILTER_KEYS = ['town', 'feed', 'status', 'q'];
+const STATUS_FILTERS = [['', 'Any status'], ['problems', 'Failing or needs a look'], ['red', 'Failing'], ['amber', 'Needs a look'], ['green', 'OK'], ['paused', 'Paused']];
+const blankFilters = () => ({ town: '', feed: '', status: '', q: '' });
+let filters = blankFilters();
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } },
+};
+
+function readFilters(query) {
+  const p = new URLSearchParams(query);
+  const fromUrl = FILTER_KEYS.some((k) => p.has(k));
+  const saved = store.get('buzz-admin-filters') || {};
+  filters = blankFilters();
+  for (const k of FILTER_KEYS) filters[k] = String((fromUrl ? p.get(k) : saved[k]) || '');
+}
+
+function saveFilters() {
+  store.set('buzz-admin-filters', filters);
+  const p = new URLSearchParams();
+  for (const k of FILTER_KEYS) if (filters[k]) p.set(k, filters[k]);
+  const qs = p.toString();
+  history.replaceState(null, '', `#health${qs ? `?${qs}` : ''}`); // no hashchange, so no re-route
+}
+
+function matches(s, f, townName = '') {
+  if (f.feed && s.feed !== f.feed) return false;
+  if (f.status === 'problems' ? !['red', 'amber'].includes(s.color) : (f.status && s.color !== f.status)) return false;
+  if (f.q) {
+    const hay = [s.label, s.key, s.adapterName, s.note, s.error, townName].join(' ').toLowerCase();
+    if (!f.q.toLowerCase().split(/\s+/).every((w) => hay.includes(w))) return false;
+  }
+  return true;
+}
+
+const isFiltered = (f, withTown) => !!(f.feed || f.status || f.q || (withTown && f.town));
+
+/** A row of selects. towns = [{id,name}] or null to hide the town picker. */
+function filterBar(f, { towns, feeds, feedNames }, onChange) {
+  const sel = (key, label, options) => h('label', { class: 'filter' }, label,
+    h('select', { name: key, onchange: (e) => { f[key] = e.target.value; onChange(); } },
+      ...options.map(([v, text]) => h('option', { value: v, selected: f[key] === v }, text))));
+  const q = h('input', { type: 'search', name: 'q', value: f.q, placeholder: 'Name, key or error', autocomplete: 'off' });
+  q.addEventListener('input', () => { f.q = q.value.trim(); onChange(); });
+  const clear = h('button', { type: 'button', class: 'small secondary', onclick: () => {
+    Object.assign(f, blankFilters(), towns ? {} : { town: f.town });
+    bar.querySelectorAll('select').forEach((x) => { x.value = ''; });
+    q.value = '';
+    onChange();
+  } }, 'Clear');
+  const bar = h('div', { class: 'filters card', role: 'search' },
+    towns ? sel('town', 'Town', [['', 'All towns'], ...towns.map((t) => [t.id, t.name])]) : null,
+    sel('feed', 'Feed', [['', 'All feeds'], ...feeds.map((k) => [k, feedNames[k] || k])]),
+    sel('status', 'Status', STATUS_FILTERS),
+    h('label', { class: 'filter grow' }, 'Search', q),
+    clear);
+  return bar;
+}
+
+const feedList = (sources, feedNames) => {
+  const have = new Set(sources.map((s) => s.feed));
+  return [...Object.keys(feedNames).filter((k) => have.has(k)), ...[...have].filter((k) => !(k in feedNames))];
+};
+
 // ---------- health board ----------
-async function healthPage() {
-  const { towns } = await api('/health');
-  const all = towns.flatMap((t) => t.sources);
-  const count = (c) => all.filter((s) => s.color === c).length;
-  view.replaceChildren(
-    h('div', { class: 'row spread' }, h('h1', {}, 'Source health'), h('span', { class: 'muted small' }, `Updated ${new Date().toLocaleTimeString()}, refreshes every 30 s`)),
+let healthData = null;
+async function healthPage(refresh = false) {
+  healthData = await api('/health');
+  if (!refresh || !$('#health-results')) {
+    const all = healthData.towns.flatMap((t) => t.sources);
+    const towns = healthData.towns.map((t) => ({ id: t.id, name: `${t.name}${t.state ? `, ${t.state}` : ''}` }));
+    if (filters.town && !towns.some((t) => t.id === filters.town)) filters.town = '';
+    view.replaceChildren(
+      h('div', { class: 'row spread' }, h('h1', {}, 'Source health'), h('span', { class: 'muted small', id: 'health-updated' })),
+      filterBar(filters, { towns, feeds: feedList(all, healthData.feeds || {}), feedNames: healthData.feeds || {} }, () => { saveFilters(); renderHealth(); }),
+      h('div', { id: 'health-results' }),
+    );
+  }
+  $('#health-updated').textContent = `Updated ${new Date().toLocaleTimeString()}, refreshes every 30 s`;
+  renderHealth();
+}
+
+function renderHealth() {
+  const box = $('#health-results');
+  if (!box || !healthData) return;
+  const towns = healthData.towns
+    .filter((t) => !filters.town || t.id === filters.town)
+    .map((t) => ({ ...t, shown: t.sources.filter((s) => matches(s, filters, t.name)) }));
+  const total = healthData.towns.reduce((n, t) => n + t.sources.length, 0);
+  const shown = towns.flatMap((t) => t.shown);
+  const count = (c) => shown.filter((s) => s.color === c).length;
+  const filtered = isFiltered(filters, true);
+  const visible = filtered ? towns.filter((t) => t.shown.length || (filters.town && !filters.feed && !filters.status && !filters.q)) : towns;
+  box.replaceChildren(...[
     h('p', { class: 'summary' },
-      ...['green', 'amber', 'red', 'paused'].map((c) => h('span', {}, dot(c), `${count(c)} ${COLOR_WORD[c].toLowerCase()}`))),
+      ...['green', 'amber', 'red', 'paused'].map((c) => h('span', {}, dot(c), `${count(c)} ${COLOR_WORD[c].toLowerCase()}`)),
+      filtered ? h('span', { class: 'muted' }, `Showing ${shown.length} of ${total} sources`) : null),
     h('p', { class: 'muted small' }, 'Red means a source has failed for over an hour. Amber means failing for under an hour, overdue, or waiting for its first run.'),
-    ...towns.map((t) => h('div', { class: 'card' },
+    ...visible.map((t) => h('div', { class: 'card' },
       h('div', { class: 'town-head' }, dot(t.color), h('h3', {}, h('a', { href: `#town/${t.id}` }, `${t.name}${t.state ? `, ${t.state}` : ''}`)),
         h('span', { class: `pill ${t.status}` }, t.status), h('a', { class: 'small', href: t.url, target: '_blank', rel: 'noopener' }, t.url.replace(/^https?:\/\//, ''))),
-      t.sources.length ? sourceTable(t, t.sources, true) : h('p', { class: 'muted' }, 'No sources yet.'))),
-  );
+      t.shown.length ? sourceTable(t, t.shown, true) : h('p', { class: 'muted' }, t.sources.length ? 'No sources match the filters.' : 'No sources yet.'))),
+    visible.length ? null : h('div', { class: 'card' }, h('p', { class: 'muted' }, 'No sources match the filters.')),
+  ].filter(Boolean));
 }
 
 function sourceTable(town, rows, compact = false) {
@@ -160,7 +253,9 @@ async function townPage(id) {
   const { towns } = await api('/towns');
   const t = id ? towns.find((x) => x.id === id) : null;
   if (id && !t) throw new Error(`No town "${id}"`);
-  const health = id ? (await api('/health')).towns.find((x) => x.id === id) : null;
+  const hd = id ? await api('/health') : null;
+  if (hd) feedNamesCache = hd.feeds || {};
+  const health = hd ? hd.towns.find((x) => x.id === id) : null;
   const b = t?.brand || {};
   const f = h('form', { id: 'town-form' },
     h('div', { class: 'grid2' },
@@ -213,7 +308,7 @@ async function townPage(id) {
     kids.push(
       h('div', { class: 'card' },
         h('div', { class: 'row spread' }, h('h2', {}, 'Sources'), h('a', { class: 'button', href: `#new-source/${t.id}` }, 'Add a source')),
-        health?.sources.length ? sourceTable(t, health.sources) : h('p', { class: 'muted' }, 'No sources yet.')),
+        health?.sources.length ? townSources(t, health.sources) : h('p', { class: 'muted' }, 'No sources yet.')),
       h('div', { class: 'card' }, h('h2', {}, 'Going live'), goLiveSteps(t, health)),
     );
   }
@@ -231,6 +326,23 @@ async function townPage(id) {
         : h('p', { class: 'muted small' }, 'Switch the town to draft before deleting it.')));
   }
   view.replaceChildren(...kids);
+}
+
+// The town page's sources, with feed / status / search filters (kept per town for this visit).
+const townFilters = {};
+let feedNamesCache = null;
+function townSources(t, sources) {
+  const f = townFilters[t.id] ||= blankFilters();
+  const box = h('div');
+  const names = feedNamesCache || {};
+  const render = () => {
+    const rows = sources.filter((s) => matches(s, f));
+    box.replaceChildren(...[
+      isFiltered(f) ? h('p', { class: 'muted small' }, `Showing ${rows.length} of ${sources.length} sources`) : null,
+      rows.length ? sourceTable(t, rows) : h('p', { class: 'muted' }, 'No sources match the filters.')].filter(Boolean));
+  };
+  render();
+  return h('div', {}, sources.length > 3 ? filterBar(f, { towns: null, feeds: feedList(sources, names), feedNames: names }, render) : null, box);
 }
 
 function goLiveSteps(t, health) {
