@@ -649,6 +649,7 @@ async function togglePush() {
       setPushBusy('Turning off alerts…');
       await fetch('/api/push/unsubscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: existing }) });
       await existing.unsubscribe();
+      window.buzzTrack?.('alerts-off');
       return setPush('off');
     }
     setPushBusy('Turning on alerts…');
@@ -665,6 +666,7 @@ async function togglePush() {
     const r = await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub }) });
     if (!r.ok) throw new Error(`server ${r.status}`);
     setPush('on');
+    window.buzzTrack?.('alerts-on');
   } catch (e) {
     console.warn('[push]', e);
     setPush('error', e?.message ? String(e.message).slice(0, 80) : '');
@@ -717,7 +719,9 @@ function tabFromHash(scroll) {
 document.querySelectorAll('.tabs [role=tab]').forEach((t) => t.addEventListener('click', (e) => {
   e.preventDefault();
   history.replaceState(null, '', t.getAttribute('href'));
-  showTab(t.id.replace(/^tab-/, ''));
+  const id = t.id.replace(/^tab-/, '');
+  if (t.getAttribute('aria-selected') !== 'true') window.buzzTrack?.('tab', { tab: id });
+  showTab(id);
 }));
 document.querySelectorAll('.tabs [role=tab]').forEach((t, i, all) => t.addEventListener('keydown', (e) => {
   if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
