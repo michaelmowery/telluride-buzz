@@ -200,7 +200,7 @@ function serveTemplate(req, res, file, ext, st, town) {
   const key = `${town.id}:${file}`;
   let c = templateCache.get(key);
   if (!c || c.mtime !== st.mtimeMs) {
-    const extra = file.endsWith(`${path.sep}resources.html`) ? { resources: renderResources(db.listResources(town.id), town) } : {};
+    const extra = /[\\/](resources|index)\.html$/.test(file) ? { resources: renderResources(db.listResources(town.id), town) } : {};
     const body = Buffer.from(renderTemplate(fs.readFileSync(file, 'utf8'), ext, town, pickerTowns(town), extra));
     c = { mtime: st.mtimeMs, body, etag: `"${crypto.createHash('sha1').update(body).digest('base64url').slice(0, 16)}"` };
     templateCache.set(key, c);

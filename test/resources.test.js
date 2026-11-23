@@ -90,6 +90,7 @@ test('public page: emergency box first, categories collapsible, hidden left out,
   ]) db.saveResource('telluride', normalizeResource(r).resource);
   const html = renderResources(db.listResources('telluride'), town);
   assert.ok(html.indexOf('res-emergency') < html.indexOf('id="medical"'));
+  assert.match(html, /<details class="res-cat res-emergency"/);
   assert.match(html, /href="tel:911"/);
   assert.equal((html.match(/Medical Center/g) || []).length, 2); // emergency box and its own section
   assert.match(html, /query=500%20W%20Pacific%20Ave%2C%20Telluride%2C%20CO/);

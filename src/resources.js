@@ -104,12 +104,13 @@ export function renderResources(list, town) {
   const top = shown.filter((r) => r.emergency || r.category === 'emergency');
   const parts = [];
   if (top.length) {
-    parts.push(`<section class="res-emergency" aria-labelledby="res-em">
-      <h2 id="res-em">Emergency</h2>
+    // Collapsed like the other sections, but red, with 911 one tap away even when closed.
+    parts.push(`<details class="res-cat res-emergency" id="emergency">
+      <summary><h2>Emergency</h2><span class="res-count">${top.length}</span><a class="res-btn res-call res-911" href="tel:911">911</a></summary>
       <ul class="res-list">
         ${top.map((r) => card(r, town)).join('\n        ')}
       </ul>
-    </section>`);
+    </details>`);
   }
   const nav = [];
   for (const c of RESOURCE_CATEGORIES) {

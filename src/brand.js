@@ -112,6 +112,7 @@ export function brandValues(town, towns = [town]) {
     notAffiliated: b.notAffiliated || 'the agencies and businesses whose information it shows',
     feedbackEmail: b.feedbackEmail || 'telluridebuzz@gmail.com',
     feedbackSubject: encodeURIComponent(`${site} feedback`),
+    resources: '', // filled per request by the server (index and resources pages)
   };
 }
 

@@ -183,7 +183,7 @@ function setFilter(cat) {
   $('#feed-title').textContent = state.filter ? CATEGORY_LABEL[state.filter] : 'Live feed';
   $('#clear-filter').hidden = !state.filter;
   loadFeed();
-  if (state.filter) $('.feed-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (state.filter) { showTab('feed'); $('.feed-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 }
 
 async function loadFeed(before) {
@@ -668,3 +668,37 @@ async function setupPush(reg) {
     .then(setupPush)
     .catch((e) => { console.warn('[push] service worker', e); showPush('error', 'service worker did not start'); });
 })();
+
+// ---------- tabs: Live feed | Resources ----------
+// #resources (or a section inside it, like #medical) opens the Resources tab, so the
+// header phone icon, footer link and shared links all land on it.
+function showTab(which, scroll = false) {
+  const res = which === 'resources';
+  $('#tab-feed').setAttribute('aria-selected', String(!res));
+  $('#tab-resources').setAttribute('aria-selected', String(res));
+  $('#feed-panel').hidden = res;
+  $('#res-panel').hidden = !res;
+  $('#clear-filter').hidden = res || !state.filter;
+  if (scroll) $('.feed-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function tabFromHash(scroll) {
+  const id = decodeURIComponent(location.hash.slice(1));
+  if (!id) return;
+  const el = document.getElementById(id);
+  if (id === 'resources' || (el && $('#res-panel').contains(el))) {
+    showTab('resources', id === 'resources' && scroll);
+    if (el && el.tagName === 'DETAILS') { el.open = true; if (scroll) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  } else if (id === 'feed') showTab('feed', scroll);
+}
+document.querySelectorAll('.tabs [role=tab]').forEach((t) => t.addEventListener('click', (e) => {
+  e.preventDefault();
+  history.replaceState(null, '', t.getAttribute('href'));
+  showTab(t.id === 'tab-resources' ? 'resources' : 'feed');
+}));
+document.querySelectorAll('.tabs [role=tab]').forEach((t) => t.addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  const other = t.id === 'tab-feed' ? $('#tab-resources') : $('#tab-feed');
+  other.focus(); other.click();
+}));
+window.addEventListener('hashchange', () => tabFromHash(true));
+tabFromHash(false);
