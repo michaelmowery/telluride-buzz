@@ -154,7 +154,8 @@ function card(r, town, sponsored = false) {
   const bits = [];
   if (r.phone) bits.push(tel(r.phone));
   if (r.phone2) bits.push(tel(r.phone2));
-  if (r.website) bits.push(`<a class="res-btn" href="${esc(r.website)}" target="_blank" rel="noopener">${esc(host(r.website))}</a>`);
+  // A paid listing's link is marked sponsored, as search engines ask for paid links.
+  if (r.website) bits.push(`<a class="res-btn" href="${esc(r.website)}" target="_blank" rel="${sponsored ? 'sponsored noopener' : 'noopener'}">${esc(host(r.website))}</a>`);
   if (r.address) bits.push(`<a class="res-btn" href="${esc(mapHref(r.address, town))}" target="_blank" rel="noopener">Map</a>`);
   if (sponsored) {
     const logo = r.sponsorLogo ? `<img class="res-logo" src="${esc(r.sponsorLogo)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '';
