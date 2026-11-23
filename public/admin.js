@@ -311,6 +311,7 @@ async function townPage(id) {
 
   const kids = [h('p', {}, h('a', { href: '#towns' }, '← Towns')),
     h('div', { class: 'town-head' }, health ? dot(health.color) : null, h('h1', {}, t ? `${t.name}${t.state ? `, ${t.state}` : ''}` : 'Add a town'), t ? h('span', { class: `pill ${t.status}` }, t.status) : null)];
+  if (!t) kids.push(fillTownWithClaude(f));
   if (!t) kids.push(h('p', { class: 'muted' }, 'A new town starts as a draft with National Weather Service alerts and forecast already added (they only need the map point). Then add its roads, resort, town and news sources.'));
   if (t) {
     kids.push(
@@ -475,6 +476,88 @@ async function sourcePage(townId, key) {
     health?.error ? h('p', { class: 'error' }, `${health.note}: ${health.error}`) : (health ? h('p', { class: 'muted' }, `${health.note}. Last success ${ago(health.lastOk)}.`) : null),
     h('div', { class: 'card' }, f),
   ].filter(Boolean));
+}
+
+// ---------- new town: fill with Claude ----------
+// Copy a prompt (built from the name and state typed in the form) into Claude, paste
+// its JSON answer back, and the form fills in for review. Nothing is saved until
+// Create town. Suggested sources and starter resources are shown to add afterwards.
+function fillTownWithClaude(form) {
+  const err = h('p', { class: 'error', role: 'alert' });
+  const out = h('div');
+  const paste = h('textarea', { rows: 6, spellcheck: 'false', placeholder: 'Paste Claude\'s answer here (the ```json block, or the whole reply).' });
+  const copied = h('span', { class: 'ok-msg small', role: 'status' });
+
+  function prompt() {
+    const v = Object.fromEntries(new FormData(form));
+    const place = [v.name, v.state].filter(Boolean).join(', ');
+    return `I'm adding ${place} to thetown.buzz, a network of local real-time info sites (weather, roads, ski conditions, town news, events and a civic resources page). Each town has a page at [address-name].thetown.buzz. Research ${place} with web search and answer with ONLY one JSON code block (\`\`\`json ... \`\`\`) in exactly this shape:
+
+{
+  "name": "Town name as locals write it",
+  "state": "Two-letter state",
+  "id": "address name: lowercase letters, numbers and dashes, usually the town name (ouray, crested-butte)",
+  "siteName": "[Town] Buzz",
+  "lat": 38.0228,
+  "lon": -107.6714,
+  "timezone": "IANA time zone, like America/Denver",
+  "notAffiliated": "short list of the main agencies whose info the site will show, like: the City of Ouray, CDOT or the National Weather Service",
+  "suggestedSources": [
+    { "label": "Who publishes it", "type": "rss | ical | snow-report | resort-alerts | cdot | other", "url": "https://...", "why": "what it would add (town news, county alerts, events, ski resort snow report, local paper)" }
+  ],
+  "resourcesCsv": "CSV text, see below"
+}
+
+Rules:
+- lat and lon: the center of town (town hall or main street), as numbers with 4 decimals.
+- suggestedSources: official RSS or iCal feeds for the town/city and county (news, alerts, calendar), the local newspaper or radio station feed, the nearest ski resort's snow report page, and anything else that publishes timely local information. Only include URLs you actually found. Say in "why" if a feed needs checking.
+- resourcesCsv: starter entries for the Resources page as CSV text (use \\n for new lines inside the JSON string), header first:
+id,town,category,name,phone,phone2,website,address,hours,note,emergency,hidden,checked,source
+  Leave id blank. town is the id above. category is one of emergency, medical, government, transit, utilities, roads, outdoors, schools. Include 911, the non-emergency dispatch or police line, the nearest hospital or clinic, town hall, the county, transit, the electric/gas/water utilities, the state road conditions line, the local forest or park office, and the school district and library. emergency is "yes" only for emergency lines and the ER. checked is today's date (${new Date().toISOString().slice(0, 10)}) for rows you verified on an official site. source is the URL you used.
+- Use official sources only. Never guess: leave a value blank (or empty string) if you can't confirm it.`;
+  }
+
+  function fill() {
+    err.textContent = '';
+    const text = paste.value.trim();
+    if (!text) { err.textContent = 'Paste Claude\'s answer first.'; return; }
+    const block = text.match(/```(?:json)?\s*\n([\s\S]*?)```/i);
+    let j;
+    try { j = JSON.parse(block ? block[1] : text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); } catch { err.textContent = 'That doesn\'t look like the JSON answer. Paste the whole ```json block.'; return; }
+    const set = (name, val) => { const el = form.elements[name]; if (el && val != null && val !== '' && !el.readOnly) el.value = String(val); };
+    set('name', j.name); set('state', j.state); set('id', String(j.id || '').toLowerCase()); set('siteName', j.siteName);
+    set('lat', j.lat ?? j.location?.lat); set('lon', j.lon ?? j.location?.lon); set('timezone', j.timezone); set('notAffiliated', j.notAffiliated);
+    const srcs = Array.isArray(j.suggestedSources) ? j.suggestedSources.filter((x) => x && x.url) : [];
+    const csv = typeof j.resourcesCsv === 'string' ? j.resourcesCsv.trim() : '';
+    const csvCopied = h('span', { class: 'ok-msg small', role: 'status' });
+    out.replaceChildren(...[
+      h('p', { class: 'ok-msg' }, 'Filled in the form below. Check each field (especially the map point), then Create town.'),
+      srcs.length ? h('details', { open: true }, h('summary', {}, `Suggested sources (${srcs.length}): add these after creating the town, using Add a source and Test`),
+        h('ul', {}, ...srcs.map((x) => h('li', {}, h('strong', {}, x.label || 'Source'), x.type ? ` (${x.type})` : '', ': ',
+          /^https?:\/\//.test(x.url) ? h('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer' }, x.url) : x.url, x.why ? h('div', { class: 'muted small' }, x.why) : null)))) : null,
+      csv ? h('details', {}, h('summary', {}, `Starter resources (${csv.split('\n').length - 1} rows): after creating the town, paste into Resources, Import`),
+        h('textarea', { rows: 8, readonly: true }, csv),
+        h('div', { class: 'row' }, h('button', { type: 'button', class: 'secondary', onclick: async () => {
+          try { await navigator.clipboard.writeText(csv); csvCopied.textContent = 'Copied.'; } catch { csvCopied.textContent = 'Select the text and copy it.'; }
+        } }, 'Copy resources CSV'), csvCopied)) : null,
+    ].filter(Boolean));
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  return h('div', { class: 'card' },
+    h('h2', {}, 'Fill with Claude'),
+    h('p', { class: 'muted small' }, '1. Type the town name and state in the form below. 2. Copy the prompt into Claude (claude.ai, with web search on). 3. Paste its answer here and press Fill form. Nothing is saved until you press Create town.'),
+    h('div', { class: 'row' },
+      h('button', { type: 'button', onclick: async () => {
+        err.textContent = '';
+        if (!form.elements.name.value.trim()) { err.textContent = 'Type the town name in the form first.'; return; }
+        const text = prompt();
+        try { await navigator.clipboard.writeText(text); copied.textContent = 'Prompt copied. Paste it into Claude.'; }
+        catch { out.replaceChildren(h('textarea', { rows: 10, readonly: true }, text)); copied.textContent = 'Copy the prompt below.'; }
+      } }, 'Copy prompt for Claude'), copied),
+    paste,
+    h('div', { class: 'row' }, h('button', { type: 'button', class: 'secondary', onclick: fill }, 'Fill form')),
+    err, out);
 }
 
 // ---------- resources ----------
