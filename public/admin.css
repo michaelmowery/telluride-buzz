@@ -103,8 +103,20 @@ span.err { color: var(--red); }
 .sponsor-box { border: 1px solid var(--line); border-radius: var(--radius); padding: .5rem .9rem .8rem; margin: .8rem 0; }
 .sponsor-box legend { font-weight: 600; padding: 0 .3rem; }
 .import-summary { align-items: center; gap: .75rem; flex-wrap: wrap; } .import-summary p { margin: 0; }
-/* Resources admin: one town at a time. */
-.town-tabs { display: flex; gap: .4rem; flex-wrap: wrap; margin: 0 0 1rem; }
-.town-tab { display: inline-flex; align-items: center; gap: .4rem; padding: .35rem .8rem; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--ink); text-decoration: none; font-weight: 600; }
-.town-tab[aria-current] { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
-.town-tab .count { font-size: .75rem; font-weight: 500; opacity: .75; }
+/* Resources admin: one town at a time, picked like the public site's town menu. */
+.town-pick { position: relative; }
+.town-pick h1 { margin: 0; }
+.town-picker { display: inline-flex; align-items: center; gap: .45rem; font: inherit; font-weight: 700; color: var(--ink); background: none; border: 0; padding: .1rem .2rem; margin-left: -.2rem; cursor: pointer; border-radius: 8px; }
+.town-picker:hover, .town-picker[aria-expanded="true"] { background: var(--card); }
+.town-picker:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+.town-picker .caret { font-size: .8em; color: var(--muted); transition: transform .15s; }
+.town-picker[aria-expanded="true"] .caret { transform: rotate(180deg); }
+.town-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; width: min(320px, calc(100vw - 32px)); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 10px 30px rgba(0, 0, 0, .18); padding: .5rem; }
+.town-menu[hidden] { display: none; }
+.town-menu-title { margin: .2rem .5rem .5rem; font-size: .75rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.town-opt { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .5rem; border-radius: 8px; color: var(--ink); text-decoration: none; }
+.town-opt:hover, .town-opt:focus-visible, .town-opt[aria-current] { background: var(--bg); outline: none; }
+.town-opt[aria-current] { box-shadow: inset 3px 0 0 var(--brand); }
+.town-txt { display: grid; gap: 2px; line-height: 1.25; }
+.town-txt small { color: var(--muted); }
+.town-opt .count { font-size: .8rem; color: var(--muted); white-space: nowrap; }

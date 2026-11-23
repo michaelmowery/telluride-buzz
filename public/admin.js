@@ -760,10 +760,34 @@ async function allResourcesPage() {
       q.value = ''; saveResFilters(); render();
     } }, 'Clear'));
 
-  const townTabs = h('nav', { class: 'town-tabs', 'aria-label': 'Town' },
-    ...d.towns.map((t) => h('a', { href: `#all-resources?town=${encodeURIComponent(t.id)}`, class: 'town-tab', 'aria-current': t.id === f.town ? 'page' : null,
-      onclick: (e) => { e.preventDefault(); if (t.id === f.town) return; f.town = t.id; f.cat = ''; saveResFilters(); route(); } },
-    townName.get(t.id), h('span', { class: 'count' }, String(count(t.id))))));
+  // Town picker, like the public site's: the current town as the page heading, with a
+  // dropdown of every town and its entry count.
+  const pickTown = (id) => { if (id === f.town) return; f.town = id; f.cat = ''; saveResFilters(); route(); };
+  const menu = h('div', { class: 'town-menu', id: 'res-town-menu', role: 'menu', hidden: true },
+    h('p', { class: 'town-menu-title' }, 'Choose a town'),
+    ...[...d.towns].sort((a, b) => a.name.localeCompare(b.name)).map((t) => h('a', {
+      href: `#all-resources?town=${encodeURIComponent(t.id)}`, class: 'town-opt', role: 'menuitem', 'aria-current': t.id === f.town ? 'page' : null,
+      onclick: (e) => { e.preventDefault(); setMenu(false); pickTown(t.id); },
+    }, h('span', { class: 'town-txt' }, h('strong', {}, townName.get(t.id)),
+      h('small', {}, t.id === f.town ? 'Editing now' : (t.url || '').replace(/^https?:\/\//, ''))),
+    h('span', { class: 'count' }, `${count(t.id)} entr${count(t.id) === 1 ? 'y' : 'ies'}`))));
+  const picker = h('button', { type: 'button', class: 'town-picker', 'aria-haspopup': 'true', 'aria-expanded': 'false', 'aria-controls': 'res-town-menu',
+    onclick: () => setMenu(menu.hidden) },
+  h('span', {}, townName.get(f.town) || 'Pick a town'),
+  h('span', { class: 'caret', 'aria-hidden': 'true' }, '▾'));
+  function setMenu(open) {
+    menu.hidden = !open;
+    picker.setAttribute('aria-expanded', String(open));
+    if (open) menu.querySelector('.town-opt:not([aria-current])')?.focus();
+  }
+  const closeMenu = (e) => {
+    if (!document.body.contains(menu)) { document.removeEventListener('click', closeMenu); document.removeEventListener('keydown', closeMenu); return; }
+    if (menu.hidden) return;
+    if (e.type === 'keydown' ? e.key === 'Escape' : !menu.contains(e.target) && !picker.contains(e.target)) { setMenu(false); if (e.type === 'keydown') picker.focus(); }
+  };
+  document.addEventListener('click', closeMenu);
+  document.addEventListener('keydown', closeMenu);
+  const townPick = h('div', { class: 'town-pick' }, h('h1', {}, picker), menu);
 
   function matches(r) {
     if (f.town && r.townId !== f.town) return false;
@@ -940,8 +964,7 @@ ${csv}
   }
 
   view.replaceChildren(
-    townTabs,
-    h('div', { class: 'row spread' }, h('h1', {}, `${townName.get(f.town) || 'Resources'}`),
+    h('div', { class: 'row spread' }, townPick,
       h('span', {},
         h('a', { class: 'button', href: `#new-resource/${f.town}/${f.cat || 'emergency'}` }, 'Add resource'), ' ',
         h('a', { class: 'button secondary', href: `/api/admin/resources/export?town=${encodeURIComponent(f.town)}` }, 'Export CSV'),
