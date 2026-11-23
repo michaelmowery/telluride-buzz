@@ -281,3 +281,25 @@ test('health rows say which feed a source fills, for the admin filter', async ()
   const [row] = sourceHealth({ sources: [{ key: 'ical-x', adapter: 'ical', label: 'X', settings: {} }] });
   assert.equal(row.feed, 'events');
 });
+
+test('town lookup: Nominatim results become town suggestions with state, slug and time zone', async () => {
+  const { townsFromNominatim, guessTimezone, geocodeTown } = await import('../src/geocode.js');
+  const sample = [
+    { lat: '38.0227', lon: '-107.6714', addresstype: 'town', name: 'Ouray', display_name: 'Ouray, Ouray County, Colorado, United States',
+      address: { town: 'Ouray', county: 'Ouray County', state: 'Colorado', 'ISO3166-2-lvl4': 'US-CO' } },
+    { lat: '38.1', lon: '-107.7', addresstype: 'county', name: 'Ouray County', display_name: 'Ouray County, Colorado',
+      address: { county: 'Ouray County', 'ISO3166-2-lvl4': 'US-CO' } },
+    { lat: '47.6', lon: '-116.8', addresstype: 'city', name: "Coeur d'Alene", display_name: "Coeur d'Alene, Idaho",
+      address: { city: "Coeur d'Alene", 'ISO3166-2-lvl4': 'US-ID' } },
+  ];
+  const m = townsFromNominatim(sample);
+  assert.deepEqual([m[0].name, m[0].state, m[0].id, m[0].lat, m[0].lon, m[0].timezone], ['Ouray', 'CO', 'ouray', 38.0227, -107.6714, 'America/Denver']);
+  assert.match(m[0].maps, /google\.com\/maps.*38\.0227,-107\.6714/);
+  assert.equal(m.find((x) => x.state === 'ID').timezone, 'America/Los_Angeles', 'north Idaho is Pacific');
+  assert.equal(m.find((x) => x.state === 'ID').id, 'coeur-d-alene');
+  assert.equal(guessTimezone('AZ', 34, -111), 'America/Phoenix');
+  let asked = '';
+  const got = await geocodeTown('Ouray', 'CO', { fetchJsonImpl: async (url) => { asked = url; return sample; } });
+  assert.match(asked, /nominatim\.openstreetmap\.org\/search.*countrycodes=us.*q=Ouray%2C%20CO/);
+  assert.equal(got[0].name, 'Ouray');
+});

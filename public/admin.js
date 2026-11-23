@@ -394,10 +394,36 @@ async function townPage(id) {
   // Settings is only the town's own fields: its sources live on the Feeds tab and its
   // listings on the Resources tab. A draft town also gets the going-live checklist.
   const kids = t ? [] : [h('p', {}, h('a', { href: '#towns' }, '← All towns')), h('h1', {}, 'Add a town')];
-  if (!t) kids.push(fillTownWithClaude(f));
+  if (!t) {
+    // Only Town name and State are typed by hand. The rest is filled by Look up on the
+    // map or Fill with Claude, and stays greyed out until Edit the other fields.
+    const others = [...f.elements].filter((el) => el.name && !['name', 'state'].includes(el.name) && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName));
+    const lock = (on) => {
+      for (const el of others) {
+        if (el.tagName === 'SELECT') el.disabled = on; else el.readOnly = on;
+        el.classList.toggle('locked', on);
+        if (on) el.dataset.autofill = ''; else delete el.dataset.autofill;
+      }
+      editBtn.textContent = on ? 'Edit the other fields' : 'Lock them again';
+    };
+    const editBtn = h('button', { type: 'button', class: 'small secondary', onclick: () => lock(others[0].classList.contains('locked') ? false : true) });
+    f.querySelector('.grid2').before(h('div', { class: 'row lock-note' },
+      h('span', { class: 'muted small' }, 'Type the town name and state. Everything else is filled in for you by Look up on the map or Fill with Claude.'), editBtn));
+    lock(true);
+    // Disabled selects aren't sent with the form, so turn them back on just before saving.
+    f.addEventListener('submit', () => { for (const el of others) if (el.tagName === 'SELECT') el.disabled = false; }, true);
+    // The Look up button sits right under the Town name box; its result shows under the fields.
+    const { button, out } = townLookup(f);
+    f.elements.name.after(button);
+    f.querySelector('.grid2').after(out);
+  }
+
   if (!t) kids.push(h('p', { class: 'muted' }, 'A new town starts as a draft with National Weather Service alerts and forecast already added (they only need the map point). Then add its roads, resort, town and news sources.'));
   if (t && t.status === 'draft') kids.push(h('div', { class: 'card' }, h('h2', {}, 'Going live'), goLiveSteps(t, health)));
   kids.push(h('div', { class: 'card' }, h('h2', {}, t ? 'Settings' : 'Town details'), f));
+  // Add a town: Fill with Claude sits under the form and builds its prompt from the
+  // town name (and state) typed above.
+  if (!t) kids.push(fillTownWithClaude(f));
   if (t) {
     kids.push(h('div', { class: 'card' }, h('h2', {}, 'Backup and removal'),
       h('p', {}, h('a', { class: 'button secondary', href: `/api/admin/export?town=${encodeURIComponent(t.id)}` }, 'Download town as JSON'),
@@ -564,6 +590,45 @@ function otherTownCard(t, s, towns) {
 // Copy a prompt (built from the name and state typed in the form) into Claude, paste
 // its JSON answer back, and the form fills in for review. Nothing is saved until
 // Create town. Suggested sources and starter resources are shown to add afterwards.
+// Add a town: type the name, press Look up, and the map point, state, address name,
+// site name and time zone fill in (OpenStreetMap search, via our server). Several
+// matches show as choices. Fields already typed by hand are kept, except the map point.
+function townLookup(form) {
+  const out = h('div', { class: 'lookup-out', role: 'status' });
+  const el = (n) => form.elements[n];
+  const fill = (m) => {
+    const keep = (n, v) => { if (v && !el(n).value.trim()) el(n).value = v; };
+    el('name').value = m.name;
+    keep('state', m.state);
+    keep('id', m.id);
+    keep('siteName', `${m.name} Buzz`);
+    el('lat').value = m.lat;
+    el('lon').value = m.lon;
+    form.dispatchEvent(new Event('lookup-filled'));
+    if (m.timezone && (!el('timezone').value.trim() || el('timezone').value === 'America/Denver')) el('timezone').value = m.timezone;
+    out.replaceChildren(h('p', { class: 'ok-msg small' }, `Filled from ${m.label}. `,
+      h('a', { href: m.maps, target: '_blank', rel: 'noopener' }, 'Check the point on Google Maps ↗')));
+  };
+  const btn = h('button', { type: 'button', class: 'secondary', onclick: async () => {
+    const name = el('name').value.trim();
+    if (!name) { out.replaceChildren(h('p', { class: 'error' }, 'Type the town name first.')); el('name').focus(); return; }
+    btn.disabled = true; btn.textContent = 'Looking up…';
+    try {
+      const { matches } = await api(`/geocode?q=${encodeURIComponent(name)}&state=${encodeURIComponent(el('state').value.trim())}`);
+      if (!matches.length) out.replaceChildren(h('p', { class: 'error' }, `No town called "${name}" found. Add the state, or fill the point in by hand from `,
+        h('a', { href: `https://www.google.com/maps/search/${encodeURIComponent(name)}`, target: '_blank', rel: 'noopener' }, 'Google Maps ↗'), '.'));
+      else if (matches.length === 1 || matches[0].place && !matches[1].place) fill(matches[0]);
+      else out.replaceChildren(h('p', { class: 'small' }, 'Which one?'),
+        h('div', { class: 'row' }, ...matches.map((m) => h('button', { type: 'button', class: 'small secondary', title: m.label, onclick: () => fill(m) },
+          `${m.name}${m.state ? `, ${m.state}` : ''}${m.county ? ` (${m.county})` : ''}`))));
+    } catch (e) { out.replaceChildren(h('p', { class: 'error' }, e.message)); }
+    btn.disabled = false; btn.textContent = 'Look up on the map';
+  } }, 'Look up on the map');
+  const maps = h('a', { class: 'small', href: 'https://www.google.com/maps', target: '_blank', rel: 'noopener',
+    onclick: (e) => { const n = el('name').value.trim(); if (n) e.currentTarget.href = `https://www.google.com/maps/search/${encodeURIComponent(n)}`; } }, 'Open Google Maps ↗');
+  return { button: h('span', { class: 'lookup' }, btn, maps), out };
+}
+
 function fillTownWithClaude(form) {
   const err = h('p', { class: 'error', role: 'alert' });
   const out = h('div');
@@ -606,7 +671,8 @@ id,town,category,name,phone,phone2,website,address,hours,note,emergency,hidden,c
     const block = text.match(/```(?:json)?\s*\n([\s\S]*?)```/i);
     let j;
     try { j = JSON.parse(block ? block[1] : text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); } catch { err.textContent = 'That doesn\'t look like the JSON answer. Paste the whole ```json block.'; return; }
-    const set = (name, val) => { const el = form.elements[name]; if (el && val != null && val !== '' && !el.readOnly) el.value = String(val); };
+    // Greyed-out (autofill) fields are filled too; a field fixed for good (an existing town's address name) isn't.
+    const set = (name, val) => { const el = form.elements[name]; if (el && val != null && val !== '' && (!el.readOnly || 'autofill' in el.dataset)) el.value = String(val); };
     set('name', j.name); set('state', j.state); set('id', String(j.id || '').toLowerCase()); set('siteName', j.siteName);
     set('lat', j.lat ?? j.location?.lat); set('lon', j.lon ?? j.location?.lon); set('timezone', j.timezone); set('notAffiliated', j.notAffiliated);
     const srcs = Array.isArray(j.suggestedSources) ? j.suggestedSources.filter((x) => x && x.url) : [];
@@ -626,16 +692,29 @@ id,town,category,name,phone,phone2,website,address,hours,note,emergency,hidden,c
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  // The prompt shows here and follows the Town name and State boxes as they're typed.
+  const promptBox = h('textarea', { rows: 8, readonly: true, class: 'mono' });
+  const hint = h('p', { class: 'muted small' });
+  const sync = () => {
+    const has = !!form.elements.name.value.trim();
+    promptBox.hidden = !has;
+    hint.textContent = has ? '' : 'Type the town name above and the prompt for Claude appears here.';
+    if (has) promptBox.value = prompt();
+  };
+  for (const n of ['name', 'state']) form.elements[n].addEventListener('input', sync);
+  form.addEventListener('lookup-filled', sync);
+  sync();
   return h('div', { class: 'card' },
-    h('h2', {}, 'Fill with Claude'),
-    h('p', { class: 'muted small' }, '1. Type the town name and state in the form below. 2. Copy the prompt into Claude (claude.ai, with web search on). 3. Paste its answer here and press Fill form. Nothing is saved until you press Create town.'),
+    h('h2', {}, 'Fill the rest with Claude'),
+    h('p', { class: 'muted small' }, 'For the sources, the starter resources and anything the map lookup missed. 1. Copy the prompt into Claude (claude.ai, with web search on). 2. Paste its answer below and press Fill form. Nothing is saved until you press Create town.'),
+    hint, promptBox,
     h('div', { class: 'row' },
       h('button', { type: 'button', onclick: async () => {
         err.textContent = '';
-        if (!form.elements.name.value.trim()) { err.textContent = 'Type the town name in the form first.'; return; }
-        const text = prompt();
-        try { await navigator.clipboard.writeText(text); copied.textContent = 'Prompt copied. Paste it into Claude.'; }
-        catch { out.replaceChildren(h('textarea', { rows: 10, readonly: true }, text)); copied.textContent = 'Copy the prompt below.'; }
+        if (!form.elements.name.value.trim()) { err.textContent = 'Type the town name above first.'; form.elements.name.focus(); return; }
+        sync();
+        try { await navigator.clipboard.writeText(promptBox.value); copied.textContent = 'Prompt copied. Paste it into Claude.'; }
+        catch { promptBox.select(); copied.textContent = 'Select the prompt and copy it.'; }
       } }, 'Copy prompt for Claude'), copied),
     paste,
     h('div', { class: 'row' }, h('button', { type: 'button', class: 'secondary', onclick: fill }, 'Fill form')),

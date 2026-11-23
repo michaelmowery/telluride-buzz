@@ -125,3 +125,8 @@ span.err { color: var(--red); }
 .town-tab { padding: .5rem 0 .6rem; color: var(--muted); text-decoration: none; font-weight: 600; border-bottom: 3px solid transparent; margin-bottom: -1px; white-space: nowrap; }
 .town-tab:hover { color: var(--ink); }
 .town-tab[aria-current] { color: var(--ink); border-bottom-color: var(--brand); }
+.lookup { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; margin-top: .4rem; } .lookup-out p { margin: .5rem 0 .75rem; }
+[hidden] { display: none !important; }
+/* Add a town: fields filled automatically stay greyed out until "Edit the other fields". */
+.locked { background: transparent !important; opacity: .7; color: var(--muted) !important; border-style: dashed !important; cursor: default; }
+.lock-note { align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; margin-bottom: .75rem; }
