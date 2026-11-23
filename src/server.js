@@ -139,7 +139,7 @@ function home(town) {
   return body;
 }
 
-const CATEGORIES = new Set(['weather', 'roads', 'lifts', 'events', 'town', 'news']);
+const CATEGORIES = new Set(['weather', 'roads', 'lifts', 'events', 'town', 'news', 'alerts']);
 
 function health(town) {
   const sources = sourceHealth(town, db.sourceStatus(town.id)).map((s) => ({

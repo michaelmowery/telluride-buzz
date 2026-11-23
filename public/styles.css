@@ -518,6 +518,12 @@ a.prefs-btn { text-decoration: none; }
 .res-sub[data-cat="emergency"] { color: var(--rust); border-color: var(--rust); }
 .res-sub[data-cat="emergency"][aria-current="true"] { background: var(--rust); color: #f6efe2; }
 .res-empty { margin: 12px 0; }
+.feed-pills { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.feed-pills::-webkit-scrollbar { display: none; }
+.feed-pill { cursor: pointer; font-family: var(--sans); }
+.feed-pill:focus-visible { outline: 3px solid var(--amber); outline-offset: 1px; }
+.feed-pill[data-cat="alerts"] { color: var(--rust); border-color: var(--rust); }
+.feed-pill[data-cat="alerts"][aria-current="true"] { background: var(--rust); color: #f6efe2; }
 
 /* ---------- wide desktop layout ----------
    Phones and tablets keep the single column above. On a wide screen the page fills the
@@ -554,7 +560,7 @@ a.prefs-btn { text-decoration: none; }
   /* When the alerts prompt is showing it already gives the column its top margin. */
   .push:not([hidden]) ~ .feed-wrap .side-title { margin-top: 0; }
   html[data-hide~="push"] .push ~ .feed-wrap .side-title { margin-top: 22px; }
-  .res-subtabs { flex-wrap: wrap; overflow: visible; }
+  .res-subtabs, .feed-pills { flex-wrap: wrap; overflow: visible; }
   .foot { max-width: 1400px; padding: 0 32px; }
   .foot .disclaimer, .foot .mission, .foot .fine { max-width: 1100px; }
 }

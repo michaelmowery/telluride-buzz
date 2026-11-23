@@ -1,7 +1,7 @@
 // Telluride.Buzz home screen. Polls /api/home every 60 s while visible.
 const POLL_MS = 60e3;
 const STALE_MS = { weather: 45 * 60e3, roads: 20 * 60e3, lifts: 90 * 60e3, events: 6 * 3600e3 };
-const CATEGORY_LABEL = { weather: 'Weather', roads: 'Roads', lifts: 'Lifts & Snow', events: 'Events', town: 'Town', news: 'News', prefs: 'Preferences' };
+const CATEGORY_LABEL = { weather: 'Weather', roads: 'Roads', lifts: 'Lifts & Snow', events: 'Events', town: 'Town', news: 'News', alerts: 'Alerts', prefs: 'Preferences' };
 
 const $ = (s, el = document) => el.querySelector(s);
 const state = { data: null, filter: null, lastOk: 0, timer: null, feed: [], seen: new Set() };
@@ -177,13 +177,13 @@ function renderFeed(items) {
 }
 
 // ---------- filter ----------
-function setFilter(cat) {
-  state.filter = state.filter === cat ? null : cat;
+// cat === null shows everything. From a pill the page stays put; from a panel it scrolls to the feed.
+function setFilter(cat, scroll = true) {
+  state.filter = cat && state.filter !== cat ? cat : null;
+  document.querySelectorAll('.feed-pill').forEach((b) => b.setAttribute('aria-current', String((b.dataset.cat || null) === state.filter)));
   document.querySelectorAll('.tile').forEach((t) => t.setAttribute('aria-pressed', String(t.dataset.tile === state.filter)));
-  $('#feed-title').textContent = state.filter ? CATEGORY_LABEL[state.filter] : 'Live feed';
-  $('#clear-filter').hidden = !state.filter;
   loadFeed();
-  if (state.filter) { showTab('feed'); $('.feed-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  if (state.filter && scroll) { showTab('feed'); $('.feed-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 }
 
 async function loadFeed(before) {
@@ -246,7 +246,10 @@ window.addEventListener('offline', setStatus);
 
 // Tapping a tile opens its expanded panel; the panel has a button to filter the feed.
 document.querySelectorAll('.tile').forEach((t) => t.addEventListener('click', () => openPanel(t.dataset.tile)));
-$('#clear-filter').addEventListener('click', () => setFilter(state.filter));
+document.querySelectorAll('.feed-pill').forEach((b) => b.addEventListener('click', () => {
+  const cat = b.dataset.cat || null;
+  if (cat !== state.filter) setFilter(cat, false);
+}));
 $('#more').addEventListener('click', () => {
   const last = state.feed[state.feed.length - 1];
   if (last) loadFeed(last.publishedAt);
@@ -678,7 +681,6 @@ function showTab(which, scroll = false) {
   $('#tab-resources').setAttribute('aria-selected', String(res));
   $('#feed-panel').hidden = res;
   $('#res-panel').hidden = !res;
-  $('#clear-filter').hidden = res || !state.filter;
   if (scroll) $('.feed-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function tabFromHash(scroll) {
