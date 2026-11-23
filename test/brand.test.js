@@ -46,3 +46,18 @@ test('logo opens a town picker listing every town in its own logo', () => {
   assert.match(menu, />telluride<\/text>[\s\S]*?>buzz<\/text>/);
   assert.match(menu, />durango<\/text>[\s\S]*?>thetown<\/text>/);
 });
+
+test('thetown logo accents keep "thetown" in the circle and never imply [town].buzz', async () => {
+  const { logoSvg } = await import('../src/brand.js');
+  for (const logo of ['rock', 'ridge', 'rail']) {
+    const svg = logoSvg({ name: 'Durango', brand: { logo } });
+    assert.match(svg, />thetown<\/text>/, `${logo} keeps thetown`);
+    assert.match(svg, />durango<\/text>/);
+  }
+  assert.match(logoSvg({ name: 'Durango', brand: { logo: 'rock' } }), /class="logo logo-rock"/);
+  assert.match(logoSvg({ name: 'Durango', brand: { logo: 'ridge' } }), /class="logo-ridge"/);
+  assert.match(logoSvg({ name: 'Durango', brand: { logo: 'rail' } }), /class="logo-rail"/);
+  const a = logoSvg({ name: 'X', brand: { logo: 'ridge' } }), b = logoSvg({ name: 'Y', brand: { logo: 'ridge' } });
+  assert.notEqual(a.match(/id="([^"]+)"/)[1], b.match(/id="([^"]+)"/)[1], 'clip ids are unique per logo');
+  assert.doesNotMatch(logoSvg({ name: 'Durango', brand: { logo: 'bogus' } }), /logo-rock|logo-ridge|logo-rail/);
+});
