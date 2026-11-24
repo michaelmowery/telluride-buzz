@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openDb } from '../src/db.js';
-import { refPattern, shapeQuery, waysToPaths, routeShapes, simplify } from '../src/route-shapes.js';
+import { refPattern, shapeQuery, waysToPaths, routeShapes, simplify, ntadRoadnum, ntadUrl } from '../src/route-shapes.js';
 import { buildRoadsTile } from '../src/sources/cdot.js';
 
 const bbox = { minLat: 37.6, maxLat: 38.4, minLon: -108.3, maxLon: -107.3 };
@@ -57,4 +57,26 @@ test('shapes are fetched once, cached, and a failure never breaks the tile', asy
   assert.equal(co62.status, 'No reported issues');
   assert.ok(co62.shape.length, 'clear route still drawn');
   assert.equal(tile.routes.find((x) => x.label === 'US-550').shape, null);
+});
+
+test('shapes come from the US DOT road atlas first (I-70 -> I70, US-550 -> U550, CO-62 -> S62)', async () => {
+  assert.equal(ntadRoadnum('I-70'), 'I70');
+  assert.equal(ntadRoadnum('US-550'), 'U550');
+  assert.equal(ntadRoadnum('CO-62'), 'S62');
+  assert.equal(ntadRoadnum('NM-371'), 'S371');
+  assert.match(decodeURIComponent(ntadUrl('CO-62', bbox)), /ROADNUM='S62'.*geometry=-108\.3,37\.6,-107\.3,38\.4/);
+  const db = openDb(':memory:');
+  const asked = [];
+  const get = async (url) => {
+    asked.push(url);
+    if (!url.includes('arcgis')) throw new Error('Overpass should not be needed');
+    return { type: 'FeatureCollection', features: [
+      { type: 'Feature', geometry: { type: 'LineString', coordinates: [[-107.9, 38.1], [-107.8, 38.1]] } },
+      { type: 'Feature', geometry: { type: 'MultiLineString', coordinates: [[[-107.8, 38.1], [-107.7, 38.15]]] } },
+    ] };
+  };
+  const shapes = await routeShapes(town, db, { get });
+  assert.equal(shapes['CO-62'].length, 1, 'pieces joined');
+  assert.equal(asked.length, 2);
+  assert.ok(asked.every((u) => u.includes('arcgis')));
 });

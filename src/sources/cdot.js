@@ -321,7 +321,7 @@ export function cdotJobs(town, { get = fetchJson, apiKey = process.env.CDOT_API_
   }
 
   const refreshTile = async (db) => {
-    if (state.okAt) state.shapes = await routeShapes(town, db, { get, maxFetch: 1 });
+    if (state.okAt) state.shapes = await routeShapes(town, db, { get, maxFetch: 4 });
     db.setTile(town.id, 'roads', buildRoadsTile(town, state));
   };
 

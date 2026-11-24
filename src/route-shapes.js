@@ -2,7 +2,9 @@
 // map draws every route (green when clear), not only the stretches a DOT reports on.
 //
 // CDOT and NMRoads only send geometry for segments with conditions or events, so the
-// shapes come from OpenStreetMap through the public Overpass API. Highways barely
+// shapes come from the US DOT's National Transportation Atlas (NTAD North American
+// Roads, an ArcGIS Online service covering every state), with OpenStreetMap's public
+// Overpass API as a fallback (it refuses or times out from the server). Highways barely
 // move, so each shape is fetched once and kept in the database for 30 days; a
 // failed fetch waits an hour before trying again and never fails the road source.
 import { fetchJson } from './http.js';
@@ -10,6 +12,8 @@ import { routeLabel } from './cdot-routes.js';
 
 export const OVERPASS_URLS = (process.env.OVERPASS_URLS || 'https://overpass-api.de/api/interpreter,https://overpass.kumi.systems/api/interpreter,https://overpass.private.coffee/api/interpreter')
   .split(',').map((s) => s.trim()).filter(Boolean);
+export const NTAD_URL = process.env.NTAD_ROADS_URL
+  || 'https://services.arcgis.com/xOi1kZaI0eWDREZv/arcgis/rest/services/NTAD_North_American_Roads/FeatureServer/0/query';
 const KEEP_MS = 30 * 86400e3;
 const RETRY_MS = 3600e3;
 
@@ -20,6 +24,35 @@ export function refPattern(label) {
   const prefix = r.label.split('-')[0];
   const alts = { I: 'I', US: 'US', CO: '(CO|SH|SR)', NM: 'NM' }[prefix] || prefix;
   return `(^|;) *${alts}[ -]?${r.num} *($|;)`;
+}
+
+/** NTAD ROADNUM for a route label: I-70 -> I70, US-550 -> U550, CO-62 / NM-371 -> S62 / S371. */
+export function ntadRoadnum(label) {
+  const r = routeLabel(label);
+  if (!r) return null;
+  const prefix = r.label.split('-')[0];
+  return `${{ I: 'I', US: 'U' }[prefix] || 'S'}${r.num}`;
+}
+
+/** NTAD query URL for one route's lines inside the town's box (GeoJSON, WGS84). */
+export function ntadUrl(label, b) {
+  const num = ntadRoadnum(label);
+  if (!num) return null;
+  return `${NTAD_URL}?${new URLSearchParams({
+    where: `ROADNUM='${num}'`, geometry: `${b.minLon},${b.minLat},${b.maxLon},${b.maxLat}`, geometryType: 'esriGeometryEnvelope',
+    inSR: '4326', outSR: '4326', spatialRel: 'esriSpatialRelIntersects', outFields: 'ROADNUM', returnGeometry: 'true', f: 'geojson',
+  })}`;
+}
+
+/** GeoJSON lines -> the Overpass-like ways waysToPaths reads. */
+export function geojsonToWays(data) {
+  const ways = [];
+  for (const f of data?.features || []) {
+    const g = f?.geometry;
+    const lines = g?.type === 'LineString' ? [g.coordinates] : g?.type === 'MultiLineString' ? g.coordinates : [];
+    for (const l of lines) ways.push({ type: 'way', geometry: (l || []).map(([lon, lat]) => ({ lat, lon })) });
+  }
+  return { elements: ways };
 }
 
 /** Overpass query for one route's ways inside the town's box. */
@@ -101,28 +134,39 @@ export function waysToPaths(data, b) {
 }
 
 async function fetchShape(label, b, get) {
+  const errs = [];
+  const url = ntadUrl(label, b);
+  if (url) {
+    try {
+      const data = await get(url, { timeoutMs: 25000 });
+      if (data?.error) throw new Error(`NTAD: ${data.error.message || 'error'}`);
+      if (!Array.isArray(data?.features)) throw new Error('NTAD sent no features');
+      const paths = waysToPaths(geojsonToWays(data), b);
+      if (paths.length) return paths;
+      errs.push('NTAD: no matching road in the box');
+    } catch (e) { errs.push(e.message); }
+  }
   const q = shapeQuery(label, b);
   if (!q) return null;
-  let lastErr = null;
   for (const base of OVERPASS_URLS) {
     try {
-      const data = await get(`${base}?data=${encodeURIComponent(q)}`, { timeoutMs: 25000 });
+      const data = await get(`${base}?data=${encodeURIComponent(q)}`, { timeoutMs: 20000 });
       if (!Array.isArray(data?.elements)) throw new Error('Overpass sent no elements');
       return waysToPaths(data, b);
-    } catch (e) { lastErr = e; }
+    } catch (e) { errs.push(e.message); }
   }
-  throw lastErr || new Error('No Overpass server');
+  throw new Error(errs.join('; ').slice(0, 400) || 'No road shape source');
 }
 
-const metaKey = (b, label) => `route-shape:${label}:${[b.minLat, b.minLon, b.maxLat, b.maxLon].join(',')}`;
+const metaKey = (b, label) => `route-shape2:${label}:${[b.minLat, b.minLon, b.maxLat, b.maxLon].join(',')}`;
 
 /**
  * Shapes for the town's routes, { 'CO-62': [[ [lat, lon], ... ], ...] }, from the
- * database when fresh, else from Overpass (one route per call, at most `maxFetch`
+ * database when fresh, else from NTAD or Overpass (at most `maxFetch`
  * fetches per run so a new town doesn't hammer the public server).
  * Never throws: a route without a shape is simply drawn from its reports only.
  */
-export async function routeShapes(town, db, { get = fetchJson, now = Date.now(), maxFetch = 2 } = {}) {
+export async function routeShapes(town, db, { get = fetchJson, now = Date.now(), maxFetch = 4 } = {}) {
   const out = {};
   const b = town.bbox;
   if (!b || !db?.getMeta || db.getMeta('skip-route-shapes')) return out;
@@ -132,7 +176,7 @@ export async function routeShapes(town, db, { get = fetchJson, now = Date.now(),
     let saved = null;
     try { saved = JSON.parse(db.getMeta(k) || 'null'); } catch { /* bad cache: refetch */ }
     const fresh = saved && ((saved.paths && now - saved.at < KEEP_MS) || (!saved.paths && now - saved.at < RETRY_MS));
-    if (!fresh && fetched < maxFetch && shapeQuery(r.label, b)) {
+    if (!fresh && fetched < maxFetch && (ntadUrl(r.label, b) || shapeQuery(r.label, b))) {
       fetched++;
       try {
         const paths = await fetchShape(r.label, b, get);
