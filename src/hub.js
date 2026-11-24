@@ -5,6 +5,7 @@
 // from the same database the town pages use. Town sites stay on their own
 // addresses (telluride.buzz, durango.thetown.buzz); thetown.buzz/<town> redirects
 // there, per the subdomain-per-town decision (2026-11-21).
+import { buildInfo } from './version.js';
 import { groupByState, logoSvg, townSearchText, townUrl } from './brand.js';
 import { formLinks } from './forms.js';
 
@@ -70,6 +71,7 @@ export function renderHub(text, towns, snapFor) {
     suggestTownUrl: esc(formLinks().suggestTownUrl),
     feedbackUrl: esc(formLinks().feedbackUrl),
     supportUrl: esc(formLinks().supportUrl),
+    buildLabel: esc(buildInfo.label),
   };
   return text.replace(/\{\{(\w+)\}\}/g, (m, k) => (k in v ? v[k] : m));
 }

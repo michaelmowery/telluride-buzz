@@ -506,6 +506,8 @@ export function serverSettings(env = {}, info = {}) {
       shown('Push contact', 'VAPID_SUBJECT', 'https://telluride.buzz', 'Sent to the push services with each alert.'),
     ] },
     { title: 'Server', items: [
+      fact('Version', info.build?.label || '', info.build?.build ? '' : 'Build number, commit and deploy time appear once the server deploy script writes config/build.json.'),
+      ...(info.build?.deployedAt ? [fact('Deployed', new Date(info.build.deployedAt).toLocaleString('en-US', { timeZone: 'America/Denver', dateStyle: 'medium', timeStyle: 'short' }) + ' Mountain')] : []),
       fact('Demo mode', info.demo ? 'On (sample data, no feeds polled)' : 'Off'),
       fact('Database size', info.demo ? 'In memory (demo)' : mb(info.dbBytes)),
       fact('Last nightly backup', info.lastBackup || 'None yet', 'Backups stay on this server (7 days kept).'),
