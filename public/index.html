@@ -15,9 +15,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/styles.css?v=37">
-  <script src="/theme.js?v=37"></script>
-  <script src="/towns.js?v=37" defer></script>
+  <link rel="stylesheet" href="/styles.css?v=38">
+  <script src="/theme.js?v=38"></script>
+  <script src="/towns.js?v=38" defer></script>
 </head>
 <body class="{{bodyClass}}" data-feedback-url="{{feedbackUrl}}" data-support-url="{{supportUrl}}">
   <header class="top">
@@ -71,6 +71,14 @@
         <div class="tile-src" data-src></div>
       </button>
       <button class="tile-expand" tabindex="-1" aria-hidden="true" data-open="events" aria-label="Expand Events" title="Expand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
+      </div>
+      <div class="tile-wrap" data-show="sky">
+      <button class="tile" data-tile="sky" aria-pressed="false" aria-haspopup="dialog">
+        <div class="tile-head"><span class="tile-title">Sun &amp; Moon</span><span class="tile-age" data-age></span></div>
+        <div class="tile-body" data-body><div class="skeleton"></div></div>
+        <div class="tile-src" data-src></div>
+      </button>
+      <button class="tile-expand" tabindex="-1" aria-hidden="true" data-open="sky" aria-label="Expand Sun and Moon" title="Expand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
       </div>
     </section>
 
@@ -139,6 +147,6 @@
     <p class="fine build">{{buildLabel}}</p>
   </footer>
 
-  <script src="/app.js?v=37" type="module"></script>
+  <script src="/app.js?v=38" type="module"></script>
 </body>
 </html>

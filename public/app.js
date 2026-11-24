@@ -1,9 +1,10 @@
 // Telluride.Buzz home screen. Polls /api/home every 60 s while visible.
-import { wxIcon, hourlyChart, dayRows, snowBars } from './wx.js?v=37';
+import { wxIcon, hourlyChart, dayRows, snowBars } from './wx.js?v=38';
+import { skyTile, skyPanel } from './sky.js?v=38';
 
 const POLL_MS = 60e3;
 const STALE_MS = { weather: 45 * 60e3, roads: 20 * 60e3, lifts: 90 * 60e3, events: 6 * 3600e3 };
-const CATEGORY_LABEL = { weather: 'Weather', roads: 'Roads', lifts: 'Lifts & Snow', events: 'Events', town: 'Town', news: 'News', alerts: 'Alerts', prefs: 'Preferences' };
+const CATEGORY_LABEL = { weather: 'Weather', roads: 'Roads', lifts: 'Lifts & Snow', events: 'Events', sky: 'Sun & Moon', town: 'Town', news: 'News', alerts: 'Alerts', prefs: 'Preferences' };
 
 const $ = (s, el = document) => el.querySelector(s);
 const state = { data: null, filter: null, lastOk: 0, timer: null, feed: [], seen: new Set() };
@@ -159,6 +160,11 @@ function renderLifts(l) {
   }).join(''));
 }
 
+function renderSky(s) {
+  if (!s || !s.ok) return setTile('sky', unavailable(s?.error));
+  setTile('sky', skyTile(s));
+}
+
 function renderEvents(events) {
   if (!events?.length) return setTile('events', '<div class="tile-error">Nothing listed for the next few days.</div>');
   setTile('events', events.slice(0, 3).map((e) => `
@@ -253,7 +259,7 @@ async function refresh() {
     state.lastOk = Date.now();
     renderAlerts(data.alerts || []);
     const t = data.tiles || {};
-    renderWeather(t.weather); renderRoads(t.roads); renderLifts(t.lifts); renderEvents(data.events);
+    renderWeather(t.weather); renderRoads(t.roads); renderLifts(t.lifts); renderEvents(data.events); renderSky(data.sky);
     for (const name of ['weather', 'roads', 'lifts']) tileAge(name, t[name]);
     tileAge('events', null);
     if (!state.filter) renderFeed(data.feed || []);
@@ -495,7 +501,7 @@ function panelPrefs() {
     <p class="prefs-note">Ideas, a missing place or something that bugs you: we read every one. Opens in a new tab.</p>`;
 }
 const SHOW_OPTS = [
-  ['weather', 'Weather tile'], ['roads', 'Roads tile'], ['lifts', 'Lifts & Snow tile'], ['events', 'Events tile'],
+  ['weather', 'Weather tile'], ['roads', 'Roads tile'], ['lifts', 'Lifts & Snow tile'], ['events', 'Events tile'], ['sky', 'Sun & Moon tile'],
   ['feed', 'Live feed'],
 ];
 const FEED_OPTS = [
@@ -507,14 +513,15 @@ function toggleHtml([key, label]) {
   return `<button class="toggle" role="switch" aria-checked="${on}" data-toggle="${esc(key)}"><span>${esc(label)}</span><i class="switch" aria-hidden="true"></i></button>`;
 }
 
-const PANELS = { weather: panelWeather, roads: panelRoads, lifts: panelLifts, events: panelEvents, prefs: panelPrefs };
+const panelSky = (s) => (s?.ok ? skyPanel(s, state.data?.town?.name) : unavailable(s?.error));
+const PANELS = { weather: panelWeather, roads: panelRoads, lifts: panelLifts, events: panelEvents, sky: panelSky, prefs: panelPrefs };
 let openTile = null;
 let closing = false;
 
 function renderPanel() {
   if (!openTile || !state.data) return;
   const t = state.data.tiles || {};
-  const data = openTile === 'events' ? state.data.events : t[openTile];
+  const data = openTile === 'events' ? state.data.events : openTile === 'sky' ? state.data.sky : t[openTile];
   const body = $('#panel-body');
   const scroll = body.scrollTop;
   const liveMap = $('#roads-map', body);
@@ -528,6 +535,7 @@ function renderPanel() {
   body.querySelectorAll('[data-pct]').forEach((i) => { i.style.width = `${i.dataset.pct}%`; }); // CSP: no inline style attributes
   body.querySelectorAll('[data-left]').forEach((i) => { i.style.left = `${i.dataset.left}%`; i.style.right = `${i.dataset.right}%`; });
   body.querySelectorAll('[data-h]').forEach((i) => { i.style.height = `${i.dataset.h}%`; });
+  body.querySelectorAll('[data-x]').forEach((i) => { i.style.left = `${i.dataset.x}%`; if (i.dataset.y) i.style.top = `${i.dataset.y}%`; });
   const src = $(`.tile[data-tile="${openTile}"] [data-age]`);
   const meta = tileMeta[openTile];
   const checked = meta?.checked ? `checked ${ago(meta.checked)}` : '';
