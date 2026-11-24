@@ -295,3 +295,23 @@ test('Vail Resorts snow report: reads FR.snowReportData JSON, not the forecast t
   assert.equal(new Date(at).toISOString(), '2026-11-24T12:31:00.000Z');
   assert.equal(fromVailResorts('<script>FR.snowReportData = {broken;</script>'), null);
 });
+
+test('Vail Resorts lift & trail page fills lift and trail counts on the tile', async () => {
+  const { fromVailTerrain } = await import('../src/sources/lifts.js');
+  assert.deepEqual(fromVailTerrain(fx('terrain-status-vail.html')), { liftsOpen: 1, liftsTotal: 3, trailsOpen: 2, trailsTotal: 5 });
+  assert.equal(fromVailTerrain('<p>nothing</p>'), null);
+  const vail = { ...town, id: 'vail', lifts: { url: 'https://snow.example/report', liftsUrl: 'https://snow.example/terrain', name: 'Vail', label: 'Vail Mountain' } };
+  const pages = { 'https://snow.example/report': fx('snow-report-vail.html'), 'https://snow.example/terrain': fx('terrain-status-vail.html') };
+  const db = openDb(':memory:');
+  const [job] = liftsJobs(vail, { get: async (u) => pages[u] });
+  await job.run(db);
+  const tile = db.getTiles('vail').lifts;
+  assert.deepEqual([tile.new24, tile.base, tile.liftsOpen, tile.liftsTotal, tile.trailsOpen, tile.trailsTotal], [2, 18, 1, 3, 2, 5]);
+  // A failing lift page leaves the snow numbers in place.
+  const db2 = openDb(':memory:');
+  const [job2] = liftsJobs(vail, { get: async (u) => { if (u.endsWith('terrain')) throw new Error('403'); return pages[u]; } });
+  await job2.run(db2);
+  const t2 = db2.getTiles('vail').lifts;
+  assert.equal(t2.ok, true);
+  assert.equal(t2.liftsTotal, null);
+});

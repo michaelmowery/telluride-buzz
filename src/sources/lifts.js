@@ -69,6 +69,28 @@ export function fromVailResorts(html) {
   };
 }
 
+/**
+ * Vail Resorts' lift and terrain page: FR.TerrainStatusFeed = {"GroomingAreas":[{"Lifts":[...],
+ * "Trails":[...]}], "Lifts":[...]}. Lift Status is Closed/Open/OnHold/Scheduled, sent as
+ * 0/1/2/3 in the server HTML (or as the name). Only Open counts as open, as on vail.com.
+ */
+export function fromVailTerrain(html) {
+  const m = String(html).match(/FR\.TerrainStatusFeed\s*=\s*(\{[\s\S]*?\})\s*;\s*(?:\n|<\/script>)/);
+  if (!m) return null;
+  let d;
+  try { d = JSON.parse(m[1]); } catch { return null; }
+  const areas = Array.isArray(d.GroomingAreas) ? d.GroomingAreas : [];
+  const lifts = Array.isArray(d.Lifts) && d.Lifts.length ? d.Lifts : areas.flatMap((a) => a.Lifts || []);
+  const trails = areas.flatMap((a) => a.Trails || []);
+  const isOpen = (st) => st === 1 || /^open$/i.test(String(st));
+  return {
+    liftsOpen: lifts.length ? lifts.filter((l) => isOpen(l.Status)).length : null,
+    liftsTotal: lifts.length || null,
+    trailsOpen: trails.length ? trails.filter((t) => t.IsOpen === true).length : null,
+    trailsTotal: trails.length || null,
+  };
+}
+
 /** Then visible text, e.g. "24 Hours 6"" or "Base Depth 32 in" or "Lifts Open 12 / 19". */
 function fromText(text, valueFirst = false) {
   const t = text.replace(/\s+/g, ' ');
@@ -132,8 +154,8 @@ export function parseSnowReport(html, tz = 'America/Denver', { valueFirst = fals
   if (r.new7d != null && r.new7d > 200) r.new7d = null;
   if (r.season != null && r.season > 1000) r.season = null;
   if (r.base != null && r.base > 250) r.base = null;
-  if (r.liftsTotal != null && (r.liftsTotal > 40 || (r.liftsOpen ?? 0) > r.liftsTotal)) r.liftsOpen = r.liftsTotal = null;
-  if (r.trailsTotal != null && (r.trailsTotal > 300 || (r.trailsOpen ?? 0) > r.trailsTotal)) r.trailsOpen = r.trailsTotal = null;
+  if (r.liftsTotal != null && (r.liftsTotal > 60 || (r.liftsOpen ?? 0) > r.liftsTotal)) r.liftsOpen = r.liftsTotal = null;
+  if (r.trailsTotal != null && (r.trailsTotal > 500 || (r.trailsOpen ?? 0) > r.trailsTotal)) r.trailsOpen = r.trailsTotal = null;
   const found = Object.values(r).filter((v) => v != null).length;
   const c = v.condition || t.condition || '';
   const condition = /^[A-Za-z][A-Za-z /&-]{1,40}$/.test(c) && !/^(?:details|n\/?a|none|see)\b/i.test(c) ? c : null;
@@ -181,6 +203,15 @@ export function liftsJobs(town, { get = fetchText } = {}) {
       try {
         const html = await get(res.url);
         const r = parseSnowReport(html, town.timezone, { valueFirst: !!res.valueFirst });
+        if (res.liftsUrl) {
+          // A separate lift & trail page fills in counts; if it fails, the snow numbers still show.
+          try {
+            const lt = fromVailTerrain(await get(res.liftsUrl)) || {};
+            for (const k of ['liftsOpen', 'liftsTotal', 'trailsOpen', 'trailsTotal']) {
+              if (r[k] == null && lt[k] != null) { r[k] = lt[k]; r.found += 1; }
+            }
+          } catch { /* keep the snow report */ }
+        }
         entry = { ...base, ok: r.found >= 2, ...r, error: r.found >= 2 ? null : SORRY };
       } catch (e) {
         saveTile(db, { ...base, ok: false, error: SORRY });
