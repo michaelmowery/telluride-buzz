@@ -315,3 +315,11 @@ test('Vail Resorts lift & trail page fills lift and trail counts on the tile', a
   assert.equal(t2.ok, true);
   assert.equal(t2.liftsTotal, null);
 });
+
+test('CDOT work zones: the same work zone listed twice (e.g. each direction) shows once', () => {
+  const data = fxj('cdot-wzdx.json');
+  const twin = JSON.parse(JSON.stringify(data.features[0]));
+  twin.id = 'wz-1-eb';
+  const items = workZonesToItems({ ...data, features: [data.features[0], twin] }, town);
+  assert.equal(items.length, 1);
+});

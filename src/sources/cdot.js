@@ -221,7 +221,15 @@ export function workZonesToItems(data, town) {
       _at: time(p, ['lastUpdated', 'updateTime', 'updated', 'update_date', 'reportedTime', 'timestamp']),
     });
   }
-  return items;
+  // WZDx often lists one work zone as several features (one per direction or road
+  // segment) with the same description. Show it once, keeping the most severe.
+  const byText = new Map();
+  for (const it of items) {
+    const k = `${it.title}\n${it.summary || ''}\n${it.expiresAt || ''}`;
+    const prev = byText.get(k);
+    if (!prev || it.severity > prev.severity) byText.set(k, it);
+  }
+  return [...byText.values()];
 }
 
 // ---------- tile ----------
