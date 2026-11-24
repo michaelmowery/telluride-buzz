@@ -8,6 +8,7 @@
 import { fetchJson, sharedJson } from '../http.js';
 import { featuresOf, inBbox, geoOf, buildRoadsTile } from './cdot.js';
 import { routeLabel, routesNear } from '../cdot-routes.js';
+import { routeShapes } from '../route-shapes.js';
 
 export const NM_FEED = process.env.NMROADS_URL || 'https://nmroads.com/nmroads.json';
 const LABEL = 'NMDOT NMRoads';
@@ -88,7 +89,7 @@ export function nmroadsToItems(data, town, now = Date.now()) {
 }
 
 export function nmroadsJobs(town, { get = fetchJson } = {}) {
-  const state = { incidents: [], error: null, okAt: null };
+  const state = { incidents: [], shapes: {}, error: null, okAt: null };
   const tileView = { ...town, cdot: { ...town.cdot, disclaimer: town.cdot.disclaimer || NM_DISCLAIMER }, roadsMeta: NM_ROADS_META };
   return [{
     id: 'nmroads-events',
@@ -105,6 +106,7 @@ export function nmroadsJobs(town, { get = fetchJson } = {}) {
         state.error = e;
         throw e;
       } finally {
+        if (state.okAt) state.shapes = await routeShapes(town, db, { get });
         db.setTile(town.id, 'roads', buildRoadsTile(tileView, state));
       }
     },

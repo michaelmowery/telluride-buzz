@@ -1,5 +1,9 @@
 // Sample data for local development and screenshots (DEMO=1). Never used in production.
+import fs from 'node:fs';
 import { buildRoadsTile } from './sources/cdot.js';
+
+// Telluride's highways from OpenStreetMap (simplified), so the demo map draws whole routes.
+const DEMO_SHAPES = JSON.parse(fs.readFileSync(new URL('./demo-shapes.json', import.meta.url), 'utf8'));
 
 export function seedDemo(db, town) {
   const now = Date.now();
@@ -33,9 +37,9 @@ export function seedDemo(db, town) {
     incidents,
     conditions: {
       'CO-145': [{ segment: 'Telluride to Placerville', text: 'Wet in areas', level: 'ok', geo: [[[37.9530, -107.8730], [37.9720, -107.9300], [38.0160, -108.0530]]] }],
-      'CO-62': [{ segment: 'Dallas Divide', text: 'Snow packed, icy spots', level: 'caution', geo: [[[38.0160, -108.0530], [38.0900, -107.9800], [38.1300, -107.8800], [38.1520, -107.7560]]] }],
       'US-550': [{ segment: 'Ridgway to Ouray', text: 'Dry', level: 'ok', geo: [[[38.1520, -107.7560], [38.0900, -107.7200], [38.0230, -107.6720]]] }],
     },
+    shapes: town.id === 'telluride' ? DEMO_SHAPES : {},
     okAt: now,
   }));
 
