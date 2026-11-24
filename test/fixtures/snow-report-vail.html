@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html><head><title>Vail Weather Forecast - Snow Conditions | Vail Mountain</title></head>
+<body>
+<div class="snow_report">
+  <h2>SNOW REPORT</h2>
+  <div id="snow-report-root"></div>
+<script type="text/javascript">
+    FR.snowReportData = {"OverallSnowConditions":"Packed Powder","OvernightSnowfall":{"Inches":"2","Centimeters":"5"},"TwentyFourHourSnowfall":{"Inches":"2","Centimeters":"5"},"FortyEightHourSnowfall":{"Inches":"2","Centimeters":"5"},"SevenDaySnowfall":{"Inches":"13","Centimeters":"33"},"BaseDepth":{"Inches":"18","Centimeters":"45"},"CurrentSeason":{"Inches":"24","Centimeters":"61"},"LastUpdatedText":"Updated November 24, 2026 at 5:31 AM MST"};
+    FR.unitsOfMeasurement = 1;
+    FR.snowReportContext = {
+        OverallSnowConditions: 'Overall Snow Conditions',
+        OvernightSnowfall: '12 Hr <br> Snowfall',
+        TwentyFourHourSnowfall: '24 Hour<br/>Snowfall',
+        FortyEightHourSnowfall: '48 Hour<br/>Snowfall',
+        SevenDaySnowfall: '7 Day<br/>Snowfall',
+        BaseDepth: 'Base<br/>Depth',
+        CurrentSeason: 'Current<br/>Season'
+    };
+    FR.$el.window.trigger('snow-report-fr-loaded');
+</script>
+</div>
+<h3>FORECAST</h3><p>Partly Cloudy. 33°F HI 19°F LOW 0in DAYTIME SNOW 0in OVERNIGHT SNOW</p>
+</body></html>

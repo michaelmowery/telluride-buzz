@@ -45,6 +45,30 @@ function fromJson(html) {
   return out;
 }
 
+/**
+ * Vail Resorts sites (vail.com, beavercreek.com, breckenridge.com, keystoneresort.com,
+ * crestedbutte.com ...) render the report in the browser from a JSON object in the
+ * page: FR.snowReportData = {"TwentyFourHourSnowfall":{"Inches":"2",...}, ...}.
+ * The visible numbers aren't in the server HTML, so read that object directly.
+ */
+export function fromVailResorts(html) {
+  const m = html.match(/FR\.snowReportData\s*=\s*(\{[\s\S]*?\})\s*;/);
+  if (!m) return null;
+  let d;
+  try { d = JSON.parse(m[1]); } catch { return null; }
+  const inches = (k) => (d[k] && typeof d[k] === 'object' ? num(d[k].Inches) : null);
+  return {
+    overnight: inches('OvernightSnowfall'),
+    new24: inches('TwentyFourHourSnowfall'),
+    new48: inches('FortyEightHourSnowfall'),
+    new7d: inches('SevenDaySnowfall'),
+    base: inches('BaseDepth'),
+    season: inches('CurrentSeason'),
+    condition: typeof d.OverallSnowConditions === 'string' ? d.OverallSnowConditions.trim() : null,
+    updatedText: typeof d.LastUpdatedText === 'string' ? d.LastUpdatedText : null,
+  };
+}
+
 /** Then visible text, e.g. "24 Hours 6"" or "Base Depth 32 in" or "Lifts Open 12 / 19". */
 function fromText(text, valueFirst = false) {
   const t = text.replace(/\s+/g, ' ');
@@ -87,10 +111,13 @@ function fromText(text, valueFirst = false) {
 }
 
 export function parseSnowReport(html, tz = 'America/Denver', { valueFirst = false } = {}) {
+  const v = fromVailResorts(html) || {};
   const j = fromJson(html);
   const text = htmlToText(html);
   const t = fromText(text, valueFirst);
-  const pick = (k) => j[k] ?? t[k] ?? null;
+  // Vail Resorts' JSON values are the resort's own figures, so they win; the text
+  // pass would otherwise read the forecast ("0in OVERNIGHT SNOW") as snowfall.
+  const pick = (k) => v[k] ?? j[k] ?? t[k] ?? null;
   const r = {
     overnight: pick('overnight'), new24: pick('new24'), new48: pick('new48'),
     new72: pick('new72'), new7d: pick('new7d'), season: pick('season'), base: pick('base'),
@@ -108,8 +135,10 @@ export function parseSnowReport(html, tz = 'America/Denver', { valueFirst = fals
   if (r.liftsTotal != null && (r.liftsTotal > 40 || (r.liftsOpen ?? 0) > r.liftsTotal)) r.liftsOpen = r.liftsTotal = null;
   if (r.trailsTotal != null && (r.trailsTotal > 300 || (r.trailsOpen ?? 0) > r.trailsTotal)) r.trailsOpen = r.trailsTotal = null;
   const found = Object.values(r).filter((v) => v != null).length;
-  const condition = /^[A-Za-z][A-Za-z /&-]{1,40}$/.test(t.condition || '') && !/^(?:details|n\/?a|none|see)\b/i.test(t.condition) ? t.condition : null;
-  return { ...r, condition, found, sourceAt: reportUpdatedAt(text, tz) };
+  const c = v.condition || t.condition || '';
+  const condition = /^[A-Za-z][A-Za-z /&-]{1,40}$/.test(c) && !/^(?:details|n\/?a|none|see)\b/i.test(c) ? c : null;
+  const sourceAt = (v.updatedText && reportUpdatedAt(v.updatedText, tz)) || reportUpdatedAt(text, tz);
+  return { ...r, condition, found, sourceAt };
 }
 
 /** A town's ski resorts: config `lifts` may be one resort or a list. */
