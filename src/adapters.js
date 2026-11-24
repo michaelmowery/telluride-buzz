@@ -336,6 +336,7 @@ export async function testSource(town, source, deps = {}) {
   const job = jobFor(town, source, deps);
   if (!job) throw new Error(`Unknown source type "${source.adapter}"`);
   const scratch = openDb(':memory:');
+  scratch.setMeta('skip-route-shapes', '1'); // a quick test doesn't wait on map shapes
   const started = Date.now();
   let error = null;
   try { await job.run(scratch); } catch (e) { error = e.message; }

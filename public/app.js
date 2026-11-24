@@ -435,16 +435,20 @@ async function drawRoadsMap(r) {
   }
   roadsLayer.clearLayers();
   const bounds = [];
-  const add = (geo, level, html, weight) => {
+  const add = (geo, level, html, weight, opacity = 0.9) => {
     for (const path of geo || []) {
       const color = LEVEL_COLOR[level] || LEVEL_COLOR.unknown;
       const layer = path.length === 1
         ? L.circleMarker(path[0], { radius: 8, color: '#fff', weight: 2, fillColor: color, fillOpacity: 1 })
-        : L.polyline(path, { color, weight, opacity: 0.9, lineCap: 'round' });
+        : L.polyline(path, { color, weight, opacity, lineCap: 'round' });
       layer.bindPopup(html).addTo(roadsLayer);
       bounds.push(...path);
     }
   };
+  // Every followed highway, in its overall color (green when clear), under the reported stretches.
+  for (const route of r.routes || []) {
+    add(route.shape, route.level, `<b>${esc(route.label)}</b>${route.note ? ` · ${esc(route.note)}` : ''}<br>${esc(route.status || '')}`, 4, route.level === 'ok' ? 0.85 : 0.5);
+  }
   for (const route of r.routes || []) {
     for (const s of route.segments || []) add(s.geo, s.level, `<b>${esc(route.label)}</b><br>${esc(s.text)}`, 5);
   }

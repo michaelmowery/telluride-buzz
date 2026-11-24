@@ -8,6 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fetchJson, redact } from '../http.js';
+import { routeShapes } from '../route-shapes.js';
 
 const LABEL = 'CDOT COtrip';
 const BASE = process.env.CDOT_BASE || 'https://data.cotrip.org/api/v1';
@@ -237,7 +238,7 @@ export function workZonesToItems(data, town) {
 export const CDOT_ROADS_META = { sourceLabel: LABEL, shortName: 'CDOT', link: MAP_LINK, linkText: 'Live map at COtrip' };
 
 /** The Roads tile. town.roadsMeta names another state's DOT (default CDOT). */
-export function buildRoadsTile(town, { incidents = [], workZones = [], conditions = {}, error = null, okAt = Date.now() }) {
+export function buildRoadsTile(town, { incidents = [], workZones = [], conditions = {}, shapes = {}, error = null, okAt = Date.now() }) {
   const meta = { ...CDOT_ROADS_META, ...(town.roadsMeta || {}) };
   const rank = { ok: 0, caution: 1, closed: 2 };
   const routes = town.cdot.routes.map((r) => {
@@ -256,6 +257,8 @@ export function buildRoadsTile(town, { incidents = [], workZones = [], condition
     if (!okAt) return { label: r.label, note: r.note, level: 'unknown', status: 'No current data', events: [], conditions: [] };
     return {
       label: r.label, note: r.note, level, status,
+      // The whole highway near town (OpenStreetMap), drawn under the reported stretches.
+      shape: shapes[r.label] || null,
       events: evts.slice(0, 12).map((e) => ({ title: e.title.replace(`${r.label}: `, ''), summary: e.summary || null, level: e._level, geo: e._geo || null })),
       segments: conds.filter((c) => c.geo).slice(0, 20).map((c) => ({ text: c.segment ? `${c.segment}: ${c.text}` : c.text, level: c.level, geo: c.geo })),
       conditions: [...new Set(conds.map((c) => (c.segment ? `${c.segment}: ${c.text}` : c.text)).filter(Boolean))].slice(0, 8),
@@ -307,7 +310,7 @@ function saveSample(name, data) {
 }
 
 export function cdotJobs(town, { get = fetchJson, apiKey = process.env.CDOT_API_KEY } = {}) {
-  const state = { incidents: [], workZones: [], conditions: {}, error: null, okAt: null };
+  const state = { incidents: [], workZones: [], conditions: {}, shapes: {}, error: null, okAt: null };
   const url = (ep) => `${BASE}/${ep}?apiKey=${encodeURIComponent(apiKey || '')}`;
 
   async function fetchFeed(ep) {
@@ -317,7 +320,10 @@ export function cdotJobs(town, { get = fetchJson, apiKey = process.env.CDOT_API_
     return data;
   }
 
-  const refreshTile = (db) => db.setTile(town.id, 'roads', buildRoadsTile(town, state));
+  const refreshTile = async (db) => {
+    if (state.okAt) state.shapes = await routeShapes(town, db, { get, maxFetch: 1 });
+    db.setTile(town.id, 'roads', buildRoadsTile(town, state));
+  };
 
   const job = (id, ep, apply) => ({
     id,
@@ -332,7 +338,7 @@ export function cdotJobs(town, { get = fetchJson, apiKey = process.env.CDOT_API_
         state.error = e;
         throw new Error(redact(e.message));
       } finally {
-        refreshTile(db);
+        await refreshTile(db);
       }
     },
   });
