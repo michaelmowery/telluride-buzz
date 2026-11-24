@@ -13,6 +13,11 @@ export function seedDemo(db, town) {
       { name: 'Saturday Night', temp: 8, isDaytime: false, short: 'Clear', detail: 'Clear, with a low around 8.' },
       { name: 'Sunday', temp: 33, isDaytime: true, short: 'Sunny', detail: 'Sunny, with a high near 33.' },
       { name: 'Sunday Night', temp: 11, isDaytime: false, short: 'Mostly Clear', detail: 'Mostly clear, with a low around 11.' },
+      { name: 'Monday', temp: 30, isDaytime: true, short: 'Partly Sunny', detail: 'Partly sunny, with a high near 30.' },
+      { name: 'Monday Night', temp: 14, isDaytime: false, short: 'Chance Snow Showers', detail: 'A chance of snow showers after 11pm. Low around 14. Chance of precipitation is 40%. New snow accumulation of less than one inch possible.' },
+      { name: 'Tuesday', temp: 25, isDaytime: true, short: 'Snow Likely', detail: 'Snow likely. High near 25. Chance of precipitation is 70%. New snow accumulation of 3 to 7 inches possible.' },
+      { name: 'Tuesday Night', temp: 6, isDaytime: false, short: 'Mostly Cloudy', detail: 'Mostly cloudy, with a low around 6.' },
+      { name: 'Wednesday', temp: 28, isDaytime: true, short: 'Sunny', detail: 'Sunny, with a high near 28.' },
     ],
     hourly: Array.from({ length: 24 }, (_, i) => ({
       t: Math.floor(now / hr) * hr + (i + 1) * hr, temp: Math.round(24 - 8 * Math.sin(i / 4)),
