@@ -266,3 +266,49 @@ test('home page tabs: Essentials, Food & drink, Shops (shops + services), Lodgin
   assert.match(tab('stay'), /Inn/);
   assert.match(renderResources(list.slice(0, 2), town, Date.now(), 'stay'), /Places to stay are on the way/);
 });
+
+test('business tabs group listings by type, with a pill each', async () => {
+  const { typeOf } = await import('../src/resources.js');
+  const t = (tags, name = 'X', category = 'food') => typeOf({ category, tags, name });
+  assert.equal(t('Mexican'), 'restaurants');
+  assert.equal(t('Brewpub · American'), 'bars');
+  assert.equal(t('Bakery · Cafe'), 'cafes');
+  assert.equal(t('Café'), 'cafes');
+  assert.equal(t('Pizza'), 'pizza');
+  assert.equal(t('', 'Joe’s Coffee'), 'cafes');
+  assert.equal(t('', 'Somewhere'), 'restaurants');
+  assert.equal(t('Ski rentals', 'X', 'shops'), 'outdoor');
+  assert.equal(t('Boutique hotel', 'X', 'lodging'), 'hotels');
+  assert.equal(t('Vacation rentals', 'X', 'lodging'), 'rentals');
+  assert.equal(t('Plumbing', 'X', 'services'), null);
+  assert.equal(t('Pizza', 'X', 'medical'), null);
+
+  const town = { id: 'telluride', name: 'Telluride', state: 'CO', timezone: 'America/Denver' };
+  const list = [
+    { id: 1, category: 'food', name: 'La Cocina', tags: 'Mexican', sort: 10 },
+    { id: 2, category: 'food', name: 'Brown Dog', tags: 'Pizza', sort: 20 },
+    { id: 3, category: 'food', name: 'Smuggler Union', tags: 'Brewpub · American', sort: 30 },
+    { id: 4, category: 'food', name: 'Butcher & Baker', tags: 'Bakery · Cafe', sort: 40 },
+    { id: 5, category: 'food', name: 'Coffee Cowboy', tags: 'Coffee', sort: 50 },
+    { id: 6, category: 'food', name: 'Sponsored Cafe', tags: 'Cafe', sort: 60, sponsored: true, sponsorFrom: '2000-01-01', sponsorUntil: '2999-12-31' },
+  ];
+  const html = renderResources(list, town, Date.now(), 'eat');
+  // Lone pizza place folds into Restaurants; cafes and bars get their own sections and pills.
+  for (const id of ['food-restaurants', 'food-cafes', 'food-bars']) {
+    assert.match(html, new RegExp(`<details class="res-cat" id="${id}" open>`));
+    assert.match(html, new RegExp(`data-cat="${id}"`));
+  }
+  assert.equal(html.includes('food-pizza'), false);
+  assert.ok(html.indexOf('Brown Dog') < html.indexOf('id="food-cafes"'));
+  // #food still lands on the tab; sponsors lead their own type.
+  assert.match(html, /id="food"/);
+  const cafes = html.slice(html.indexOf('id="food-cafes"'));
+  assert.ok(cafes.indexOf('Sponsored Cafe') < cafes.indexOf('Butcher'));
+  assert.match(cafes, /res-sponsor-label">Sponsored/);
+  // One type only: no pills, the plain category section.
+  const one = renderResources(list.slice(0, 1), town, Date.now(), 'eat');
+  assert.match(one, /id="food" open/);
+  assert.equal(one.includes('res-subtabs'), false);
+  // The all-resources page stays by category.
+  assert.equal(renderResources(list, town).includes('food-cafes'), false);
+});

@@ -34,6 +34,74 @@ const tabOf = (cat) => RESOURCE_CATEGORIES.find((c) => c.id === cat)?.tab || 'es
 export const isBusiness = (cat) => RESOURCE_CATEGORIES.find((c) => c.id === cat)?.group === 'business';
 const CAT_IDS = new Set(RESOURCE_CATEGORIES.map((c) => c.id));
 
+// Business tabs (Food & drink, Shops, Lodging) split each category into types, read
+// from the listing's tags ("Brewpub · American", "Bakery · Cafe"). Tags are checked
+// in order and the first one that names a type wins, then the name; anything left
+// over goes to the category's catch-all. A type with `into` and only one listing in a
+// town folds into that type, so a town never gets a pill with a single place on it.
+// Order here is the page order. Works for every town: nothing here is per town.
+export const TYPE_GROUPS = {
+  food: {
+    fallback: 'restaurants',
+    groups: [
+      { id: 'restaurants', label: 'Restaurants', re: /\b(restaurants?|american|italian|mexican|tex-mex|latin|thai|sushi|japanese|chinese|asian|indian|french|steak ?house|steaks?|seafood|fine dining|bistro|grill|diner|mediterranean|greek|vietnamese|korean|southwestern|new american|tapas|ramen|noodles?)\b/ },
+      { id: 'cafes', label: 'Cafes & bakeries', re: /\b(cafes?|coffee( ?house| shop)?|espresso|bakery|bakeries|bagels?|donuts?|doughnuts?|tea ?(house|room|shop)?|juice( bar)?|smoothies?|crepes?|patisserie)\b/ },
+      { id: 'bars', label: 'Bars & breweries', re: /\b(bars?|brew(ery|eries|pub|pubs)|pubs?|saloons?|taverns?|tap ?rooms?|distiller(y|ies)|winer(y|ies)|wine|cocktails?|lounges?|beer|spirits|cidery)\b/ },
+      { id: 'pizza', label: 'Pizza', re: /\b(pizzas?|pizzerias?)\b/, into: 'restaurants' },
+      { id: 'quick', label: 'Quick bites', re: /\b(deli|delis|sandwich(es)?|subs|food trucks?|burgers?|ice cream|gelato|frozen yogurt|grab[- ]and[- ]go|take ?out|fast food|hot dogs?|bbq|barbecue|tacos?|burritos?)\b/, into: 'restaurants' },
+      { id: 'markets', label: 'Markets & groceries', re: /\b(grocer(y|ies)|markets?|supermarkets?|liquor|butcher|natural foods|co-?op|convenience)\b/ },
+    ],
+  },
+  shops: {
+    fallback: 'other',
+    groups: [
+      { id: 'outdoor', label: 'Outdoor & ski', re: /\b(ski|skis|snowboards?|bikes?|bicycles?|cycling|outdoors?|mountaineering|climbing|fly ?shop|fly fishing|fishing|rentals?|gear|sporting goods|sports|tuning)\b/ },
+      { id: 'clothing', label: 'Clothing', re: /\b(clothing|apparel|boutiques?|fashion|shoes|footwear|outerwear|vintage|consignment)\b/ },
+      { id: 'gifts', label: 'Gifts, art & books', re: /\b(gifts?|galler(y|ies)|art|artists?|jewel(ry|ers?)|books?|bookstores?|souvenirs?|home decor|decor|toys?|crafts?|antiques?|candles?)\b/ },
+      { id: 'markets', label: 'Groceries & liquor', re: /\b(grocer(y|ies)|markets?|supermarkets?|liquor|wine shop|pharmac(y|ies)|drug ?store|convenience|hardware)\b/ },
+      { id: 'other', label: 'More shops', re: null },
+    ],
+  },
+  lodging: {
+    fallback: 'other',
+    groups: [
+      { id: 'hotels', label: 'Hotels & inns', re: /\b(hotels?|inns?|lodges?|resorts?|motels?|boutique hotel|suites)\b/ },
+      { id: 'bnb', label: 'B&Bs', re: /(\bb ?& ?b\b|\bbnb\b|bed (and|&) breakfast)/, into: 'hotels' },
+      { id: 'rentals', label: 'Condos & rentals', re: /\b(condos?|condominiums?|vacation rentals?|rentals?|property management|homes?|cabins?|apartments?|townhomes?|chalets?|villas?)\b/ },
+      { id: 'camping', label: 'Camping & hostels', re: /\b(camp(ing|grounds?|s|site)?|rv|hostels?|huts?|yurts?|glamping)\b/ },
+      { id: 'other', label: 'More places to stay', re: null },
+    ],
+  },
+};
+
+/** The type id for one business listing (see TYPE_GROUPS); null for other categories. */
+export function typeOf(r) {
+  const T = TYPE_GROUPS[r.category];
+  if (!T) return null;
+  // Lower case without accents, so "Café" reads as "cafe".
+  const plain = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const tags = String(r.tags || '').split(/\s*[·•|,;/]\s*/).map(plain).filter(Boolean);
+  for (const text of [...tags, plain(r.name)]) {
+    const g = T.groups.find((x) => x.re && x.re.test(text));
+    if (g) return g.id;
+  }
+  return T.fallback;
+}
+
+/** Split a category's rows into its types, in page order, folding lone minor types. */
+function groupRows(cat, rows) {
+  const T = TYPE_GROUPS[cat];
+  if (!T) return null;
+  const by = new Map(T.groups.map((g) => [g.id, []]));
+  for (const r of rows) by.get(typeOf(r)).push(r);
+  for (const g of T.groups) {
+    if (g.into && by.get(g.id).length === 1) { by.get(g.into).push(...by.get(g.id)); by.set(g.id, []); }
+  }
+  // Keep the category's own order (sponsors first, then admin order) inside each type.
+  const pos = new Map(rows.map((r, i) => [r, i]));
+  return T.groups.map((g) => ({ ...g, rows: by.get(g.id).sort((a, b) => pos.get(a) - pos.get(b)) })).filter((g) => g.rows.length);
+}
+
 /** Entries not checked for this long are flagged in the admin. */
 export const STALE_DAYS = 180;
 
@@ -202,6 +270,7 @@ export function renderResources(list, town, now = Date.now(), tab = null) {
     </details>`);
   }
   let bizHeading = false;
+  const sections = []; // { id, label } of each section shown, for the pills
   for (const c of cats) {
     if (c.id === 'emergency') continue;
     const all = shown.filter((r) => r.category === c.id);
@@ -212,17 +281,27 @@ export function renderResources(list, town, now = Date.now(), tab = null) {
       bizHeading = true;
       parts.push(`<h2 class="res-group" id="local-businesses">Local businesses</h2>`);
     }
-    // Business tabs start open (there are only one or two sections); civic ones collapsed.
-    parts.push(`<details class="res-cat" id="${c.id}"${tab && tab !== 'essentials' ? ' open' : ''}>
-      <summary><h2>${esc(c.label)}</h2><span class="res-count">${rows.length}</span></summary>
+    // On a business tab each category splits into its types (Restaurants, Cafes &
+    // bakeries, ...), one open section and one pill each. A category with only one
+    // type keeps its own name and address (#food).
+    const groups = tab && tab !== 'essentials' ? groupRows(c.id, rows) : null;
+    const split = groups && groups.length > 1;
+    if (split) parts.push(`<span class="res-anchor" id="${c.id}"></span>`);
+    const secs = split ? groups.map((g) => ({ id: `${c.id}-${g.id}`, label: g.label, rows: g.rows })) : [{ id: c.id, label: c.label, rows }];
+    for (const sec of secs) {
+      sections.push(sec);
+      // Business tabs start open; civic ones collapsed.
+      parts.push(`<details class="res-cat" id="${sec.id}"${tab && tab !== 'essentials' ? ' open' : ''}>
+      <summary><h2>${esc(sec.label)}</h2><span class="res-count">${sec.rows.length}</span></summary>
       <ul class="res-list">
-        ${rows.map((r) => card(r, town, sponsorActive(r, day))).join('\n        ')}
+        ${sec.rows.map((r) => card(r, town, sponsorActive(r, day))).join('\n        ')}
       </ul>
     </details>`);
+    }
   }
   // Search box and category sub-tabs. Without JavaScript the sub-tabs are plain jump
   // links and the search box stays hidden (towns.js turns both on).
-  const subCats = cats.filter((c) => (c.id === 'emergency' ? top.length : shown.some((r) => r.category === c.id)));
+  const subCats = [...(top.length && cats.some((c) => c.id === 'emergency') ? [{ id: 'emergency', label: 'Emergency' }] : []), ...sections];
   const search = T ? T.search : 'Search resources';
   // Sub-tabs only when there's more than one section to pick from.
   const subtabs = subCats.length > 1 ? `
