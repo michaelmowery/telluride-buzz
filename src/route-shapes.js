@@ -136,8 +136,10 @@ export async function routeShapes(town, db, { get = fetchJson, now = Date.now(),
       fetched++;
       try {
         const paths = await fetchShape(r.label, b, get);
-        saved = { at: now, paths: paths || [] };
+        if (!paths?.length) throw new Error('OpenStreetMap has no matching road in the town\'s box');
+        saved = { at: now, paths };
       } catch (e) {
+        console.warn(`[route-shapes] ${town.id} ${r.label}: ${e.message}`);
         // Keep an old shape if there is one; otherwise wait an hour before the next try.
         saved = saved?.paths ? { ...saved, at: now - KEEP_MS + RETRY_MS } : { at: now, paths: null, error: String(e.message).slice(0, 200) };
       }
