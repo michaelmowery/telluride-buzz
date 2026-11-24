@@ -185,3 +185,10 @@ span.err { color: var(--red); }
   .settings-list { grid-template-columns: 1fr; }
   .settings-list dd { border-top: 0; padding-top: 0; }
 }
+
+/* Fill with Claude (Add a source / Add a resource) */
+.claude-fill > summary { cursor: pointer; }
+.claude-fill[open] > summary { margin-bottom: .5rem; }
+.claude-fill textarea { width: 100%; margin: .5rem 0; }
+.claude-fill-url { align-items: center; flex-wrap: wrap; }
+.claude-fill-url input { flex: 1 1 18rem; min-width: 0; }

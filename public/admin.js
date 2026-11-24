@@ -882,6 +882,9 @@ async function sourcePage(townId, key) {
     h('p', {}, h('a', { href: `#feeds?town=${encodeURIComponent(t.id)}` }, '← Feeds')),
     h('div', { class: 'town-head' }, health ? dot(health.color) : null, h('h1', {}, s ? s.label : `Add a source to ${t.name}`)),
     health?.error ? h('p', { class: 'error' }, `${health.note}: ${health.error}`) : (health ? h('p', { class: 'muted' }, `${health.note}. Last success ${ago(health.lastOk)}.`) : null),
+    s ? null : claudeFillCard({ what: 'source', placeholder: 'https://www.example.gov/news',
+      intro: '1. Paste the address of a news page, calendar, feed or agency site. 2. Copy the prompt into Claude (claude.ai, with web search on). 3. Paste its answer below and press Fill form. Then Test, and Add source.',
+      prompt: (u) => sourcePrompt(u, t, cat), apply: (j, u) => applySource(j, u, f, typeSel, cat) }),
     h('div', { class: 'card' }, f),
     s && towns.length > 1 ? otherTownCard(t, s, towns) : null,
   ].filter(Boolean));
@@ -1000,6 +1003,194 @@ function otherTownCard(t, s, towns) {
       h('button', { type: 'button', class: 'secondary', onclick: go('copy') }, 'Copy to town'),
       h('button', { type: 'button', class: 'secondary', onclick: go('move') }, 'Move to town')),
     err);
+}
+
+// ---------- fill a form from a web address with Claude ----------
+// Add a source / Add a resource: type the address, copy a prompt into Claude,
+// paste its ```json answer back and the form fills in. Nothing is saved until
+// the form's own button is pressed.
+
+/** The JSON object in a Claude reply: the ```json block, or the outermost { … }. */
+function parseClaudeJson(text) {
+  const block = String(text || '').match(/```(?:json)?\s*\n([\s\S]*?)```/i);
+  const body = block ? block[1] : text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
+  const j = JSON.parse(body);
+  if (!j || typeof j !== 'object' || Array.isArray(j)) throw new Error('not an object');
+  return j;
+}
+
+/**
+ * The "Fill with Claude" card. what: 'source' or 'resource' (for the words);
+ * prompt(url) builds the prompt; apply(json) fills the form and returns a
+ * summary line (or throws with a message for the person).
+ */
+function claudeFillCard({ what, intro, placeholder, prompt, apply, initialUrl = '' }) {
+  const url = h('input', { type: 'url', placeholder, value: initialUrl, 'aria-label': `Web address of the ${what}` });
+  const promptBox = h('textarea', { rows: 8, readonly: true, class: 'mono', hidden: true, 'aria-label': 'Prompt for Claude' });
+  const paste = h('textarea', { rows: 5, spellcheck: 'false', placeholder: 'Paste Claude\'s answer here (the ```json block, or the whole reply).', 'aria-label': 'Claude\'s answer' });
+  const copied = h('span', { class: 'ok-msg small', role: 'status' });
+  const err = h('p', { class: 'error', role: 'alert' });
+  const out = h('div', { role: 'status' });
+  const clean = () => {
+    let v = url.value.trim();
+    if (v && !/^[a-z]+:\/\//i.test(v)) v = `https://${v}`;
+    return v;
+  };
+  const sync = () => {
+    const v = clean();
+    promptBox.hidden = !v;
+    if (v) promptBox.value = prompt(v);
+  };
+  url.addEventListener('input', sync);
+  sync();
+  const copy = async () => {
+    err.textContent = '';
+    if (!clean()) { err.textContent = 'Type or paste the web address first.'; url.focus(); return; }
+    sync();
+    try { await navigator.clipboard.writeText(promptBox.value); copied.textContent = 'Prompt copied. Paste it into Claude.'; }
+    catch { promptBox.select(); copied.textContent = 'Select the prompt and copy it.'; }
+  };
+  const fill = () => {
+    err.textContent = ''; out.replaceChildren();
+    const text = paste.value.trim();
+    if (!text) { err.textContent = 'Paste Claude\'s answer first.'; paste.focus(); return; }
+    let j;
+    try { j = parseClaudeJson(text); } catch { err.textContent = 'That doesn\'t look like the JSON answer. Paste the whole ```json block.'; return; }
+    try {
+      const said = apply(j, clean());
+      out.replaceChildren(...[
+        h('p', { class: 'ok-msg' }, said),
+        j.notes ? h('p', { class: 'muted small' }, `Claude's note: ${String(j.notes).slice(0, 600)}`) : null,
+      ].filter(Boolean));
+    } catch (e) { err.textContent = e.message; }
+  };
+  return h('details', { class: 'card claude-fill' },
+    h('summary', {}, h('strong', {}, 'Fill with Claude'), h('span', { class: 'muted small' }, ` Give it the ${what}'s web address and Claude works out the rest.`)),
+    h('p', { class: 'muted small' }, intro),
+    h('div', { class: 'row claude-fill-url' }, url, h('button', { type: 'button', onclick: copy }, 'Copy prompt for Claude'), copied),
+    promptBox,
+    paste,
+    h('div', { class: 'row' }, h('button', { type: 'button', class: 'secondary', onclick: fill }, 'Fill form')),
+    err, out);
+}
+
+/** Prompt for Add a source: every type the admin offers, with its settings. */
+function sourcePrompt(url, t, cat) {
+  const lines = cat.filter((a) => !a.fields.some((f) => f.editor === 'routes')).map((a) => {
+    const fields = a.fields.map((f) => {
+      const kind = f.type === 'select' ? `one of ${f.options.map((o) => `"${o}"`).join(', ')}`
+        : f.type === 'checkbox' ? 'true or false'
+          : f.type === 'urls' || f.type === 'list' ? 'array of strings'
+            : f.type === 'number' ? 'number' : 'string';
+      return `      - ${f.key} (${kind}${f.required ? ', required' : ''}): ${f.label}${f.help ? `. ${f.help}` : ''}${f.placeholder ? ` Example: ${f.placeholder}` : ''}`;
+    });
+    return `  - "${a.type}": ${a.name}. ${a.description} Default check interval ${a.defaultEvery} minutes.\n${fields.join('\n') || '      (no settings)'}`;
+  });
+  const have = t.sources.map((s) => `${s.label} (${s.adapter})`).join('; ') || 'none yet';
+  return `I'm adding a source to the ${t.name}${t.state ? `, ${t.state}` : ''} page of thetown.buzz, a local real-time info site (town news, events, alerts, weather, roads, ski conditions). The site checks each source on a schedule and shows its posts in the town's live feed.
+
+The source is this web address: ${url}
+
+Open it (use web fetch or search) and work out how the site should read it. Look for an RSS/Atom feed (link rel="alternate", /feed, /rss, ?format=rss, CivicPlus RSS pages, WordPress /feed/ or /events/feed/), an iCal (.ics or webcal://) calendar, or, if there is no feed, whether its news or events page can be read as a "News page (no feed)".
+
+The source types the site can use, with their settings:
+${lines.join('\n')}
+
+Kinds: "news" = newspapers and radio, "town" = town, county, school or utility news, "events" = calendars and event listings, "alerts" = official emergency notices only (urgent ones go to a banner).
+
+${t.name} already has: ${have}. Say in notes if this one duplicates one of them.
+
+Answer with ONLY one JSON code block (\`\`\`json ... \`\`\`) in exactly this shape:
+
+{
+  "type": "one of the type ids above, like rss",
+  "label": "Name shown on posts: who publishes it, like Town of ${t.name} or the newspaper's name",
+  "everyMin": 15,
+  "about": "One short line for the site's About page saying what this source adds, like: Town news and the community calendar",
+  "settings": { "the settings for that type, by key": "..." },
+  "notes": "Anything to check by hand, which address you confirmed works, or why you chose this type"
+}
+
+Rules:
+- Only use addresses you actually opened and confirmed. Prefer a real feed over a news page. For feed addresses, give the working feed first and fallbacks (www or not) after.
+- everyMin: 15 for alerts, 30 for news and town feeds, 60 to 180 for calendars and slow sites.
+- For a "News page (no feed)", linkPattern is the part of the address every post link shares (like /news/ or /article_), and say in notes how many post links it matched.
+- Never guess. Leave a setting out if you can't confirm it.`;
+}
+
+/** Fill the Add a source form from Claude's answer. */
+function applySource(j, url, f, typeSel, cat) {
+  const want = String(j.type || j.adapter || '').trim();
+  const a = cat.find((x) => x.type === want);
+  if (!a) throw new Error(`Claude picked a type this site doesn't have ("${want || 'none'}"). Pick the type by hand, or ask Claude again.`);
+  const opt = [...typeSel.options].find((o) => o.value === a.type);
+  if (opt?.disabled) throw new Error(`${a.name} is already set up for this town (one per town).`);
+  if (!typeSel.disabled && typeSel.value !== a.type) { typeSel.value = a.type; typeSel.dispatchEvent(new Event('change')); }
+  const set = (name, val) => { const el = f.elements[name]; if (el && val != null && val !== '') el.value = String(val); };
+  set('label', j.label || j.name);
+  if (Number.isFinite(+j.everyMin) && +j.everyMin > 0) set('everyMin', Math.round(+j.everyMin));
+  set('about', j.about);
+  const s = j.settings && typeof j.settings === 'object' ? j.settings : {};
+  if (a.fields.some((x) => x.key === 'url') && s.url == null) s.url = url;
+  let filled = 0;
+  for (const fd of a.fields) {
+    const v = s[fd.key];
+    const el = f.elements[`s.${fd.key}`];
+    if (v == null || !el) continue;
+    if (fd.type === 'checkbox') el.checked = v === true || v === 'true';
+    else if (fd.type === 'select') {
+      if (!fd.options.includes(String(v))) continue;
+      el.value = String(v);
+      delete el.dataset.auto; // Claude's kind wins over the name-based guess
+    } else if (fd.type === 'urls' || fd.type === 'list') el.value = [].concat(v).map(String).join('\n');
+    else if (fd.type === 'json') el.value = typeof v === 'string' ? v : JSON.stringify(v, null, 2);
+    else el.value = String(v);
+    filled++;
+  }
+  return `Filled in as ${a.name}${filled ? ` with ${filled} setting${filled === 1 ? '' : 's'}` : ''}. Press Test to check it reads posts, then Add source.`;
+}
+
+/** Prompt for Add a resource. */
+function resourcePrompt(url, t, categories, category) {
+  const cats = categories.map((c) => `"${c.id}" (${c.label}${c.group === 'business' ? ', a local business' : ''})`).join(', ');
+  return `I'm adding an entry to the ${t.name}${t.state ? `, ${t.state}` : ''} page of thetown.buzz, a local info site. Its Resources and business pages list phone numbers, offices, services and local businesses with tap-to-call and map links.
+
+The entry is for this web address: ${url}
+
+Open it (and its contact or about page; use web search if the site is thin) and answer with ONLY one JSON code block (\`\`\`json ... \`\`\`) in exactly this shape:
+
+{
+  "name": "Name as the place writes it",
+  "category": "one of: ${categories.map((c) => c.id).join(', ')}",
+  "phone": "Main phone, like 970-728-3848",
+  "phone2": "Optional second line (after-hours, reservations); explain it in note",
+  "website": "Best https:// address for people (the home page unless a deeper page is more useful)",
+  "address": "Street address with town, state and ZIP",
+  "hours": "Short hours, like Daily 8 a.m. to 6 p.m.",
+  "tags": "Short descriptor for a business, like Mexican · $$ or Outdoor gear and rentals. Empty for civic entries",
+  "note": "One or two short sentences a local would want (like how to reach the ER, or seasonal closures)",
+  "emergency": false,
+  "notes": "Anything you couldn't confirm, for the person adding it"
+}
+
+Categories: ${cats}.${category ? ` The person started in "${category}"; keep it unless another fits clearly better.` : ''}
+
+Rules:
+- emergency is true only for an emergency line or an ER.
+- Use what the official site says. Never guess: leave a value as an empty string if you can't confirm it.`;
+}
+
+/** Fill the Add a resource form from Claude's answer. */
+function applyResource(j, url, f, categories) {
+  const set = (name, val) => { const el = f.elements[name]; if (el && val != null && String(val).trim() !== '') el.value = String(val).trim(); };
+  if (!j.name && !j.phone && !j.website) throw new Error('Claude\'s answer has no name, phone or website to fill in.');
+  for (const k of ['name', 'phone', 'phone2', 'address', 'hours', 'tags', 'note']) set(k, j[k]);
+  set('website', j.website || url);
+  const cat = categories.find((c) => c.id === String(j.category || '').trim());
+  const sel = f.elements.category;
+  if (cat && sel.value !== cat.id) { sel.value = cat.id; sel.dispatchEvent(new Event('change')); }
+  if (typeof j.emergency === 'boolean') f.elements.emergency.checked = j.emergency;
+  return `Filled in${cat ? ` under ${cat.label}` : ''}. Check each field, tick "I checked this is right today" if it is, then press Add resource.`;
 }
 
 // ---------- new town: fill with Claude ----------
@@ -1296,12 +1487,15 @@ async function resourcePage(townId, id, category = '') {
     if (!confirm(`Delete "${r.name}" from ${t.name}'s resources?`)) return;
     try { await api('/resource/delete', { town: t.id, id: r.id }); location.hash = `resources/${t.id}`; } catch (e2) { err.textContent = e2.message; }
   }
-  view.replaceChildren(
+  view.replaceChildren(...[
     h('p', {}, h('a', { href: `#resources/${t.id}` }, `← ${t.name} resources`)),
     h('h1', {}, r ? r.name : `Add a resource to ${t.name}`),
     r ? h('p', { class: 'muted' }, r.checkedAt ? `Last checked ${ago(r.checkedAt)}.` : 'Never checked.') : null,
+    r ? null : claudeFillCard({ what: 'place', placeholder: 'https://www.example.com',
+      intro: '1. Paste the website of the business, office or service. 2. Copy the prompt into Claude (claude.ai, with web search on). 3. Paste its answer below and press Fill form. Then check the fields and Add resource.',
+      prompt: (u) => resourcePrompt(u, t, d.categories, catSelect.value), apply: (j, u) => applyResource(j, u, f, d.categories) }),
     h('div', { class: 'card' }, f),
-  );
+  ].filter(Boolean));
 }
 
 // ---------- all resources (every town) ----------
