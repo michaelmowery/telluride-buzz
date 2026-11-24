@@ -5,6 +5,7 @@
 import { fetchText } from '../http.js';
 import { decodeEntities, htmlToText } from '../rss.js';
 import { parseLocalDateTime } from '../time.js';
+import { eventEnd } from '../relevance.js';
 
 const MONTHS = 'Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|Sept?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?';
 const DATE_RES = [
@@ -28,22 +29,35 @@ export function findDate(text, tz) {
   return null;
 }
 
-/** The date in html[lo..hi] closest to the link at [start..end]: a <time datetime> or a written date. */
+/** The date in html[lo..hi] closest to the link at [start..end] (a <time datetime> or a written date or range): { v, end } or null. */
 function nearestDate(html, lo, hi, start, end, tz) {
   const chunk = html.slice(lo, hi);
   const found = [];
   for (const t of chunk.matchAll(/<time[^>]*datetime=["']([^"']+)["']/gi)) {
     const v = Date.parse(t[1]);
-    if (v) found.push({ at: lo + t.index, v });
+    if (v) found.push({ at: lo + t.index, v, end: null });
   }
   // Written dates, read from the text between tags.
   for (const t of chunk.matchAll(/>([^<]{6,200})(?=<|$)/g)) {
-    const v = findDate(decodeEntities(t[1]), tz);
-    if (v) found.push({ at: lo + t.index, v });
+    const text = decodeEntities(t[1]);
+    const r = findRange(text, tz);
+    const v = r ? r.start : findDate(text, tz);
+    if (v) found.push({ at: lo + t.index, v, end: r ? r.end : null });
   }
   const dist = (at) => (at < start ? start - at : at > end ? at - end : 0);
   found.sort((a, b) => dist(a.at) - dist(b.at));
-  return found[0]?.v || null;
+  return found[0] || null;
+}
+
+const RANGE_RE = new RegExp(`\\b(${MONTHS})\\.? (\\d{1,2})(?:,? (\\d{4}))?\\s*(?:-|–|—|to|through)\\s*(?:(${MONTHS})\\.? )?(\\d{1,2}),? (\\d{4})\\b`, 'i');
+
+/** A date range ("June 28 - July 4, 2027", "Sept 17-19, 2027") as { start, end } at local midnights, or null. */
+export function findRange(text, tz) {
+  const m = text.match(RANGE_RE);
+  if (!m) return null;
+  const start = parseLocalDateTime(tz, `${m[1]} ${m[2]}, ${m[3] || m[6]}`, '');
+  const end = parseLocalDateTime(tz, `${m[4] || m[1]} ${m[5]}, ${m[6]}`, '');
+  return start && end && end >= start ? { start, end } : null;
 }
 
 /** Turn a pattern setting ("/news/" or a /regex/) into a test function. */
@@ -57,7 +71,7 @@ export function matcher(pattern) {
 }
 
 /**
- * Posts listed on a page: [{ link, title, date }], newest page order kept.
+ * Posts listed on a page: [{ link, title, date, end, summary }], page order kept. end is set for date ranges.
  * cfg: { url, linkPattern, exclude, requireDate, max }.
  */
 export function pageToPosts(html, cfg, tz = 'America/Denver') {
@@ -69,8 +83,9 @@ export function pageToPosts(html, cfg, tz = 'America/Denver') {
   const re = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
   let m;
   while ((m = re.exec(clean))) {
-    const href = m[1].match(/\bhref\s*=\s*["']([^"'#]+)/i)?.[1];
-    if (!href || /^(mailto|tel|javascript):/i.test(href)) continue;
+    const hm = m[1].match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/i);
+    const href = hm && (hm[1] ?? hm[2] ?? hm[3]);
+    if (!href || /^(#|mailto:|tel:|javascript:)/i.test(href)) continue;
     let url;
     try { url = new URL(decodeEntities(href.trim()), base); } catch { continue; }
     if (url.host.replace(/^www\./, '') !== base.host.replace(/^www\./, '')) continue;
@@ -79,7 +94,11 @@ export function pageToPosts(html, cfg, tz = 'America/Denver') {
     const path = url.pathname + url.search;
     if (link.replace(/\/$/, '') === base.href.replace(/\/$/, '') || !keep(path) || drop(path)) continue;
     // Headline: the link text, else a title/aria-label, else the nearest heading before it.
-    let title = htmlToText(m[2]).replace(/\s+/g, ' ').trim();
+    // A card link (image, date, heading, teaser all in one <a>) is titled by its heading.
+    const inner = m[2].match(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/i);
+    let title = htmlToText(inner ? inner[1] : m[2]).replace(/\s+/g, ' ').trim();
+    const teaser = [...m[2].matchAll(/<p\b[^>]*>([\s\S]*?)(?=<p\b|<h[1-6]|<\/p>|<\/a>|$)/gi)]
+      .map((x) => htmlToText(x[1]).replace(/\s+/g, ' ').trim()).filter((x) => x.length >= 40 && x !== title).sort((a, b) => b.length - a.length)[0] || null;
     if (title.length < 12 || JUNK.test(title)) {
       const t = m[1].match(/\b(?:title|aria-label)\s*=\s*["']([^"']{12,})["']/i)?.[1];
       title = t ? decodeEntities(t).trim() : '';
@@ -90,7 +109,7 @@ export function pageToPosts(html, cfg, tz = 'America/Denver') {
       title = hs.length ? htmlToText(hs[hs.length - 1][1]).replace(/\s+/g, ' ').trim() : '';
     }
     const ok = title.length >= 12 && title.length <= 300 && !JUNK.test(title);
-    hits.push({ link, title: ok ? title : null, start: m.index, end: re.lastIndex });
+    hits.push({ link, title: ok ? title : null, teaser, start: m.index, end: re.lastIndex });
   }
   // A post's date sits between its own links and the neighbouring posts' links.
   const byLink = new Map();
@@ -99,9 +118,11 @@ export function pageToPosts(html, cfg, tz = 'America/Denver') {
     for (let j = i - 1; j >= 0; j--) if (hits[j].link !== h.link) { lo = Math.max(lo, hits[j].end); break; }
     for (let j = i + 1; j < hits.length; j++) if (hits[j].link !== h.link) { hi = Math.min(hi, hits[j].start); break; }
     const prev = byLink.get(h.link);
-    const date = nearestDate(clean, lo, hi, h.start, h.end, tz) || prev?.date || null;
-    if (!h.title) { if (!byLink.has(h.link)) byLink.set(h.link, null); else if (prev && !prev.date) prev.date = date; return; }
-    if (!prev || h.title.length > prev.title.length) byLink.set(h.link, { link: h.link, title: h.title, date });
+    const found = nearestDate(clean, lo, hi, h.start, h.end, tz);
+    const date = found?.v || prev?.date || null;
+    const end = found?.v ? found.end : prev?.end || null;
+    if (!h.title) { if (!byLink.has(h.link)) byLink.set(h.link, null); else if (prev && !prev.date) Object.assign(prev, { date, end }); return; }
+    if (!prev || h.title.length > prev.title.length) byLink.set(h.link, { link: h.link, title: h.title, date, end, summary: h.teaser || prev?.summary || null });
   });
   return [...byLink.values()].filter((p) => p && (!cfg.requireDate || p.date)).slice(0, Number(cfg.max) || 20);
 }
@@ -116,16 +137,18 @@ export function webpageJob(town, cfg, { get = fetchText } = {}) {
       const seen = db.firstSeen ? db.firstSeen(town.id, cfg.key) : new Map();
       // First read of a page: undated posts are old news, so they go in below today's.
       const firstRun = seen.size === 0;
-      const items = posts.map((p, i) => ({
-        extId: p.link,
-        sourceLabel: cfg.label,
-        category: cfg.category || 'news',
-        title: p.title,
-        summary: null,
-        link: p.link,
-        publishedAt: p.date ? Math.min(p.date, now) : seen.get(p.link) ?? (firstRun ? now - 3 * 86400e3 - i * 3600e3 : now),
-      }));
-      db.syncItems(town.id, cfg.key, items, { deactivateMissing: false });
+      const events = cfg.category === 'events';
+      const items = posts.map((p, i) => {
+        const first = seen.get(p.link) ?? (firstRun ? now - 3 * 86400e3 - i * 3600e3 : now);
+        const item = { extId: p.link, sourceLabel: cfg.label, category: cfg.category || 'news', title: p.title, summary: p.summary || null, link: p.link };
+        if (!events) return { ...item, publishedAt: p.date ? Math.min(p.date, now) : first };
+        // An events page: the date (or range) is when it happens; it leaves the feed when it ends.
+        if (!p.date) return null;
+        const expiresAt = p.end ? p.end + 86400e3 : eventEnd(p.date, null, true);
+        return expiresAt < now ? null : { ...item, publishedAt: Math.min(first, now), startsAt: p.date, expiresAt };
+      }).filter(Boolean);
+      // An events page is the full list: events it drops are gone. News pages roll forward.
+      db.syncItems(town.id, cfg.key, items, { deactivateMissing: events });
     },
   };
 }
