@@ -19,6 +19,7 @@ import { importResources, renderResources } from './resources.js';
 import { baseUrl, feedSnapshot, guideDescription, guideEntries, guideFor, guideJsonLd, guideNav, homeJsonLd, robotsTxt, seoHead, sitemapXml, townSitemap } from './seo.js';
 import crypto from 'node:crypto';
 import { createAnalytics } from './analytics.js';
+import { skyFor } from './sky.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -152,6 +153,7 @@ function home(town) {
     alerts: db.alerts(town.id),
     tiles: db.getTiles(town.id),
     events: db.upcomingEvents(town.id, 40, 30),
+    sky: skyFor(town),
     feed: db.feed(town.id, { limit: 40 }),
   });
   homeCache.set(town.id, { at: Date.now(), body });
