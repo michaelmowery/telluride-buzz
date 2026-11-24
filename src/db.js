@@ -307,6 +307,12 @@ function wrap(db) {
      * Replace the active set for one source: upsert what the source returned now and
      * deactivate anything it no longer lists (e.g. an expired alert or a cleared incident).
      */
+    /** When each post of a source was first published or seen: Map(ext_id -> ms). */
+    firstSeen(townId, source) {
+      return new Map(db.prepare('SELECT ext_id, published_at FROM items WHERE town_id = ? AND source = ?').all(townId, source)
+        .map((r) => [r.ext_id, r.published_at]));
+    },
+
     syncItems(townId, source, items, { deactivateMissing = true } = {}) {
       const now = Date.now();
       db.exec('BEGIN');

@@ -15,6 +15,7 @@ import { nmroadsJobs, nearbyNmRoutes } from './sources/nmroads.js';
 import { liftsJobs } from './sources/lifts.js';
 import { resortAlertsJobs } from './sources/resort-alerts.js';
 import { meanderJobs } from './sources/meander.js';
+import { webpageJob } from './sources/webpage.js';
 import { parseIcs } from './ical.js';
 import { eventEnd } from './relevance.js';
 
@@ -27,7 +28,7 @@ export const KIND_LABELS = { news: 'News', town: 'Town and county news', events:
  * in their settings; the rest are fixed by their type.
  */
 export function kindOf(s) {
-  if (s.adapter === 'rss' || s.adapter === 'meander') return s.settings?.category || 'news';
+  if (s.adapter === 'rss' || s.adapter === 'meander' || s.adapter === 'webpage') return s.settings?.category || 'news';
   return { ical: 'events', 'nws-alerts': 'alerts', 'resort-alerts': 'alerts', 'nws-forecast': 'weather', cdot: 'roads', nmroads: 'roads', 'snow-report': 'lifts' }[s.adapter] || 'news';
 }
 
@@ -55,6 +56,26 @@ export const ADAPTERS = {
       if (`feed-${feed.id}` === s.key) return job;
       // Keys that don't start with feed- (rare) keep their own item source.
       return { ...job, run: (db) => job.run(renameSource(db, `feed-${feed.id}`, s.key)) };
+    },
+  },
+
+  webpage: {
+    name: 'News page (no feed)',
+    description: 'A "News" or "Announcements" web page with no RSS feed. Reads the links to posts on it; the link text is the headline.',
+    defaultEvery: 30,
+    fields: [
+      { key: 'url', label: 'Page address', type: 'url', required: true },
+      { key: 'linkPattern', label: 'Post links contain', type: 'text', required: true, placeholder: '/news/',
+        help: 'Only links whose address contains this become posts (e.g. /news/ or /blog/). Several: separate with commas. A /regex/ works too. Use Test to check.' },
+      { key: 'requireDate', label: 'Only links with a date next to them', type: 'checkbox', help: 'For pages whose post addresses have nothing in common (e.g. smpa.com/some-headline): menus and footers have no dates, posts do.' },
+      { key: 'exclude', label: 'Skip links containing', type: 'text', placeholder: '/category/, /page/', help: 'Optional. Category, tag or paging links to leave out.' },
+      { key: 'category', label: 'Kind', type: 'select', options: CATEGORIES, labels: KIND_LABELS, required: true },
+      { key: 'max', label: 'Posts to read', type: 'number', placeholder: '20' },
+    ],
+    keyFor: (s) => `page-${slug(s.label)}`,
+    itemSources: (s) => [s.key],
+    job(town, s, deps) {
+      return webpageJob(town, { ...s.settings, key: s.key, label: s.label }, { get: deps.text });
     },
   },
 
