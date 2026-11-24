@@ -198,6 +198,7 @@ export const ADAPTERS = {
       { key: 'url', label: 'Snow report page', type: 'url', required: true },
       { key: 'name', label: 'Mountain name', type: 'text', required: true, placeholder: 'Purgatory', help: 'Shown on the tile and in posts ("Purgatory: 6" of new snow").' },
       { key: 'linkUrl', label: 'Link people to', type: 'url', help: 'Defaults to the snow report page.' },
+      { key: 'liftsUrl', label: 'Lift & trail status page', type: 'url', help: 'Optional. For resorts that list lifts and trails on a separate page (Vail Resorts: …/terrain-and-lift-status.aspx).' },
       { key: 'valueFirst', label: 'Numbers come before labels', type: 'checkbox', help: 'Tick if the page reads "3\" 24 Hr" rather than "24 Hr 3\"". Use Test to check.' },
     ],
     keyFor: (s, town, taken) => (taken.includes('lifts-snow') ? `lifts-snow-${slug(s.settings.name || s.label)}` : 'lifts-snow'),
