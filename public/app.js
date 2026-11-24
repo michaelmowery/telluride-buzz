@@ -107,6 +107,20 @@ function renderRoads(r) {
   setTile('roads', `${rows}${r.error ? `<div class="tile-error">${esc(r.error)}</div>` : ''}`);
 }
 
+/** The other snow totals under the tile's big numbers: 'Overnight 3" · 48h 8" · 7 days 8" · Season 24"'. */
+function snowLine(r, shown) {
+  const bits = [
+    shown !== 'overnight' && r.overnight != null ? `Overnight ${r.overnight}"` : null,
+    shown === 'overnight' && r.new24 != null ? `24h ${r.new24}"` : null,
+    r.new48 != null ? `48h ${r.new48}"` : null,
+    r.new72 != null ? `72h ${r.new72}"` : null,
+    r.new7d != null ? `7 days ${r.new7d}"` : null,
+    r.season != null ? `Season ${r.season}"` : null,
+  ].filter(Boolean);
+  const cond = r.condition ? `<div class="snow-cond">${esc(r.condition)}</div>` : '';
+  return bits.length || cond ? `<div class="snow-line">${bits.map((b) => `<span>${esc(b)}</span>`).join('')}</div>${cond}` : '';
+}
+
 /** Each resort in the Lifts & Snow tile (older servers sent one resort at the top level). */
 const resortsIn = (l) => (l?.resorts?.length ? l.resorts : l ? [l] : []);
 
@@ -124,13 +138,13 @@ function renderLifts(l) {
     ${stat(r.base, 'Base', '"')}
     ${ratio(r.liftsOpen, r.liftsTotal, 'Lifts open')}
     ${ratio(r.trailsOpen, r.trailsTotal, 'Runs open')}
-  </div>`);
+  </div>${snowLine(r, word)}`);
   }
   // Several mountains: one compact row each.
   setTile('lifts', list.map((r) => {
     if (!r.ok) return `<div class="mtn-row"><b>${esc(r.name)}</b><span>No report</span></div>`;
     const [snow, word] = fresh(r);
-    const bits = [snow != null ? `${snow}" ${word}` : null, r.liftsOpen != null ? `${r.liftsOpen}${r.liftsTotal != null ? `/${r.liftsTotal}` : ''} lifts` : null].filter(Boolean);
+    const bits = [snow != null ? `${snow}" ${word}` : null, r.new7d != null ? `${r.new7d}" 7 days` : null, r.season != null ? `${r.season}" season` : null, r.liftsOpen != null ? `${r.liftsOpen}${r.liftsTotal != null ? `/${r.liftsTotal}` : ''} lifts` : null].filter(Boolean);
     return `<div class="mtn-row"><b>${esc(r.name)}</b><span>${esc(bits.join(' · ') || 'Report posted')}</span></div>`;
   }).join(''));
 }
@@ -321,7 +335,8 @@ function panelLifts(l) {
     if (!r.ok) return `<h3 class="p-mountain">${name}</h3>${unavailable(r.error)}<div class="p-actions">${srcLink(r.link, 'Snow report')}</div>`;
     const updated = r.sourceAt ? `<span class="muted"> · updated ${esc(clock(r.sourceAt))}</span>` : '';
     return `<h3 class="p-mountain">${name}${updated}</h3>
-    <h4>Snow</h4><div class="p-stats">${stat(r.overnight, 'Overnight')}${stat(r.new24, 'Last 24 hours')}${stat(r.new48, 'Last 48 hours')}${stat(r.base, 'Base depth')}</div>
+    <h4>Snow</h4><div class="p-stats">${stat(r.overnight, 'Overnight')}${stat(r.new24, 'Last 24 hours')}${stat(r.new48, 'Last 48 hours')}${stat(r.new72, 'Last 72 hours')}${stat(r.new7d, 'Last 7 days')}</div>
+    <h4>On the ground</h4><div class="p-stats">${stat(r.base, 'Base depth')}${stat(r.season, 'Season total')}${r.condition ? `<div class="p-card"><b class="p-word">${esc(r.condition)}</b><span>Snow condition</span></div>` : ''}</div>
     <h4>On the mountain</h4><div class="p-stats">${ratio(r.liftsOpen, r.liftsTotal, 'Lifts open')}${ratio(r.trailsOpen, r.trailsTotal, 'Runs open')}</div>
     <div class="p-actions">${srcLink(r.link, `Full report at ${r.sourceLabel || 'the resort'}`)}</div>`;
   };
