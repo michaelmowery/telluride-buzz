@@ -34,6 +34,9 @@ function fromJson(html) {
   out.overnight = grab(/"(?:overnight_?snow(?:fall)?|snowOvernight|overnight)"\s*:\s*"?([\d.]+)/i);
   out.new24 = grab(/"(?:snow_?24_?hours?|twentyFourHourSnowfall|snowfall24|new_?snow_?24|last24Hours?)"\s*:\s*"?([\d.]+)/i);
   out.new48 = grab(/"(?:snow_?48_?hours?|fortyEightHourSnowfall|snowfall48|last48Hours?)"\s*:\s*"?([\d.]+)/i);
+  out.new72 = grab(/"(?:snow_?72_?hours?|seventyTwoHourSnowfall|snowfall72|last72Hours?)"\s*:\s*"?([\d.]+)/i);
+  out.new7d = grab(/"(?:snow_?7_?days?|sevenDaySnowfall|snowfall7d(?:ays?)?|last7Days?)"\s*:\s*"?([\d.]+)/i);
+  out.season = grab(/"(?:season_?total|seasonTotal|season_?snowfall|seasonSnowfall|snowfall_?season)"\s*:\s*"?([\d.]+)/i);
   out.base = grab(/"(?:base_?depth|baseDepth|snow_?base|midMountainBase|base)"\s*:\s*"?([\d.]+)/i);
   out.liftsOpen = grab(/"(?:lifts_?open|openLifts|liftsOpen)"\s*:\s*"?(\d+)/i);
   out.liftsTotal = grab(/"(?:lifts_?total|totalLifts|liftsTotal)"\s*:\s*"?(\d+)/i);
@@ -51,10 +54,16 @@ function fromText(text, valueFirst = false) {
     const m = t.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(?:"|”|″|in\\b|inches)\\s*${label}`, 'i'));
     return m ? num(m[1]) : null;
   };
+  // Prefer a number with an inch mark after the label: Telluride's page has
+  // "8" last 24 hr Details Lifts Status 0/17" before its "Last 24 hours 8"" row,
+  // and the bare 0 there is the lift count, not the snowfall.
   const after = (label) => {
-    const m = t.match(new RegExp(`${label}[^0-9]{0,25}(\\d+(?:\\.\\d+)?)\\s*(?:"|”|″|in\\b|inches|cm)?`, 'i'));
+    const m = t.match(new RegExp(`${label}[^0-9]{0,25}(\\d+(?:\\.\\d+)?)\\s*(?:"|”|″|in\\b|inches|cm)`, 'i'))
+      || t.match(new RegExp(`${label}[^0-9]{0,25}(\\d+(?:\\.\\d+)?)`, 'i'));
     return m ? num(m[1]) : null;
   };
+  // A short word or two after a known condition label: "Current snow condition Variable".
+  const cond = t.match(/(?:current (?:snow |surface )?conditions?|primary surface|surface conditions?|snow conditions?)\s*:?\s*([A-Za-z][A-Za-z/&-]*(?: [A-Za-z/&-]+){0,3}?)(?=\s*(?:\n|$|snow\b|last\b|lifts?\b|trails?\b|runs?\b|base\b|season\b|secondary\b|\d))/i);
   const near = (label) => (valueFirst ? before(label) ?? after(label) : after(label));
   const ratio = (label) => {
     const labelFirst = new RegExp(`${label}[^0-9]{0,25}(\\d+)\\s*(?:/|of)\\s*(\\d+)`, 'i');
@@ -68,6 +77,10 @@ function fromText(text, valueFirst = false) {
     overnight: near('(?:snow )?overnight'),
     new24: near('24[ -]?(?:hours?|hrs?|hr)') ?? near('new snow'),
     new48: near('48[ -]?(?:hours?|hrs?|hr)'),
+    new72: near('72[ -]?(?:hours?|hrs?|hr)'),
+    new7d: near('(?:7|seven)[ -]?days?'),
+    season: near('season(?:al)?(?: total| snowfall| to date)'),
+    condition: cond ? cond[1].trim() : null,
     base: near('(?:base depth|snow depth|mid[- ]mountain(?: base)?|base)'),
     liftsOpen, liftsTotal, trailsOpen, trailsTotal,
   };
@@ -79,7 +92,8 @@ export function parseSnowReport(html, tz = 'America/Denver', { valueFirst = fals
   const t = fromText(text, valueFirst);
   const pick = (k) => j[k] ?? t[k] ?? null;
   const r = {
-    overnight: pick('overnight'), new24: pick('new24'), new48: pick('new48'), base: pick('base'),
+    overnight: pick('overnight'), new24: pick('new24'), new48: pick('new48'),
+    new72: pick('new72'), new7d: pick('new7d'), season: pick('season'), base: pick('base'),
     liftsOpen: pick('liftsOpen'), liftsTotal: pick('liftsTotal'),
     trailsOpen: pick('trailsOpen'), trailsTotal: pick('trailsTotal'),
   };
@@ -87,11 +101,15 @@ export function parseSnowReport(html, tz = 'America/Denver', { valueFirst = fals
   if (r.new24 != null && r.new24 > 60) r.new24 = null;
   if (r.overnight != null && r.overnight > 60) r.overnight = null;
   if (r.new48 != null && r.new48 > 90) r.new48 = null;
+  if (r.new72 != null && r.new72 > 120) r.new72 = null;
+  if (r.new7d != null && r.new7d > 200) r.new7d = null;
+  if (r.season != null && r.season > 1000) r.season = null;
   if (r.base != null && r.base > 250) r.base = null;
   if (r.liftsTotal != null && (r.liftsTotal > 40 || (r.liftsOpen ?? 0) > r.liftsTotal)) r.liftsOpen = r.liftsTotal = null;
   if (r.trailsTotal != null && (r.trailsTotal > 300 || (r.trailsOpen ?? 0) > r.trailsTotal)) r.trailsOpen = r.trailsTotal = null;
   const found = Object.values(r).filter((v) => v != null).length;
-  return { ...r, found, sourceAt: reportUpdatedAt(text, tz) };
+  const condition = /^[A-Za-z][A-Za-z /&-]{1,40}$/.test(t.condition || '') && !/^(?:details|n\/?a|none|see)\b/i.test(t.condition) ? t.condition : null;
+  return { ...r, condition, found, sourceAt: reportUpdatedAt(text, tz) };
 }
 
 /** A town's ski resorts: config `lifts` may be one resort or a list. */
@@ -152,7 +170,7 @@ export function liftsJobs(town, { get = fetchText } = {}) {
           sourceLabel: res.label,
           category: 'lifts',
           title: `${res.name}: ${fresh}" of new snow ${when}`,
-          summary: entry.base != null ? `Base depth ${entry.base}".` : null,
+          summary: [entry.base != null ? `Base depth ${entry.base}".` : null, entry.season != null ? `Season total ${entry.season}".` : null].filter(Boolean).join(' ') || null,
           link: entry.link,
           severity: 0,
           publishedAt: Math.min(reportAt, Date.now()),

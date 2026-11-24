@@ -40,7 +40,7 @@ export function seedDemo(db, town) {
   }));
 
   db.setTile(town.id, 'lifts', {
-    ok: true, sourceAt: now - 5 * hr, new24: 6, new48: 9, base: 31, liftsOpen: 9, liftsTotal: 19, trailsOpen: 42, trailsTotal: 148,
+    ok: true, sourceAt: now - 5 * hr, overnight: 2, new24: 6, new48: 9, new7d: 14, season: 48, condition: 'Packed powder', base: 31, liftsOpen: 9, liftsTotal: 19, trailsOpen: 42, trailsTotal: 148,
     link: resort?.linkUrl || resort?.url || '#', sourceLabel: resort?.label || 'Ski Resort',
   });
 

@@ -209,6 +209,27 @@ test('Snow report: an unchanged report never shows up twice in the feed', async 
   assert.equal(snow[0].title, 'Telluride Ski Resort: 6" of new snow overnight');
 });
 
+test('Snow report: live Telluride layout reads 24h/48h/7-day, season total and condition', () => {
+  const r = parseSnowReport(fx('snow-report-tsr-live.html'));
+  // The "8" last 24 hr" summary box is followed by "Lifts Status 0/17"; that 0 is not snowfall.
+  assert.equal(r.new24, 8);
+  assert.equal(r.overnight, 3);
+  assert.equal(r.new48, 8);
+  assert.equal(r.new7d, 8);
+  assert.equal(r.base, 20);
+  assert.equal(r.season, 24);
+  assert.equal(r.condition, 'Variable');
+  assert.deepEqual([r.liftsOpen, r.liftsTotal, r.trailsOpen, r.trailsTotal], [0, 17, 0, 149]);
+});
+
+test('Purgatory snow report: 72 hour and season totals, value before label', () => {
+  const r = parseSnowReport(fx('snow-report-purgatory-72.html'), 'America/Denver', { valueFirst: true });
+  assert.deepEqual([r.new24, r.new48, r.new72, r.base, r.season], [8, 8, 11, 20, 34]);
+  assert.equal(r.new7d, null);
+  const older = parseSnowReport(fx('snow-report-purgatory.html'), 'America/Denver', { valueFirst: true });
+  assert.deepEqual([older.new7d, older.season], [7, 26]);
+});
+
 test('Purgatory snow report: values come before labels (3" 24 Hr, 2 of 12 Lifts Open)', () => {
   const r = parseSnowReport(fx('snow-report-purgatory.html'), 'America/Denver', { valueFirst: true });
   assert.equal(r.new24, 3);
