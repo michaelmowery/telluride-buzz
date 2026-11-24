@@ -283,3 +283,15 @@ test('Events Calendar RSS: start time from pubDate, WordPress footer removed', (
   assert.equal(ev.startsAt, Date.UTC(2099, 10, 26, 23, 30));
   assert.equal(ev.summary, 'Buffet at Purgy’s.');
 });
+
+test('Vail Resorts snow report: reads FR.snowReportData JSON, not the forecast text', async () => {
+  const { fromVailResorts, reportUpdatedAt } = await import('../src/sources/lifts.js');
+  const r = parseSnowReport(fx('snow-report-vail.html'));
+  assert.deepEqual([r.overnight, r.new24, r.new48, r.new7d, r.base, r.season], [2, 2, 2, 13, 18, 24]);
+  assert.equal(r.condition, 'Packed Powder');
+  assert.ok(r.found >= 2);
+  const v = fromVailResorts(fx('snow-report-vail.html'));
+  const at = reportUpdatedAt(v.updatedText, 'America/Denver', Date.UTC(2026, 10, 24, 18));
+  assert.equal(new Date(at).toISOString(), '2026-11-24T12:31:00.000Z');
+  assert.equal(fromVailResorts('<script>FR.snowReportData = {broken;</script>'), null);
+});
