@@ -59,3 +59,28 @@ test('webpage: "only links with a date" drops undated menu links when post addre
   const posts = pageToPosts(html, { url: 'https://www.smpa.com/Posts', linkPattern: '/^\\/[a-z0-9-]{20,}$/', requireDate: true });
   assert.deepEqual(posts.map((p) => p.title), ['SMPA Pursues Historic Renewable Energy Purchase']);
 });
+
+// telluride.com festivals page markup (unquoted attributes, whole card in one link).
+const FESTIVALS = `<ul><li><div class="card teaser"><a href=/event/telluride-comedy-festival/ class=thumb> <img src=/a.webp alt="Comedy" loading=lazy><p class=card-detail>Feb 11 - 14, 2099<h3 class=card-title>Telluride Comedy Festival</h3><p class=card-body>The Sheridan Arts Foundation presents the annual Telluride Comedy Festival at the Sheridan Opera House.</p></a><div class=card__buttons><a href=/event/telluride-comedy-festival/ tabindex=-1 class=card-details>See Details</a></div></div>
+<li><div class="card teaser"><a href=/event/telluride-plein-air/ class=thumb><p class=card-detail>June 28 - July 4, 2099<h3 class=card-title>Telluride Plein Air</h3><p class=card-body>The Telluride Plein Air Festival is an essential fundraiser for the arts.</p></a><a href=/event/telluride-plein-air/ class=card-details>See Details</a></div>
+<li><div class="card teaser"><a href=/event/telluride-blues-brews/ class=thumb><p class=card-detail>Sept 17-19, 2099<h3 class=card-title>Telluride Blues &amp; Brews Festival</h3></a></div>
+<li><div class="card teaser"><a href=/event/last-years-fest/ class=thumb><p class=card-detail>June 1 - 3, 2001<h3 class=card-title>A Festival That Already Happened</h3></a></div></ul>`;
+
+test('webpage events: card links with date ranges become events with real start and end', async () => {
+  const cfg = { url: 'https://www.telluride.com/festivals-events/festivals/', linkPattern: '/event/', category: 'events', key: 'page-fest', label: 'Visit Telluride' };
+  const posts = pageToPosts(FESTIVALS, cfg);
+  assert.deepEqual(posts.map((p) => p.title), ['Telluride Comedy Festival', 'Telluride Plein Air', 'Telluride Blues & Brews Festival', 'A Festival That Already Happened']);
+  assert.match(posts[0].summary, /Sheridan Opera House/);
+  assert.equal(new Date(posts[1].date).toISOString(), '2099-06-28T06:00:00.000Z');
+  assert.equal(new Date(posts[1].end).toISOString(), '2099-07-04T06:00:00.000Z');
+  assert.equal(new Date(posts[2].end).toISOString(), '2099-09-19T06:00:00.000Z');
+
+  const db = openDb(':memory:');
+  await webpageJob({ id: 't', timezone: 'America/Denver' }, cfg, { get: async () => FESTIVALS }).run(db);
+  const events = db.feed('t', { category: 'events' });
+  assert.deepEqual(events.map((e) => e.title).sort(), ['Telluride Blues & Brews Festival', 'Telluride Comedy Festival', 'Telluride Plein Air']);
+  assert.ok(events.every((e) => e.startsAt > Date.now()));
+  // Months away, so not in the main feed (only the next few days of events are).
+  assert.equal(db.feed('t').length, 0);
+  db.close();
+});
