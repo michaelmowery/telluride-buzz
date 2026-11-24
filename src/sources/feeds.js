@@ -2,42 +2,57 @@
 // Sources are listed in config/<town>.json so they can change without code.
 import { fetchText } from '../http.js';
 import { parseFeed } from '../rss.js';
-import { parseLocalDateTime } from '../time.js';
+import { parseLocalDateTime, tzOffsetMinutes } from '../time.js';
+import { eventEnd } from '../relevance.js';
 
 const MAX_AGE_DAYS = 21;
 
 export function feedToItems(xml, feed, town) {
   const cutoff = Date.now() - MAX_AGE_DAYS * 86400e3;
   const out = [];
+  const now = Date.now();
   for (const e of parseFeed(xml).slice(0, 40)) {
     if (!e.title) continue;
     let startsAt = null;
+    let category = feed.category;
     if (feed.category === 'events') {
       // The Events Calendar (WordPress) puts each event's start time in pubDate.
       startsAt = feed.startFromPubDate ? (e.publishedAt || null)
         : parseLocalDateTime(town.timezone, e.eventDates || '', e.eventTimes || '') ?? guessEventStart(e, town);
+    } else if (feed.category !== 'alerts') {
+      // A news feed that also lists events: a post with calendar dates (CivicPlus), or with
+      // "Some posts are events" ticked a clear upcoming date in its text, sorts as an event.
+      const start = e.eventDates ? parseLocalDateTime(town.timezone, e.eventDates, e.eventTimes || '')
+        : feed.findEvents ? guessEventStart(e, town) : null;
+      if (start && start > now - 86400e3 && start < now + 90 * 86400e3) {
+        startsAt = start;
+        category = 'events';
+      }
     }
-    const publishedAt = e.publishedAt || Date.now();
-    if (feed.category !== 'events' && publishedAt < cutoff) continue;
-    if (feed.category === 'events' && startsAt && startsAt < Date.now() - 86400e3) continue;
+    const publishedAt = e.publishedAt || now;
+    if (category !== 'events' && publishedAt < cutoff) continue;
+    if (category === 'events' && startsAt && startsAt < now - 86400e3) continue;
     const isAlert = feed.category === 'alerts';
     out.push({
       extId: e.guid,
       sourceLabel: feed.label,
-      category: feed.category === 'alerts' ? 'town' : feed.category,
+      category: isAlert ? 'town' : category,
       title: e.title,
       summary: [e.eventLocation, stripWpFooter(e.summary)].filter(Boolean).join(' · ') || null,
       link: e.link,
       // Emergency notices from the county/town go to the banner.
       severity: isAlert ? (/(evacuat|shelter in place|emergency|closure|boil water|wildfire|avalanche)/i.test(e.title) ? 2 : 1) : 0,
-      publishedAt: feed.category === 'events' && startsAt ? Math.min(publishedAt, Date.now()) : publishedAt,
+      publishedAt: category === 'events' && startsAt ? Math.min(publishedAt, now) : publishedAt,
       startsAt,
-      // Alerts drop off the banner after a day unless the source re-lists them.
-      expiresAt: isAlert ? publishedAt + 24 * 3600e3 : null,
+      // Alerts drop off the banner after a day unless the source re-lists them; events when they end.
+      expiresAt: isAlert ? publishedAt + 24 * 3600e3 : startsAt ? eventEnd(startsAt, null, isMidnight(startsAt, town.timezone)) : null,
     });
   }
   return out;
 }
+
+/** A start at local midnight means the post gave a date but no time: an all-day event. */
+const isMidnight = (t, tz = 'America/Denver') => (t + tzOffsetMinutes(tz, t) * 60e3) % 86400e3 === 0;
 
 /** WordPress adds "The post X appeared first on Y." to every feed summary. */
 const stripWpFooter = (s) => (s ? s.replace(/\s*The post .{1,300}? appeared first on .{1,120}?\.?\s*$/s, '').trim() || null : s);

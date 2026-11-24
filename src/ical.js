@@ -65,7 +65,9 @@ export function parseIcs(text, tz = 'America/Denver', now = Date.now()) {
     if (l.name === 'END' && l.value.toUpperCase() === 'VEVENT') {
       if (ev && ev.start != null && ev.status !== 'CANCELLED') {
         const start = nextOccurrence(ev.start, ev.rrule, now - 86400e3);
-        if (start != null) out.push({ ...ev, start, uid: ev.rrule ? `${ev.uid}@${start}` : ev.uid });
+        // A repeat keeps the first date's length; DTEND is exclusive, so all-day ends at midnight.
+        const end = ev.end != null && ev.end > ev.start ? start + (ev.end - ev.start) : null;
+        if (start != null) out.push({ ...ev, start, end, uid: ev.rrule ? `${ev.uid}@${start}` : ev.uid });
       }
       ev = null;
       continue;
@@ -79,6 +81,7 @@ export function parseIcs(text, tz = 'America/Denver', now = Date.now()) {
       case 'URL': ev.url = l.value.trim(); break;
       case 'STATUS': ev.status = l.value.toUpperCase(); break;
       case 'RRULE': ev.rrule = l.value; break;
+      case 'DTEND': ev.end = icsDate(l.value, l.params, tz); break;
       case 'DTSTART': ev.start = icsDate(l.value, l.params, tz); ev.allDay = l.params.VALUE === 'DATE' || /^\d{8}$/.test(l.value); break;
       default: break;
     }

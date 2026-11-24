@@ -16,8 +16,20 @@ import { liftsJobs } from './sources/lifts.js';
 import { resortAlertsJobs } from './sources/resort-alerts.js';
 import { meanderJobs } from './sources/meander.js';
 import { parseIcs } from './ical.js';
+import { eventEnd } from './relevance.js';
 
-export const CATEGORIES = ['alerts', 'town', 'news', 'events'];
+export const CATEGORIES = ['news', 'town', 'events', 'alerts'];
+export const KIND_LABELS = { news: 'News', town: 'Town and county news', events: 'Events', alerts: 'Alerts (official emergency notices)' };
+
+/**
+ * What kind of posts a source makes, for the Feeds table and sorting: news, town,
+ * events, alerts, or a tile (weather, roads, lifts). RSS and meander sources say so
+ * in their settings; the rest are fixed by their type.
+ */
+export function kindOf(s) {
+  if (s.adapter === 'rss' || s.adapter === 'meander') return s.settings?.category || 'news';
+  return { ical: 'events', 'nws-alerts': 'alerts', 'resort-alerts': 'alerts', 'nws-forecast': 'weather', cdot: 'roads', nmroads: 'roads', 'snow-report': 'lifts' }[s.adapter] || 'news';
+}
 
 const pointOf = (town) => (town.location ? `${(+town.location.lat).toFixed(4)},${(+town.location.lon).toFixed(4)}` : '');
 const list = (v) => [].concat(v ?? []).flatMap((x) => String(x).split(/\n|,(?=\s*https?:)/)).map((x) => x.trim()).filter(Boolean);
@@ -29,7 +41,9 @@ export const ADAPTERS = {
     defaultEvery: 15,
     fields: [
       { key: 'url', label: 'Feed address', type: 'urls', required: true, help: 'One per line. Extra lines are fallbacks (e.g. with and without www).' },
-      { key: 'category', label: 'Shows under', type: 'select', options: CATEGORIES, required: true, help: 'alerts = town/county emergency notices (urgent words go to the banner).' },
+      { key: 'category', label: 'Kind', type: 'select', options: CATEGORIES, labels: KIND_LABELS, required: true,
+        help: 'Sets where posts sort in the feed. News sorts by post date. Events sort by when they happen and leave the feed once over. Alerts are official emergency notices: urgent ones go to the banner and stay on top.' },
+      { key: 'findEvents', label: 'Some posts are events', type: 'checkbox', help: 'For a news feed that also posts event listings: posts with a clear upcoming date in them sort as events.' },
       { key: 'startFromPubDate', label: 'Event start is the post date', type: 'checkbox', help: 'For WordPress "The Events Calendar" feeds.' },
     ],
     keyFor: (s) => `feed-${slug(s.label)}`,
@@ -74,6 +88,8 @@ export const ADAPTERS = {
               link: e.url || null,
               publishedAt: Math.min(now, e.start),
               startsAt: e.start,
+              // Drops off the live feed when it ends.
+              expiresAt: eventEnd(e.start, e.end, e.allDay),
             }));
           db.syncItems(town.id, s.key, items);
         },
@@ -221,7 +237,7 @@ export const ADAPTERS = {
       { key: 'tagName', label: 'Tag shown to readers', type: 'text' },
       { key: 'api', label: 'CMS addresses', type: 'urls', placeholder: 'https://cms.meander.me', help: 'One per line, tried in order.' },
       { key: 'site', label: 'Site address', type: 'url', placeholder: 'https://meander.me' },
-      { key: 'category', label: 'Shows under', type: 'select', options: CATEGORIES },
+      { key: 'category', label: 'Kind', type: 'select', options: CATEGORIES, labels: KIND_LABELS },
     ],
     keyFor: () => 'meander',
     itemSources: () => ['meander'],
@@ -301,7 +317,7 @@ export async function testSource(town, source, deps = {}) {
   const started = Date.now();
   let error = null;
   try { await job.run(scratch); } catch (e) { error = e.message; }
-  const items = scratch.feed(town.id, { limit: 200 });
+  const items = scratch.feed(town.id, { limit: 200, eventDays: null });
   const events = items.filter((i) => i.startsAt).sort((a, b) => a.startsAt - b.startsAt);
   const out = {
     ok: !error,
