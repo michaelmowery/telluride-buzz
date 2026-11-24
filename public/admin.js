@@ -169,7 +169,8 @@ async function route() {
   } catch { return; }
   $('#login').hidden = true;
   $('#nav').hidden = false;
-  document.querySelectorAll('[data-nav]').forEach((n) => n.toggleAttribute('aria-current', n.dataset.nav === 'towns' && /^(towns|new-town)$/.test(page)));
+  document.querySelectorAll('[data-nav]').forEach((n) => n.toggleAttribute('aria-current',
+    (n.dataset.nav === 'towns' && /^(towns|new-town)$/.test(page)) || (n.dataset.nav === 'admin-settings' && page === 'admin-settings')));
   try {
     if (page === 'health') { location.replace(`#feeds${query ? `?${query}` : ''}`); return; } // old bookmarks
     // Town pages: work out the town, draw the page, then put the town bar on top.
@@ -182,6 +183,7 @@ async function route() {
       await healthPage();
       timer = setInterval(() => healthPage(true).catch(() => {}), 30e3);
     } else if (page === 'towns') await townsPage();
+    else if (page === 'admin-settings') await adminSettingsPage();
     else if (page === 'new-town') await townPage(null);
     else if (page === 'town') { town = a; tab = 'settings'; await townPage(a); }
     else if (page === 'source') { town = a; tab = 'feeds'; await sourcePage(a, b); }
@@ -537,6 +539,90 @@ async function townsPage() {
         h('div', { class: 'muted small' }, `${t.sources.length} sources · ${(t.hostnames || [])[0] || ''}`)),
       h('span', { class: `pill ${t.status}` }, t.status))))),
     allTownsNotice(notice),
+  );
+}
+
+// ---------- admin settings ----------
+// Settings for the whole admin and server, not one town: the admin password, signing
+// out other devices, and a read-only look at the server's .env settings.
+async function adminSettingsPage() {
+  const { password: pw, groups } = await api('/server-settings');
+  const day = (t) => new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const status = () => (pw.source === 'admin'
+    ? `Set here on ${day(pw.changedAt)}. It replaces ADMIN_PASSWORD in the server's .env.`
+    : "Comes from ADMIN_PASSWORD in the server's .env.");
+  const statusLine = h('p', { class: 'muted small' }, status());
+
+  const msg = h('p', { class: 'ok-msg small', role: 'status' });
+  const err = h('p', { class: 'error', role: 'alert' });
+  const pwInput = (name, auto) => h('input', { type: 'password', name, autocomplete: auto, required: true });
+  const f = h('form', { id: 'password-form' },
+    field('Current password', pwInput('current', 'current-password')),
+    h('div', { class: 'grid2' },
+      field('New password', pwInput('next', 'new-password'), `At least ${pw.minLength} characters.`),
+      field('New password again', pwInput('again', 'new-password'))),
+    h('div', { class: 'row' }, h('button', { type: 'submit' }, 'Change password')),
+    err, msg);
+  f.next.minLength = pw.minLength;
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    err.textContent = ''; msg.textContent = '';
+    if (f.next.value !== f.again.value) { err.textContent = "The two new passwords don't match."; return; }
+    const btn = f.querySelector('button[type=submit]');
+    btn.disabled = true;
+    try {
+      Object.assign(pw, await api('/password', { current: f.current.value, next: f.next.value }));
+      f.reset();
+      statusLine.textContent = status();
+      useEnv.hidden = pw.source !== 'admin';
+      msg.textContent = 'Password changed. Every other device is signed out; this one stays signed in.';
+    } catch (x) { err.textContent = x.message; }
+    btn.disabled = false;
+  });
+
+  // Back to the .env password (needs the current password, typed in the field above).
+  const useEnv = h('div', { hidden: pw.source !== 'admin' },
+    h('p', { class: 'muted small' }, "Or go back to the password in the server's .env file. Type your current password above first."),
+    h('button', { type: 'button', class: 'secondary small', onclick: async () => {
+      err.textContent = ''; msg.textContent = '';
+      if (!f.current.value) { err.textContent = 'Type your current password first.'; f.current.focus(); return; }
+      try {
+        Object.assign(pw, await api('/password/use-env', { current: f.current.value }));
+        f.reset();
+        statusLine.textContent = status();
+        useEnv.hidden = true;
+        msg.textContent = "The admin uses the .env password again. Every other device is signed out.";
+      } catch (x) { err.textContent = x.message; }
+    } }, 'Use the .env password'));
+
+  const othersMsg = h('span', { class: 'ok-msg small', role: 'status' });
+  const others = h('div', { class: 'card' }, h('h2', {}, 'Signed-in devices'),
+    h('p', { class: 'muted small' }, 'A sign-in lasts 14 days on each device. If you signed in on a computer or phone that is not yours, sign it out here.'),
+    h('div', { class: 'row' }, h('button', { type: 'button', class: 'secondary', onclick: async (e) => {
+      e.target.disabled = true;
+      try { await api('/sign-out-others', {}); othersMsg.textContent = 'Done. Only this device is signed in now.'; } catch (x) { othersMsg.textContent = x.message; }
+      e.target.disabled = false;
+    } }, 'Sign out every other device'), othersMsg));
+
+  const value = (it) => {
+    if (it.secret) return it.set ? h('span', {}, 'Set ', h('span', { class: 'muted' }, '(hidden)')) : h('span', { class: 'warn-text' }, 'Not set');
+    if (!it.set) return h('span', { class: 'muted' }, 'Not set');
+    return h('span', {}, it.name ? h('code', { class: 'setting-value' }, it.value) : it.value, it.isDefault ? h('span', { class: 'muted small' }, ' (default)') : null);
+  };
+  const groupCard = (g) => h('div', { class: 'card' }, h('h2', {}, g.title),
+    h('dl', { class: 'settings-list' }, ...g.items.flatMap((it) => [
+      h('dt', {}, it.label, it.name ? h('span', { class: 'muted small setting-name' }, it.name) : null),
+      h('dd', {}, value(it), it.note ? h('span', { class: 'help' }, it.note) : null)])));
+
+  view.replaceChildren(
+    h('h1', {}, 'Admin settings'),
+    h('p', { class: 'muted' }, 'For the whole admin and server. Each town has its own Settings tab for its name, logo and header message.'),
+    h('div', { class: 'card' }, h('h2', {}, 'Admin password'), statusLine, f, useEnv),
+    others,
+    h('h2', { class: 'section-title' }, 'Server settings'),
+    h('p', { class: 'muted small' }, "These come from the .env file on the server, so they only change there. Secret values are never shown. After you edit .env, run: ",
+      h('code', {}, 'cd /opt/telluride-buzz && docker compose up -d --force-recreate')),
+    ...groups.map(groupCard),
   );
 }
 

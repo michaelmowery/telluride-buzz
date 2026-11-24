@@ -98,6 +98,20 @@ if (DEMO) {
 const admin = createAdmin({
   db,
   log,
+  serverInfo: () => {
+    const size = (f) => { try { return fs.statSync(f).size; } catch { return null; } };
+    let lastBackup = '';
+    try {
+      const last = fs.readdirSync(path.join(DATA_DIR, 'backups')).filter((f) => /^buzz-\d{4}-\d{2}-\d{2}\.db$/.test(f)).sort().pop();
+      if (last) lastBackup = last.slice(5, 15);
+    } catch { /* none yet */ }
+    const dbFile = path.join(DATA_DIR, 'buzz.db');
+    return {
+      demo: DEMO, analytics: analytics.enabled, push: !!vapid, pushSubscribers: db.countSubscriptions(),
+      dbBytes: DEMO ? null : (size(dbFile) ?? 0) + (size(`${dbFile}-wal`) ?? 0), lastBackup,
+      uptimeSec: Math.round(process.uptime()), rssMb: Math.round(process.memoryUsage().rss / 1048576), node: process.version,
+    };
+  },
   runNow: (townId, key) => scheduler.runNow(townId, key),
   onResources() { templateCache.clear(); },
   onChange() {

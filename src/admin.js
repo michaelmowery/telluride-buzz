@@ -1,10 +1,14 @@
 // Admin API: add and edit towns and sources, test a source before saving, and the
 // source health board. Lives at /admin on any town's address.
 //
-// Sign-in is one password (ADMIN_PASSWORD in the server's .env). With no password
-// set, the admin is off and every admin route answers 404. The session cookie is
-// signed with the password, so it survives deploys and changing the password signs
-// everyone out. CSRF: the cookie is SameSite=Strict and every change is a JSON POST.
+// Sign-in is one password. ADMIN_PASSWORD in the server's .env turns the admin on
+// (with none, every admin route answers 404) and is the password until it is changed
+// on the Admin settings page. A changed password is stored scrypt-hashed in the meta
+// table and wins over .env, until someone edits ADMIN_PASSWORD in .env: then .env
+// wins again (the way back in after a forgotten password). The session cookie is
+// signed with a key made from the password (plus a "sign out everywhere" epoch), so
+// it survives deploys and changing the password signs everyone else out.
+// CSRF: the cookie is SameSite=Strict and every change is a JSON POST.
 import crypto from 'node:crypto';
 import { adapterCatalog, itemSourcesOf, nearbyRoutes, testSource } from './adapters.js';
 import { exportTown, loadTowns, normalizeSource, normalizeTown, starterSources } from './towns.js';
@@ -19,11 +23,37 @@ import { townUrl } from './brand.js';
 
 const COOKIE = 'buzz_admin';
 const SESSION_DAYS = 14;
+const PASSWORD_KEY = 'admin_password';      // { salt, hash, envCheck, at } once changed in the admin
+const EPOCH_KEY = 'admin_session_epoch';    // changes when someone signs out every other device
+export const MIN_PASSWORD = 10;
+const scrypt = (pw, salt) => crypto.scryptSync(String(pw), Buffer.from(salt, 'base64'), 32);
+const sameBytes = (a, b) => a.length === b.length && crypto.timingSafeEqual(a, b);
 
-export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChange = () => {}, onResources = () => {}, runNow = () => false, deps = {}, log = console } = {}) {
-  const enabled = typeof password === 'string' && password.length >= 10;
-  if (password && !enabled) log.warn?.('ADMIN_PASSWORD is shorter than 10 characters, so the admin is off');
-  const key = enabled ? crypto.createHash('sha256').update(`buzz-admin:${password}`).digest() : null;
+export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChange = () => {}, onResources = () => {}, runNow = () => false, serverInfo = () => ({}), env = process.env, deps = {}, log = console } = {}) {
+  const enabled = typeof password === 'string' && password.length >= MIN_PASSWORD;
+  if (password && !enabled) log.warn?.(`ADMIN_PASSWORD is shorter than ${MIN_PASSWORD} characters, so the admin is off`);
+
+  // The password set in the admin, if any. It is dropped when .env's ADMIN_PASSWORD has
+  // changed since it was set, so editing .env always gets you back in.
+  const readStored = () => { try { return JSON.parse(db.getMeta(PASSWORD_KEY) || 'null'); } catch { return null; } };
+  let stored = enabled ? readStored() : null;
+  if (stored && !sameBytes(scrypt(password, stored.salt), Buffer.from(stored.envCheck || '', 'base64'))) {
+    db.deleteMeta(PASSWORD_KEY);
+    stored = null;
+    log.info?.('admin: ADMIN_PASSWORD in .env changed, so it replaces the password set in the admin');
+  }
+  let key = null;
+  function rekey() {
+    if (!enabled) return;
+    const epoch = db.getMeta(EPOCH_KEY) || '';
+    // With no stored password and no epoch this is the original key, so sessions survive this deploy.
+    key = crypto.createHash('sha256').update(`buzz-admin:${stored ? `stored:${stored.hash}` : password}${epoch ? `:${epoch}` : ''}`).digest();
+  }
+  rekey();
+  function checkPassword(given) {
+    if (stored) return sameBytes(scrypt(given, stored.salt), Buffer.from(stored.hash, 'base64'));
+    return sameBytes(crypto.createHash('sha256').update(String(given)).digest(), crypto.createHash('sha256').update(password).digest());
+  }
 
   const sign = (exp) => crypto.createHmac('sha256', key).update(String(exp)).digest('base64url');
   const token = () => { const exp = Date.now() + SESSION_DAYS * 86400e3; return `${exp}.${sign(exp)}`; };
@@ -121,6 +151,7 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
     if (!enabled) return { status: 404, body: { ok: false, error: 'Not found' } };
     const route = `${req.method} ${url.pathname.slice('/api/admin'.length)}`;
     const secure = req.headers['x-forwarded-proto'] === 'https' || !/^(localhost|[\w-]+\.localhost|127\.0\.0\.1)(:\d+)?$/.test(String(req.headers.host || ''));
+    const signInCookie = () => ({ 'Set-Cookie': `${COOKIE}=${token()}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_DAYS * 86400}${secure ? '; Secure' : ''}` });
 
     if (req.method === 'POST') {
       if (!String(req.headers['content-type'] || '').startsWith('application/json')) return bad('Use application/json', 415);
@@ -132,11 +163,9 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
       const ip = ipOf(req);
       if (throttled(ip)) return bad('Too many tries. Wait 15 minutes.', 429);
       const body = await readBody();
-      const given = crypto.createHash('sha256').update(String(body.password || '')).digest();
-      const want = crypto.createHash('sha256').update(password).digest();
-      if (!crypto.timingSafeEqual(given, want)) { failed(ip); return bad('Wrong password', 401); }
+      if (!checkPassword(String(body.password || ''))) { failed(ip); return bad('Wrong password', 401); }
       fails.delete(ip);
-      return { ...ok(), headers: { 'Set-Cookie': `${COOKIE}=${token()}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_DAYS * 86400}${secure ? '; Secure' : ''}` } };
+      return { ...ok(), headers: signInCookie() };
     }
     if (route === 'POST /logout') {
       return { ...ok(), headers: { 'Set-Cookie': `${COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure ? '; Secure' : ''}` } };
@@ -146,6 +175,11 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
     switch (route) {
       case 'GET /me':
         return ok();
+      case 'GET /server-settings':
+        return ok({
+          password: { source: stored ? 'admin' : 'env', changedAt: stored?.at || null, minLength: MIN_PASSWORD },
+          groups: serverSettings(env, serverInfo()),
+        });
       case 'GET /geocode': {
         // Add a town: look the name up on the map (OpenStreetMap) to fill the form.
         const name = (url.searchParams.get('q') || '').slice(0, 80);
@@ -195,6 +229,38 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
 
     if (req.method !== 'POST') return bad('Not found', 404);
     const body = await readBody();
+
+    // Admin settings: the password and signing out other devices. Each answers with a
+    // fresh cookie for this browser, since the old ones stop working.
+    if (route === 'POST /password' || route === 'POST /password/use-env') {
+      const ip = ipOf(req);
+      if (throttled(ip)) return bad('Too many tries. Wait 15 minutes.', 429);
+      if (!checkPassword(String(body.current || ''))) { failed(ip); return bad('Your current password is wrong.', 401); }
+      if (route === 'POST /password/use-env') {
+        if (!stored) return bad('The admin already uses the .env password.');
+        db.deleteMeta(PASSWORD_KEY);
+        stored = null;
+        log.info?.('admin: password set back to ADMIN_PASSWORD from .env; other sessions signed out');
+      } else {
+        const next = String(body.next || '');
+        if (next.length < MIN_PASSWORD) return bad(`Use at least ${MIN_PASSWORD} characters.`);
+        if (next.length > 200) return bad('Use 200 characters or fewer.');
+        if (checkPassword(next)) return bad('That is the password you have now. Pick a new one.');
+        const salt = crypto.randomBytes(16).toString('base64');
+        stored = { salt, hash: scrypt(next, salt).toString('base64'), envCheck: scrypt(password, salt).toString('base64'), at: Date.now() };
+        db.setMeta(PASSWORD_KEY, JSON.stringify(stored));
+        log.info?.('admin: password changed in the admin; other sessions signed out');
+      }
+      rekey();
+      return { ...ok({ source: stored ? 'admin' : 'env', changedAt: stored?.at || null }), headers: signInCookie() };
+    }
+    if (route === 'POST /sign-out-others') {
+      db.setMeta(EPOCH_KEY, crypto.randomBytes(9).toString('base64url'));
+      rekey();
+      log.info?.('admin: signed out every other device');
+      return { ...ok(), headers: signInCookie() };
+    }
+
     const all = towns();
 
     switch (route) {
@@ -404,4 +470,48 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
   }
 
   return { enabled, handle, signedIn, healthBoard };
+}
+
+// ---------- admin settings ----------
+// What the Admin settings page shows about the server. Everything here comes from the
+// server's .env (or a default) and changes there, so the page only reads it. Secrets
+// say only whether they are set.
+const SET = (v) => String(v ?? '').trim() !== '';
+export function serverSettings(env = {}, info = {}) {
+  const shown = (label, name, fallback, note) => {
+    const v = String(env[name] ?? '').trim();
+    return { label, name, value: v || fallback || '', isDefault: !v && !!fallback, set: !!v || !!fallback, note: note || '' };
+  };
+  const secret = (label, name, note) => ({ label, name, secret: true, set: SET(env[name]), note: note || '' });
+  const fact = (label, value, note) => ({ label, value: String(value ?? ''), set: value !== '' && value != null, note: note || '' });
+  const optional = (label, name, note) => (SET(env[name]) ? [shown(label, name, '', note)] : []);
+  const mb = (bytes) => (bytes == null ? '' : `${(bytes / 1048576).toFixed(1)} MB`);
+  return [
+    { title: 'Feeds', items: [
+      secret('CDOT road data key', 'CDOT_API_KEY', 'Colorado roads (CDOT) need it. Without it the Roads tile shows "No current data".'),
+      shown('Contact sent to feeds', 'USER_AGENT', 'TellurideBuzz/0.1 (+https://telluride.buzz; telluridebuzz@gmail.com)', 'The weather service (NWS) asks for a way to reach us.'),
+      ...optional('CDOT address override', 'CDOT_BASE'),
+      ...optional('NMRoads address override', 'NMROADS_URL'),
+      ...optional('Meander feed address', 'MEANDER_API'),
+    ] },
+    { title: 'Analytics (Umami)', items: [
+      fact('Analytics', info.analytics ? 'On' : 'Off', info.analytics ? '' : 'Turns on when the Website ID below is set.'),
+      shown('Umami Website ID', 'UMAMI_WEBSITE_ID', '', 'From Umami: Settings > Websites. One website covers every town.'),
+      shown('Umami address (inside the server)', 'UMAMI_URL', 'http://umami:3000'),
+      shown('Umami dashboard', 'UMAMI_DASHBOARD_URL', 'https://analytics.meander.me', 'Where the Analytics link at the top goes.'),
+    ] },
+    { title: 'Push alerts', items: [
+      fact('Push alerts', info.push ? 'On' : 'Off'),
+      fact('Phones and browsers signed up', info.pushSubscribers ?? ''),
+      shown('Push contact', 'VAPID_SUBJECT', 'https://telluride.buzz', 'Sent to the push services with each alert.'),
+    ] },
+    { title: 'Server', items: [
+      fact('Demo mode', info.demo ? 'On (sample data, no feeds polled)' : 'Off'),
+      fact('Database size', info.demo ? 'In memory (demo)' : mb(info.dbBytes)),
+      fact('Last nightly backup', info.lastBackup || 'None yet', 'Backups stay on this server (7 days kept).'),
+      fact('Running for', info.uptimeSec == null ? '' : `${Math.floor(info.uptimeSec / 3600)} h ${Math.floor((info.uptimeSec % 3600) / 60)} min`),
+      fact('Memory in use', info.rssMb == null ? '' : `${info.rssMb} MB`),
+      fact('Node.js', info.node || ''),
+    ] },
+  ];
 }

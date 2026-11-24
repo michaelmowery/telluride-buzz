@@ -171,3 +171,17 @@ span.err { color: var(--red); }
 .pill.kind { font-weight: 500; font-size: .72rem; margin-left: .25rem; }
 .pill.kind-events { color: #7c3aed; border-color: #7c3aed; }
 .pill.kind-alerts { color: var(--red, #c62828); border-color: var(--red, #c62828); }
+
+/* Admin settings */
+.settings-list { display: grid; grid-template-columns: minmax(10rem, 16rem) 1fr; gap: 0 1rem; margin: 0; }
+.settings-list dt, .settings-list dd { margin: 0; padding: .55rem 0; border-top: 1px solid var(--line); }
+.settings-list dt { font-weight: 600; }
+.settings-list .setting-name { display: block; font-weight: 400; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .75rem; }
+.setting-value { overflow-wrap: anywhere; }
+.settings-list .help { display: block; color: var(--muted); font-size: .82rem; margin-top: .15rem; }
+.warn-text { color: var(--amber); font-weight: 600; }
+.section-title { margin-top: 1.5rem; }
+@media (max-width: 560px) {
+  .settings-list { grid-template-columns: 1fr; }
+  .settings-list dd { border-top: 0; padding-top: 0; }
+}
