@@ -1,4 +1,6 @@
 // Telluride.Buzz home screen. Polls /api/home every 60 s while visible.
+import { wxIcon, hourlyChart, dayRows, snowBars } from './wx.js?v=37';
+
 const POLL_MS = 60e3;
 const STALE_MS = { weather: 45 * 60e3, roads: 20 * 60e3, lifts: 90 * 60e3, events: 6 * 3600e3 };
 const CATEGORY_LABEL = { weather: 'Weather', roads: 'Roads', lifts: 'Lifts & Snow', events: 'Events', town: 'Town', news: 'News', alerts: 'Alerts', prefs: 'Preferences' };
@@ -91,10 +93,18 @@ function setTile(name, html) {
 
 const unavailable = (msg) => `<div class="tile-error">${esc(msg || 'Not available right now.')}</div>`;
 
+/** Is it daytime right now (sun or moon on the icon)? */
+function nowIsDay(w) {
+  const h = w.hourly?.[0];
+  if (h?.isDaytime != null) return h.isDaytime;
+  const hr = Number(new Date().toLocaleString('en-US', { timeZone: TZ, hour: 'numeric', hour12: false }));
+  return hr >= 6 && hr < 18;
+}
+
 function renderWeather(w) {
   if (!w || !w.ok) return setTile('weather', unavailable(w?.error));
   setTile('weather', `
-    <div class="big">${w.temp ?? '–'}°<small>${esc(w.unit || 'F')}</small></div>
+    <div class="wx-now">${wxIcon(w.short, nowIsDay(w), 40)}<div class="big">${w.temp ?? '–'}°<small>${esc(w.unit || 'F')}</small></div></div>
     <div>${esc(w.short)}</div>
     <div class="muted">${w.hi != null ? `High ${w.hi}°` : ''}${w.hi != null && w.lo != null ? ' · ' : ''}${w.lo != null ? `Low ${w.lo}°` : ''}</div>
     ${w.snow ? `<div><span class="snowline">❄ ${esc(w.snow)} new snow</span></div>` : ''}`);
@@ -293,17 +303,20 @@ const dayLabel = (t) => eventTime(t).split(' · ')[0];
 
 function panelWeather(w) {
   if (!w || !w.ok) return unavailable(w?.error);
-  const hourly = (w.hourly || []).map((h) => `<div class="hour"><time>${esc(hourLabel(h.t))}</time><b>${h.temp ?? '–'}°</b>
-    <span>${esc(h.short)}</span>${h.pop ? `<span class="pop">${h.pop}%</span>` : ''}</div>`).join('');
-  const periods = (w.periods || []).map((p) => `<div class="p-card period"><b>${esc(p.name)}</b>
+  const chart = hourlyChart(w.hourly);
+  const days = dayRows(w.periods);
+  const snow = snowBars(w.periods);
+  const periods = (w.periods || []).map((p) => `<div class="p-card period">${wxIcon(p.short, p.isDaytime, 34)}<b>${esc(p.name)}</b>
     <span class="t ${p.isDaytime ? '' : 'night'}">${p.temp ?? '–'}°</span>
     <p>${esc(p.detail || p.short)}</p></div>`).join('');
-  return `<div class="p-card p-now"><div class="big">${w.temp ?? '–'}°<small>${esc(w.unit || 'F')}</small></div>
+  return `<div class="p-card p-now">${wxIcon(w.short, nowIsDay(w), 64)}<div class="big">${w.temp ?? '–'}°<small>${esc(w.unit || 'F')}</small></div>
       <div class="p-now-text"><div><b>${esc(w.short)}</b></div>
       <div class="muted">${w.hi != null ? `High ${w.hi}°` : ''}${w.hi != null && w.lo != null ? ' · ' : ''}${w.lo != null ? `Low ${w.lo}°` : ''}${w.wind ? ` · Wind ${esc(w.wind)}` : ''}</div>
       ${w.snow ? `<div><span class="snowline">❄ ${esc(w.snow)} new snow</span></div>` : ''}</div></div>
-    ${hourly ? `<h3>Next 24 hours</h3><div class="hourly">${hourly}</div>` : ''}
-    ${periods ? `<h3>Forecast</h3>${periods}` : ''}
+    ${chart ? `<h3>Next 24 hours</h3><div class="p-card wx-chart-card">${chart}</div>` : ''}
+    ${days ? `<h3>Next 7 days</h3><div class="p-card wx-days-card">${days}</div>` : ''}
+    ${snow ? `<h3>Snow expected</h3><div class="p-card">${snow}</div>` : ''}
+    ${periods ? `<h3>Forecast details</h3>${periods}` : ''}
     <div class="p-actions">${srcLink(w.link, 'Full forecast at weather.gov')}<button data-filter="weather">Weather posts</button></div>`;
 }
 
@@ -509,6 +522,8 @@ function renderPanel() {
   }
   body.scrollTop = scroll;
   body.querySelectorAll('[data-pct]').forEach((i) => { i.style.width = `${i.dataset.pct}%`; }); // CSP: no inline style attributes
+  body.querySelectorAll('[data-left]').forEach((i) => { i.style.left = `${i.dataset.left}%`; i.style.right = `${i.dataset.right}%`; });
+  body.querySelectorAll('[data-h]').forEach((i) => { i.style.height = `${i.dataset.h}%`; });
   const src = $(`.tile[data-tile="${openTile}"] [data-age]`);
   const meta = tileMeta[openTile];
   const checked = meta?.checked ? `checked ${ago(meta.checked)}` : '';
