@@ -1,0 +1,7 @@
+2026-11-24T16:18:31.713Z imported town durango (11 sources) from config
+2026-11-24T16:18:31.714Z imported town telluride (10 sources) from config
+2026-11-24T16:18:31.715Z imported 18 resources for telluride
+2026-11-24T16:18:31.729Z DEMO mode: sample data loaded, no feeds polled
+2026-11-24T16:18:31.731Z Buzz listening on :3999 (durango, telluride), admin on
+2026-11-24T16:18:34.791Z admin: password changed in the admin; other sessions signed out
+2026-11-24T16:18:35.251Z shutting down

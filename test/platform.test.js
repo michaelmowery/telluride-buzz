@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openDb } from '../src/db.js';
@@ -567,4 +568,79 @@ test('roads: NMRoads (New Mexico) feeds the Roads tile, picks highways and shows
 
   // A failed fetch keeps the tile honest.
   await assert.rejects(jobFor(ship, src, { json: async () => { throw new Error('HTTP 403'); } }).run(openDb(':memory:')), /403/);
+});
+
+test('admin settings: change the password, sign out others, .env edit wins, secrets masked', async () => {
+  const db = openDb(':memory:');
+  importConfigs(db, configs);
+  const env = { CDOT_API_KEY: 'super-secret-key', UMAMI_WEBSITE_ID: 'e3a27fa0-f6fd-4fa7-9510-b5325c6cce79' };
+  let admin = createAdmin({ db, password: 'correct horse battery', env, serverInfo: () => ({ analytics: true, pushSubscribers: 3 }), log: quiet });
+  const req = async (method, p, { cookie, body } = {}) => { const r = fakeReq(method, p, { cookie, body }); return admin.handle(r.req, r.url, r.read); };
+  const login = async (password) => req('POST', '/api/admin/login', { body: { password } });
+  const cookieOf = (res) => res.headers['Set-Cookie'].split(';')[0];
+  const phone = cookieOf(await login('correct horse battery'));
+  const laptop = cookieOf(await login('correct horse battery'));
+
+  // Settings page: secrets say only "set"; nothing in the reply carries the key or a password.
+  const s = await req('GET', '/api/admin/server-settings', { cookie: laptop });
+  assert.equal(s.body.password.source, 'env');
+  const text = JSON.stringify(s.body);
+  assert.ok(!text.includes('super-secret-key') && !text.includes('correct horse'));
+  const cdot = s.body.groups.flatMap((g) => g.items).find((i) => i.name === 'CDOT_API_KEY');
+  assert.deepEqual([cdot.secret, cdot.set, cdot.value], [true, true, undefined]);
+  assert.equal(s.body.groups.flatMap((g) => g.items).find((i) => i.name === 'UMAMI_WEBSITE_ID').value, env.UMAMI_WEBSITE_ID);
+
+  // Wrong current password, too short, or unchanged are refused.
+  assert.equal((await req('POST', '/api/admin/password', { cookie: laptop, body: { current: 'nope', next: 'a new long password' } })).status, 401);
+  assert.equal((await req('POST', '/api/admin/password', { cookie: laptop, body: { current: 'correct horse battery', next: 'short' } })).status, 400);
+  assert.equal((await req('POST', '/api/admin/password', { cookie: laptop, body: { current: 'correct horse battery', next: 'correct horse battery' } })).status, 400);
+
+  // Change it: stored hashed, this browser gets a new cookie, the phone is signed out.
+  const changed = await req('POST', '/api/admin/password', { cookie: laptop, body: { current: 'correct horse battery', next: 'a new long password' } });
+  assert.equal(changed.status, 200);
+  assert.equal(changed.body.source, 'admin');
+  const stored = db.getMeta('admin_password');
+  assert.ok(!stored.includes('a new long password') && !stored.includes('correct horse'));
+  const laptop2 = cookieOf(changed);
+  assert.equal((await req('GET', '/api/admin/me', { cookie: laptop2 })).status, 200);
+  assert.equal((await req('GET', '/api/admin/me', { cookie: phone })).status, 401);
+  assert.equal((await login('correct horse battery')).status, 401);
+  assert.equal((await login('a new long password')).status, 200);
+
+  // It survives a restart with the same .env.
+  admin = createAdmin({ db, password: 'correct horse battery', env, log: quiet });
+  assert.equal((await req('GET', '/api/admin/me', { cookie: laptop2 })).status, 200);
+  assert.equal((await login('a new long password')).status, 200);
+
+  // Sign out every other device: this one keeps working with its new cookie.
+  const tablet = cookieOf(await login('a new long password'));
+  const out = await req('POST', '/api/admin/sign-out-others', { cookie: laptop2, body: {} });
+  const laptop3 = cookieOf(out);
+  assert.equal((await req('GET', '/api/admin/me', { cookie: tablet })).status, 401);
+  assert.equal((await req('GET', '/api/admin/me', { cookie: laptop2 })).status, 401);
+  assert.equal((await req('GET', '/api/admin/me', { cookie: laptop3 })).status, 200);
+
+  // Forgot it? Editing ADMIN_PASSWORD in .env and restarting puts .env back in charge.
+  admin = createAdmin({ db, password: 'brand new env password', env, log: quiet });
+  assert.equal((await login('a new long password')).status, 401);
+  assert.equal((await login('brand new env password')).status, 200);
+  assert.equal(db.getMeta('admin_password'), null);
+
+  // Use the .env password again from the page.
+  const c = cookieOf(await login('brand new env password'));
+  const c2 = cookieOf(await req('POST', '/api/admin/password', { cookie: c, body: { current: 'brand new env password', next: 'yet another password' } }));
+  const back = await req('POST', '/api/admin/password/use-env', { cookie: c2, body: { current: 'yet another password' } });
+  assert.equal(back.body.source, 'env');
+  assert.equal((await login('brand new env password')).status, 200);
+});
+
+test('admin settings: sessions from before this change keep working', async () => {
+  const db = openDb(':memory:');
+  importConfigs(db, configs);
+  const old = createAdmin({ db, password: 'correct horse battery', log: quiet });
+  const r = fakeReq('POST', '/api/admin/login', { body: { password: 'correct horse battery' } });
+  const cookie = (await old.handle(r.req, r.url, r.read)).headers['Set-Cookie'].split(';')[0];
+  const exp = cookie.split('=')[1].split('.')[0];
+  const legacyKey = crypto.createHash('sha256').update('buzz-admin:correct horse battery').digest();
+  assert.equal(cookie.split('.')[1], crypto.createHmac('sha256', legacyKey).update(exp).digest('base64url'));
 });

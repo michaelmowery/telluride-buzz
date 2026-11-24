@@ -302,6 +302,7 @@ function wrap(db) {
     setMeta(key, value) {
       db.prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value').run(key, String(value));
     },
+    deleteMeta(key) { db.prepare('DELETE FROM meta WHERE key = ?').run(key); },
 
     /**
      * Replace the active set for one source: upsert what the source returned now and
