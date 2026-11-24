@@ -7,6 +7,7 @@
 // "thetown" style: town name beside the circle, "thetown" stacked above ".buzz"
 // inside it, so no logo implies we own that town's .buzz domain.
 
+import { buildInfo } from './version.js';
 import { ADAPTERS } from './adapters.js';
 import { DEFAULT_DISCLAIMER } from './sources/cdot.js';
 import { NM_DISCLAIMER } from './sources/nmroads.js';
@@ -198,6 +199,7 @@ export function brandValues(town, towns = [town]) {
   return {
     site,
     town: town.name,
+    buildLabel: buildInfo.label, // footer: which deploy this is (src/version.js)
     logo: logoSvg(town),
     townMenu: townMenu(town, towns),
     aboutSources: rows,

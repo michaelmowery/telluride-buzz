@@ -11,7 +11,7 @@
 # The private key never stays on your Mac: it is deleted at the end.
 set -euo pipefail
 ALIAS=${1:-hetzner}
-REPO=michaelmowery/telluride-buzz
+REPO=michaelmowery/thetownbuzz
 cd "$(dirname "$0")/.."
 
 cfg() { ssh -G "$ALIAS" | awk -v k="$1" '$1==k {print $2; exit}'; }

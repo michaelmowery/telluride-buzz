@@ -1,5 +1,6 @@
 // Telluride.Buzz: one small process that ingests feeds on a schedule and serves the
 // PWA plus a JSON API. Designed to sit behind the existing Caddy on the Hetzner box.
+import { buildInfo } from './version.js';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -109,7 +110,7 @@ const admin = createAdmin({
     return {
       demo: DEMO, analytics: analytics.enabled, push: !!vapid, pushSubscribers: db.countSubscriptions(),
       dbBytes: DEMO ? null : (size(dbFile) ?? 0) + (size(`${dbFile}-wal`) ?? 0), lastBackup,
-      uptimeSec: Math.round(process.uptime()), rssMb: Math.round(process.memoryUsage().rss / 1048576), node: process.version,
+      uptimeSec: Math.round(process.uptime()), rssMb: Math.round(process.memoryUsage().rss / 1048576), node: process.version, build: buildInfo,
     };
   },
   runNow: (townId, key) => scheduler.runNow(townId, key),
@@ -169,7 +170,7 @@ function health(town) {
     error: s.error,
     failures: s.failures,
   }));
-  return { ok: true, demo: DEMO, pushSubscribers: db.countSubscriptions(), analytics: analytics.enabled, uptimeSec: Math.round(process.uptime()), rssMb: Math.round(process.memoryUsage().rss / 1048576), sources };
+  return { ok: true, build: buildInfo, demo: DEMO, pushSubscribers: db.countSubscriptions(), analytics: analytics.enabled, uptimeSec: Math.round(process.uptime()), rssMb: Math.round(process.memoryUsage().rss / 1048576), sources };
 }
 
 // ---------- static ----------
@@ -422,6 +423,8 @@ const server = http.createServer((req, res) => {
         const d = String(url.searchParams.get('domain') || '').toLowerCase();
         return byHost.has(d) || HUB_HOSTS.has(d) ? send(res, 200, 'ok') : send(res, 404, 'unknown domain');
       }
+      case '/api/version':
+        return json(res, buildInfo, 0);
       case '/healthz':
         return send(res, 200, 'ok');
       default:

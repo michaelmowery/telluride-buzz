@@ -4,7 +4,7 @@
 # forced command, so that key can run this script and nothing else.
 # It clones the public repo itself; nothing is uploaded from GitHub.
 set -eu
-REPO=https://github.com/michaelmowery/telluride-buzz
+REPO=https://github.com/michaelmowery/thetownbuzz
 APP=/opt/telluride-buzz
 
 # One deploy at a time; a second push waits its turn.
@@ -20,11 +20,18 @@ esac
 
 SRC=$(mktemp -d)
 trap 'rm -rf "$SRC"' EXIT
-git clone -q --depth 20 "$REPO" "$SRC"
+# Full history (commits only, no old file contents) so the build number can count them.
+git clone -q --filter=blob:none "$REPO" "$SRC"
 if [ -n "$WANT" ]; then
   git -C "$SRC" checkout -q "$WANT" 2>/dev/null || echo "Commit $WANT not found yet, deploying latest main."
 fi
 echo "Deploying $(git -C "$SRC" log -1 --format='%h %s')"
+
+# Stamp the build: build number = commits on main up to this one, so it only
+# ever goes up. The app shows it in footers, admin Settings and /api/version.
+printf '{"build":%s,"commit":"%s","deployedAt":"%s"}\n' \
+  "$(git -C "$SRC" rev-list --count HEAD)" "$(git -C "$SRC" rev-parse HEAD)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  > "$SRC/config/build.json"
 
 rsync -a --exclude .git --exclude .env --exclude data/ "$SRC"/ "$APP"/
 cd "$APP"
