@@ -167,3 +167,7 @@ span.err { color: var(--red); }
 .claude-feeds .muted.small { margin-left: 1.6rem; overflow-wrap: anywhere; }
 .pill.on { color: var(--green); border-color: var(--green); }
 .pill.off { color: var(--amber); border-color: var(--amber); }
+/* Feed kind on the Feeds table: sets where a source's posts sort in the live feed. */
+.pill.kind { font-weight: 500; font-size: .72rem; margin-left: .25rem; }
+.pill.kind-events { color: #7c3aed; border-color: #7c3aed; }
+.pill.kind-alerts { color: var(--red, #c62828); border-color: var(--red, #c62828); }

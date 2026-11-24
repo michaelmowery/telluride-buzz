@@ -3,7 +3,7 @@
 //   amber   failing for under an hour, overdue, or waiting for its first run
 //   red     failing for over an hour (the doc's alert threshold)
 //   paused  turned off in the admin
-import { ADAPTERS } from './adapters.js';
+import { ADAPTERS, kindOf } from './adapters.js';
 
 export const RED_AFTER_MS = 3600e3;
 
@@ -26,7 +26,7 @@ export function sourceHealth(town, statusRows = [], now = Date.now()) {
     const a = ADAPTERS[s.adapter];
     const every = Number(s.everyMin) || a?.defaultEvery || 15;
     const base = {
-      key: s.key, label: s.label, adapter: s.adapter, adapterName: a?.name || s.adapter, feed: feedOf(s), everyMin: every, enabled: s.enabled !== false,
+      key: s.key, label: s.label, adapter: s.adapter, adapterName: a?.name || s.adapter, kind: kindOf(s), feed: feedOf(s), everyMin: every, enabled: s.enabled !== false,
       lastRun: st?.last_run ?? null, lastOk: st?.last_ok ?? null, error: st?.last_error ?? null,
       failures: st?.error_count ?? 0, failingSince: st?.failing_since ?? null, items: st?.last_items ?? null,
     };

@@ -144,7 +144,10 @@ function renderEvents(events) {
 // ---------- render: feed ----------
 function postHtml(p) {
   const link = safeUrl(p.link);
-  const when = p.category === 'events' && p.startsAt ? eventTime(p.startsAt) : ago(p.publishedAt);
+  const now = Date.now();
+  const when = p.category === 'events' && p.startsAt
+    ? (p.startsAt <= now && (!p.expiresAt || p.expiresAt > now) && now - p.startsAt < 86400e3 ? 'Happening now' : eventTime(p.startsAt))
+    : ago(p.publishedAt);
   return `<li class="post sev-${p.severity}" data-id="${p.id}">
     <div class="post-meta"><span class="src ${esc(p.category)}">${esc(p.sourceLabel)}</span><span class="cat cat-${esc(p.category)}">${esc(CATEGORY_LABEL[p.category] || '')}</span><span>·</span><time>${esc(when)}</time></div>
     <h3 class="post-title">${link ? `<a href="${esc(link)}" target="_blank" rel="noopener">${esc(p.title)}</a>` : esc(p.title)}</h3>
@@ -187,17 +190,20 @@ function setFilter(cat, scroll = true) {
   if (state.filter && scroll) { showTab('feed'); $('.feed-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 }
 
-async function loadFeed(before) {
-  if (!state.filter && !before && state.data) return renderFeed(state.data.feed);
+// The feed is sorted by relevance (server side), so "More" pages by position, not by time.
+async function loadFeed(offset = 0) {
+  if (!state.filter && !offset && state.data) return renderFeed(state.data.feed);
   const q = new URLSearchParams();
   if (state.filter) q.set('category', state.filter);
-  if (before) q.set('before', before);
+  if (offset) q.set('offset', offset);
   try {
     const r = await fetch(`/api/feed?${q}`);
     const { items } = await r.json();
-    if (before) {
-      state.feed = state.feed.concat(items);
-      $('#feed').insertAdjacentHTML('beforeend', items.filter(shownInFeed).map(postHtml).join(''));
+    if (offset) {
+      const have = new Set(state.feed.map((p) => p.id));
+      const fresh = items.filter((p) => !have.has(p.id));
+      state.feed = state.feed.concat(fresh);
+      $('#feed').insertAdjacentHTML('beforeend', fresh.filter(shownInFeed).map(postHtml).join(''));
       $('#more').hidden = items.length < 40;
     } else renderFeed(items);
   } catch { /* keep what is on screen */ }
@@ -252,8 +258,7 @@ document.querySelectorAll('.feed-pill').forEach((b) => b.addEventListener('click
   if (cat !== state.filter) setFilter(cat, false);
 }));
 $('#more').addEventListener('click', () => {
-  const last = state.feed[state.feed.length - 1];
-  if (last) loadFeed(last.publishedAt);
+  if (state.feed.length) loadFeed(state.feed.length);
 });
 $('#feed').addEventListener('click', (e) => {
   const b = e.target.closest('[data-expand]');

@@ -2,6 +2,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
+import { EVENT_DAYS, EVENT_WEIGHT, PIN_SEVERITY, RANK_SQL, EVENT_WINDOW_SQL } from './relevance.js';
 
 const SCHEMA = `
 PRAGMA journal_mode = WAL;
@@ -357,20 +358,28 @@ function wrap(db) {
       return out;
     },
 
-    feed(townId, { category = null, limit = 50, before = null } = {}) {
+    /**
+     * The live feed, most relevant first (see relevance.js): urgent alerts pinned, then
+     * news by publish time mixed with events by how close they are. Ended events drop
+     * off; the main feed only shows events in the next EVENT_DAYS days. The Events
+     * filter lists upcoming events by start time instead.
+     */
+    feed(townId, { category = null, limit = 50, offset = 0, eventDays = EVENT_DAYS } = {}) {
       const now = Date.now();
-      const where = ['town_id = :town', 'active = 1', '(expires_at IS NULL OR expires_at > :now)'];
-      const params = { town: townId, now, limit };
-      if (category) {
-        // "lifts" tile also shows snow; "weather" includes NWS alerts.
-        where.push('category = :category');
-        params.category = category;
+      const where = ['town_id = :town', 'active = 1', '(expires_at IS NULL OR expires_at > :now)', EVENT_WINDOW_SQL];
+      const all = category === 'events' || eventDays == null;
+      const params = { town: townId, now, limit, offset: Math.max(0, Math.min(1000, Number(offset) || 0)),
+        horizon: all ? 8.64e15 : now + eventDays * 86400e3 };
+      if (category) { where.push('category = :category'); params.category = category; }
+      let order = 'starts_at IS NULL, starts_at ASC, published_at DESC, id DESC';
+      if (category !== 'events') {
+        order = `(severity >= :pin) DESC, ${RANK_SQL} DESC, id DESC`;
+        Object.assign(params, { w: EVENT_WEIGHT, pin: PIN_SEVERITY });
       }
-      if (before) { where.push('published_at < :before'); params.before = before; }
       return db.prepare(`SELECT id, source, source_label, category, title, summary, link, severity,
                                 published_at, starts_at, expires_at
                          FROM items WHERE ${where.join(' AND ')}
-                         ORDER BY published_at DESC LIMIT :limit`).all(params).map(rowToItem);
+                         ORDER BY ${order} LIMIT :limit OFFSET :offset`).all(params).map(rowToItem);
     },
 
     alerts(townId) {

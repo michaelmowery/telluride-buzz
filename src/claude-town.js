@@ -13,6 +13,9 @@ const NEEDS_CHECK = /\b(check|checking|verify|unconfirmed|not confirmed|no (rss|
 const BY_HAND = { 'snow-report': 'Add a Lifts & Snow source for the resort.', 'resort-alerts': 'Add a resort alerts source for the resort.' };
 
 export function categoryGuess(x) {
+  // Claude names the kind in its answer; the guess is for older answers that don't.
+  const kind = String(x.kind || '').trim().toLowerCase();
+  if (['news', 'town', 'events', 'alerts'].includes(kind)) return kind;
   const text = `${x.label || ''} ${x.why || ''}`;
   if (/\b(alert|emergenc|sheriff|911|evacuat|warning)/i.test(text)) return 'alerts';
   if (/\b(event|calendar|festival|concert)/i.test(text)) return 'events';
@@ -47,7 +50,7 @@ export function planClaudeSources(suggested, town, existing = []) {
     const enabled = feed && !NEEDS_CHECK.test(why);
     const input = type === 'ical'
       ? { adapter: 'ical', label, about: why || null, enabled, settings: { url } }
-      : { adapter: 'rss', label, enabled, settings: { url, category: categoryGuess(x) },
+      : { adapter: 'rss', label, enabled, settings: { url, category: categoryGuess(x), ...(x.hasEvents === true && categoryGuess(x) !== 'events' ? { findEvents: true } : {}) },
         about: feed ? why || null : `From Claude, needs a feed address: ${why || url}`.slice(0, 240) };
     const all = [...existing, ...sources];
     const { source, error } = normalizeSource(input, town, all);

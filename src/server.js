@@ -397,8 +397,8 @@ const server = http.createServer((req, res) => {
         return json(res, home(town));
       case '/api/feed': {
         const cat = url.searchParams.get('category');
-        const before = Number(url.searchParams.get('before')) || null;
-        return json(res, { items: db.feed(town.id, { category: CATEGORIES.has(cat) ? cat : null, before, limit: 40 }) });
+        const offset = Number(url.searchParams.get('offset')) || 0;
+        return json(res, { items: db.feed(town.id, { category: CATEGORIES.has(cat) ? cat : null, offset, limit: 40 }) });
       }
       case '/api/health':
         return json(res, health(town), 0);

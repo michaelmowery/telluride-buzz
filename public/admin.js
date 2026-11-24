@@ -330,11 +330,13 @@ Answer with ONLY one JSON code block (\`\`\`json ... \`\`\`) in exactly this sha
 
 {
   "suggestedSources": [
-    { "label": "Who publishes it", "type": "rss | ical | other", "url": "https://...", "why": "what it would add (county alerts, school closures, events)" }
+    { "label": "Who publishes it", "type": "rss | ical | other", "kind": "news | town | events | alerts", "hasEvents": false, "url": "https://...", "why": "what it would add (county alerts, school closures, events)" }
   ]
 }
 
 Rules:
+- kind sets where its posts sort in the live feed: "news" for newspapers, radio and blogs (sorted by post date); "town" for town, county, school and utility news; "events" for calendars and event listings (sorted by when the event happens); "alerts" only for official emergency notices (sheriff, emergency management, public health, utility outages).
+- hasEvents: true for a news feed that also posts event listings with dates in them.
 - type "rss" is an RSS or Atom feed address and "ical" is an iCal (.ics or webcal) calendar address. Use them only for feed addresses you actually found and opened. Use "other" for a useful page that has no feed.
 - Only include URLs you actually found. Never guess a feed address.
 - Say in "why" if a feed needs checking (old posts, not sure it updates).
@@ -451,12 +453,24 @@ function renderHealth() {
   ].filter(Boolean));
 }
 
+// Short names for a source's kind (adapters.js kindOf) in the Feeds table.
+const KIND_NAMES = { news: 'News', town: 'Town news', events: 'Events', alerts: 'Alerts', weather: 'Weather', roads: 'Roads', lifts: 'Snow' };
+
+/** First guess at a new feed's kind from its name and address; the same rules as claude-town.js. */
+function guessKind(label, url) {
+  const text = `${label || ''} ${url || ''}`;
+  if (/\b(alert|emergenc|sheriff|911|evacuat|warning|oem)/i.test(text) || /nixle|everbridge|codered/i.test(url || '')) return 'alerts';
+  if (/(event|calendar|festival|concert|\.ics\b|tribe_events|\/events?\b)/i.test(text)) return 'events';
+  if (/\b(city|town|county|village|government|council|utilit|transit|bus)\b/i.test(label || '')) return 'town';
+  return 'news';
+}
+
 function sourceTable(town, rows, compact = false) {
   return h('div', { class: 'table-wrap' }, h('table', {},
     h('thead', {}, h('tr', {}, h('th', {}, ''), h('th', {}, 'Source'), h('th', { class: 'hide-sm' }, 'Type'), h('th', {}, 'Last success'), h('th', { class: 'hide-sm' }, 'Posts'), h('th', {}, 'Status'), h('th', {}, ''))),
     h('tbody', {}, ...rows.map((s) => h('tr', {},
       h('td', {}, dot(s.color)),
-      h('td', {}, h('a', { href: `#source/${town.id}/${s.key}` }, s.label), h('div', { class: 'muted small' }, s.key)),
+      h('td', {}, h('a', { href: `#source/${town.id}/${s.key}` }, s.label), ' ', h('span', { class: `pill kind kind-${s.kind}`, title: 'Kind: sets where its posts sort in the feed' }, KIND_NAMES[s.kind] || s.kind), h('div', { class: 'muted small' }, s.key)),
       h('td', { class: 'hide-sm small' }, s.adapterName, h('div', { class: 'muted' }, `every ${s.everyMin} min`)),
       h('td', { class: 'small' }, ago(s.lastOk)),
       h('td', { class: 'hide-sm small' }, s.items ?? ''),
@@ -695,7 +709,13 @@ async function sourcePage(townId, key) {
     fieldsBox.replaceChildren(...a.fields.map((fd) => {
       const val = s?.adapter === a.type ? s.settings?.[fd.key] : undefined;
       let input;
-      if (fd.type === 'select') input = h('select', { name: `s.${fd.key}` }, h('option', { value: '' }, ''), ...fd.options.map((o) => h('option', { value: o, selected: val === o }, o)));
+      if (fd.type === 'select') {
+        // A new feed's Kind starts from a guess and follows the name and address until changed by hand.
+        const auto = !s && fd.key === 'category';
+        input = h('select', { name: `s.${fd.key}`, ...(auto ? { 'data-auto': '1', onchange: (e) => { delete e.target.dataset.auto; } } : {}) },
+          auto ? null : h('option', { value: '' }, ''),
+          ...fd.options.map((o) => h('option', { value: o, selected: (val ?? (auto ? 'news' : '')) === o }, fd.labels?.[o] || o)));
+      }
       else if (fd.type === 'checkbox') return h('label', { class: 'check' }, h('input', { type: 'checkbox', name: `s.${fd.key}`, checked: !!val }), fd.label, fd.help ? h('span', { class: 'help inline-help' }, fd.help) : null);
       else if (fd.editor === 'routes') return routeEditor(fd, Array.isArray(val) ? val : [], t, a);
       else if (fd.type === 'json') input = h('textarea', { name: `s.${fd.key}`, rows: 6, placeholder: fd.placeholder || '' }, val ? JSON.stringify(val, null, 2) : '');
@@ -720,6 +740,11 @@ async function sourcePage(townId, key) {
     err, result,
   );
   renderFields();
+  if (!s) f.addEventListener('input', (e) => {
+    if (e.target.name !== 'label' && e.target.name !== 's.url') return;
+    const kind = f.querySelector('select[name="s.category"][data-auto]');
+    if (kind) kind.value = guessKind(f.querySelector('[name=label]').value, f.querySelector('[name="s.url"]')?.value);
+  });
 
   function collect() {
     const fd = new FormData(f);
@@ -993,14 +1018,14 @@ function fillTownWithClaude(form) {
   "timezone": "IANA time zone, like America/Denver",
   "notAffiliated": "short list of the main agencies whose info the site will show, like: the City of [Town], CDOT or the National Weather Service",
   "suggestedSources": [
-    { "label": "Who publishes it", "type": "rss | ical | snow-report | resort-alerts | other", "url": "https://...", "why": "what it would add (town news, county alerts, events, ski resort snow report, local paper)" }
+    { "label": "Who publishes it", "type": "rss | ical | snow-report | resort-alerts | other", "kind": "news | town | events | alerts", "hasEvents": false, "url": "https://...", "why": "what it would add (town news, county alerts, events, ski resort snow report, local paper)" }
   ],
   "resourcesCsv": "CSV text, see below"
 }
 
 Rules:
 - lat and lon: the center of town (town hall or main street), as numbers with 4 decimals.
-- suggestedSources: official RSS or iCal feeds for the town/city and county (news, alerts, calendar), the local newspaper or radio station feed, the nearest ski resort's snow report page, and anything else that publishes timely local information. Skip state road and highway sites: roads are added separately. Only include URLs you actually found. Say in "why" if a feed needs checking.
+- suggestedSources: official RSS or iCal feeds for the town/city and county (news, alerts, calendar), the local newspaper or radio station feed, the nearest ski resort's snow report page, and anything else that publishes timely local information. Skip state road and highway sites: roads are added separately. Only include URLs you actually found. Say in "why" if a feed needs checking. kind is "news" (newspapers, radio), "town" (town, county, school, utility news), "events" (calendars) or "alerts" (official emergency notices only); hasEvents is true for a news feed that also lists events.
 - resourcesCsv: starter entries for the Resources page as CSV text (use \\n for new lines inside the JSON string), header first:
 id,town,category,name,phone,phone2,website,address,hours,note,emergency,hidden,checked,source
   Leave id blank. town is the id above. category is one of emergency, medical, government, transit, utilities, roads, outdoors, schools. Include 911, the non-emergency dispatch or police line, the nearest hospital or clinic, town hall, the county, transit, the electric/gas/water utilities, the state road conditions line, the local forest or park office, and the school district and library. emergency is "yes" only for emergency lines and the ER. checked is today's date (${new Date().toISOString().slice(0, 10)}) for rows you verified on an official site. source is the URL you used.
