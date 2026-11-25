@@ -185,6 +185,23 @@ span.err { color: var(--red); }
   .settings-list dd { border-top: 0; padding-top: 0; }
 }
 
+/* Admin settings > Site size */
+.disk-meter { display: block; height: .45rem; max-width: 18rem; margin-top: .35rem; border-radius: 99px; background: var(--line); overflow: hidden; }
+.disk-meter > span { display: block; height: 100%; background: var(--green, #2e7d32); }
+.disk-meter.high > span { background: var(--amber, #b26a00); }
+.disk-meter.full > span { background: var(--red, #c62828); }
+.size-sub { font-size: 1rem; margin: 1rem 0 .25rem; }
+.size-table td:not(:first-child), .size-table th:not(:first-child) { text-align: right; white-space: nowrap; }
+@media (max-width: 640px) {
+  .size-table { display: table; font-size: .85rem; }
+  .size-table thead { display: table-header-group; }
+  .size-table tbody { display: table-row-group; }
+  .size-table tr { display: table-row; }
+  .size-table td, .size-table th { display: table-cell; padding: .4rem .3rem; border-top: 1px solid var(--line); color: inherit; }
+  .size-table th { color: var(--muted); }
+  .size-table th { border-top: 0; }
+}
+
 /* Ask an AI assistant: the one card for every copy-prompt, paste-answer job (aiCard in admin.js) */
 .ai-card > summary { cursor: pointer; }
 .ai-card[open] > summary { margin-bottom: .5rem; }

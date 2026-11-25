@@ -30,7 +30,7 @@ export const MIN_PASSWORD = 10;
 const scrypt = (pw, salt) => crypto.scryptSync(String(pw), Buffer.from(salt, 'base64'), 32);
 const sameBytes = (a, b) => a.length === b.length && crypto.timingSafeEqual(a, b);
 
-export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChange = () => {}, onResources = () => {}, runNow = () => false, serverInfo = () => ({}), env = process.env, deps = {}, log = console } = {}) {
+export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChange = () => {}, onResources = () => {}, runNow = () => false, serverInfo = () => ({}), siteSize = () => null, env = process.env, deps = {}, log = console } = {}) {
   const enabled = typeof password === 'string' && password.length >= MIN_PASSWORD;
   if (password && !enabled) log.warn?.(`ADMIN_PASSWORD is shorter than ${MIN_PASSWORD} characters, so the admin is off`);
 
@@ -180,6 +180,7 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
         return ok({
           password: { source: stored ? 'admin' : 'env', changedAt: stored?.at || null, minLength: MIN_PASSWORD },
           groups: serverSettings(env, serverInfo()),
+          size: (() => { try { return siteSize(); } catch (e) { log.warn?.(`site size failed: ${e.message}`); return null; } })(),
         });
       case 'GET /geocode': {
         // Add a town: look the name up on the map (OpenStreetMap) to fill the form.
@@ -497,7 +498,6 @@ export function serverSettings(env = {}, info = {}) {
   const secret = (label, name, note) => ({ label, name, secret: true, set: SET(env[name]), note: note || '' });
   const fact = (label, value, note) => ({ label, value: String(value ?? ''), set: value !== '' && value != null, note: note || '' });
   const optional = (label, name, note) => (SET(env[name]) ? [shown(label, name, '', note)] : []);
-  const mb = (bytes) => (bytes == null ? '' : `${(bytes / 1048576).toFixed(1)} MB`);
   return [
     { title: 'Feeds', items: [
       secret('CDOT road data key', 'CDOT_API_KEY', 'Colorado roads (CDOT) need it. Without it the Roads tile shows "No current data".'),
@@ -521,7 +521,6 @@ export function serverSettings(env = {}, info = {}) {
       fact('Version', info.build?.label || '', info.build?.build ? '' : 'Build number, commit and deploy time appear once the server deploy script writes config/build.json.'),
       ...(info.build?.deployedAt ? [fact('Deployed', new Date(info.build.deployedAt).toLocaleString('en-US', { timeZone: 'America/Denver', dateStyle: 'medium', timeStyle: 'short' }) + ' Mountain')] : []),
       fact('Demo mode', info.demo ? 'On (sample data, no feeds polled)' : 'Off'),
-      fact('Database size', info.demo ? 'In memory (demo)' : mb(info.dbBytes)),
       fact('Last nightly backup', info.lastBackup || 'None yet', 'Backups stay on this server (7 days kept).'),
       fact('Running for', info.uptimeSec == null ? '' : `${Math.floor(info.uptimeSec / 3600)} h ${Math.floor((info.uptimeSec % 3600) / 60)} min`),
       fact('Memory in use', info.rssMb == null ? '' : `${info.rssMb} MB`),
