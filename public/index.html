@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/styles.css?v=39">
+  <link rel="stylesheet" href="/styles.css?v=40">
   <script src="/theme.js?v=39"></script>
   <script src="/towns.js?v=39" defer></script>
 </head>
@@ -46,6 +46,7 @@
         <div class="tile-body" data-body><div class="skeleton"></div></div>
         <div class="tile-src" data-src></div>
       </button>
+      <button class="tile-compare" data-compare="weather" aria-label="Compare weather in other towns" title="Compare towns"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></button>
       <button class="tile-expand" tabindex="-1" aria-hidden="true" data-open="weather" aria-label="Expand Weather" title="Expand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
       </div>
       <div class="tile-wrap" data-show="roads">
@@ -62,6 +63,7 @@
         <div class="tile-body" data-body><div class="skeleton"></div></div>
         <div class="tile-src" data-src></div>
       </button>
+      <button class="tile-compare" data-compare="lifts" aria-label="Compare ski areas in other towns" title="Compare towns"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></button>
       <button class="tile-expand" tabindex="-1" aria-hidden="true" data-open="lifts" aria-label="Expand Lifts and Snow" title="Expand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
       </div>
       <div class="tile-wrap" data-show="events">
@@ -147,6 +149,6 @@
     <p class="fine build">{{buildLabel}}</p>
   </footer>
 
-  <script src="/app.js?v=40" type="module"></script>
+  <script src="/app.js?v=41" type="module"></script>
 </body>
 </html>

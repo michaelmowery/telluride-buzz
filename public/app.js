@@ -4,7 +4,7 @@ import { skyTile, skyPanel } from './sky.js?v=39';
 
 const POLL_MS = 60e3;
 const STALE_MS = { weather: 45 * 60e3, roads: 20 * 60e3, lifts: 90 * 60e3, events: 6 * 3600e3 };
-const CATEGORY_LABEL = { weather: 'Weather', roads: 'Roads', lifts: 'Lifts & Snow', events: 'Events', sky: 'Sun & Moon', town: 'Town', news: 'News', alerts: 'Alerts', prefs: 'Preferences' };
+const CATEGORY_LABEL = { weather: 'Weather', roads: 'Roads', lifts: 'Lifts & Snow', events: 'Events', sky: 'Sun & Moon', town: 'Town', news: 'News', alerts: 'Alerts', prefs: 'Preferences', 'compare-weather': 'Compare weather', 'compare-lifts': 'Compare ski areas' };
 
 const $ = (s, el = document) => el.querySelector(s);
 const state = { data: null, filter: null, lastOk: 0, timer: null, feed: [], seen: new Set() };
@@ -492,6 +492,159 @@ async function drawRoadsMap(r) {
   }, 250);
 }
 
+
+// ---------- compare towns (icon on Weather and Lifts & Snow) ----------
+// The table lists the towns this visitor picked in Preferences > Compare with.
+// The pick is saved on this device for this town site; until they choose, towns
+// within ~150 miles are on. The town you're on is always shown.
+const COMPARE_KEY = 'buzz-compare';
+const cmp = { data: null, at: 0, loading: null, error: false, sort: { weather: ['hi', -1], lifts: ['new24', -1] } };
+function loadCompare() {
+  if (cmp.data && Date.now() - cmp.at < 60e3) return Promise.resolve(cmp.data);
+  if (!cmp.loading) {
+    cmp.loading = fetch('/api/compare').then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+      .then((d) => { cmp.data = d; cmp.at = Date.now(); cmp.error = false; return d; })
+      .catch((e) => { cmp.error = !cmp.data; throw e; })
+      .finally(() => { cmp.loading = null; });
+  }
+  return cmp.loading;
+}
+/** Load (or refresh) the compare data, then redraw the panel if it needs it. */
+function ensureCompare() {
+  loadCompare().then(() => {}, () => {}).then(() => {
+    if (openTile && (openTile.startsWith('compare-') || openTile === 'prefs')) renderPanel();
+  });
+}
+function savedPicks() {
+  try { const v = JSON.parse(localStorage.getItem(COMPARE_KEY)); return Array.isArray(v) ? new Set(v) : null; } catch { return null; }
+}
+function isPicked(t, saved = savedPicks()) {
+  if (t.id === cmp.data?.here) return true;
+  return saved ? saved.has(t.id) : !!t.nearby;
+}
+function setPicked(id, on) {
+  const saved = savedPicks();
+  const ids = new Set((cmp.data?.towns || []).filter((t) => isPicked(t, saved)).map((t) => t.id));
+  if (on) ids.add(id); else ids.delete(id);
+  ids.delete(cmp.data?.here);
+  try { localStorage.setItem(COMPARE_KEY, JSON.stringify([...ids])); } catch { /* storage blocked: nothing saved */ }
+}
+function resetPicks() { try { localStorage.removeItem(COMPARE_KEY); } catch { /* storage blocked */ } }
+
+const deg = (v) => (v == null ? '–' : `${Math.round(v)}°`);
+const inch = (v) => (v == null ? '–' : `${v}″`);
+const frac = (a, b) => (a == null ? '–' : b ? `${a}/${b}` : String(a));
+const weekday = (t) => new Date(t).toLocaleDateString('en-US', { timeZone: TZ, weekday: 'short' });
+const milesText = (t) => (t.id === cmp.data?.here ? 'This town' : t.distanceMi != null ? `${t.distanceMi} mi` : '');
+
+/** Columns for each table: key, header, value for sorting (higher is better), and the text shown. */
+function compareCols(kind, rows) {
+  if (kind === 'lifts') {
+    return [
+      { k: 'new24', h: '24 hr', v: (r) => r.new24, f: (r) => inch(r.new24) },
+      { k: 'new48', h: '48 hr', v: (r) => r.new48, f: (r) => inch(r.new48) },
+      { k: 'new7d', h: '7 day', v: (r) => r.new7d, f: (r) => inch(r.new7d) },
+      { k: 'base', h: 'Base', v: (r) => r.base, f: (r) => inch(r.base) },
+      { k: 'season', h: 'Season', v: (r) => r.season, f: (r) => inch(r.season) },
+      { k: 'lifts', h: 'Lifts', v: (r) => r.liftsOpen, f: (r) => frac(r.liftsOpen, r.liftsTotal) },
+      { k: 'runs', h: 'Runs', v: (r) => r.trailsOpen, f: (r) => frac(r.trailsOpen, r.trailsTotal) },
+    ];
+  }
+  // Day columns follow this town's forecast; other towns are matched by date.
+  const here = rows.find((r) => r.town.id === cmp.data.here) || rows[0];
+  const days = (here?.w?.days || []).slice(0, 3);
+  const dayFor = (r, d, i) => (d.start ? r.w?.days?.find((x) => x.start && dayKey(x.start) === dayKey(d.start)) : r.w?.days?.[i]);
+  return [
+    { k: 'temp', h: 'Now', v: (r) => r.w?.temp, f: (r) => deg(r.w?.temp) },
+    { k: 'hi', h: 'High', v: (r) => r.w?.hi, f: (r) => deg(r.w?.hi) },
+    { k: 'lo', h: 'Low', v: (r) => r.w?.lo, f: (r) => deg(r.w?.lo) },
+    ...days.map((d, i) => ({ k: `d${i}`, h: d.start ? weekday(d.start) : String(d.name || '').slice(0, 3), v: (r) => dayFor(r, d, i)?.temp, f: (r) => deg(dayFor(r, d, i)?.temp) })),
+    // Snow: sooner sorts first; no snow in the forecast sorts last.
+    { k: 'snow', h: 'Snow', best: false, v: (r) => (r.w?.snow?.start ? -r.w.snow.start : null), f: (r) => (r.w?.snow ? (r.w.snow.start ? `${weekday(r.w.snow.start)}${/night/i.test(r.w.snow.name) ? ' night' : ''}` : r.w.snow.name) : 'None') },
+  ];
+}
+
+function compareTable(kind) {
+  if (!cmp.data) {
+    ensureCompare();
+    return cmp.error ? unavailable("Couldn't load the other towns. Try again in a minute.") : '<div class="skeleton"></div>';
+  }
+  if (Date.now() - cmp.at > 60e3) ensureCompare();
+  const saved = savedPicks();
+  const towns = cmp.data.towns.filter((t) => isPicked(t, saved));
+  const rows = kind === 'lifts'
+    ? towns.flatMap((t) => t.resorts.map((r) => ({ town: t, r, name: r.name })))
+    : towns.filter((t) => t.weather).map((t) => ({ town: t, w: t.weather, name: t.name }));
+  const others = towns.length - 1;
+  const lead = `<div class="cmp-lead"><span>${others ? `${others} other town${others === 1 ? '' : 's'} picked` : 'No other towns picked yet'}</span><button class="cmp-edit" data-cmp-edit>Edit towns</button></div>`;
+  if (!rows.length || (rows.length === 1 && !others)) {
+    const msg = kind === 'lifts' ? 'None of your picked towns have a ski area report yet. Add more towns to compare.' : 'Pick some towns to compare with.';
+    return `${lead}<div class="cmp-scroll"><p class="cmp-none">${esc(msg)}</p></div>`;
+  }
+  const cols = compareCols(kind, rows);
+  const [sk, dir] = cmp.sort[kind];
+  const byName = sk === 'name';
+  const col = byName ? null : cols.find((c) => c.k === sk) || cols[0];
+  const val = (r, c) => { const v = c.v(kind === 'lifts' ? r.r : r); return Number.isFinite(v) ? v : null; };
+  rows.sort((a, b) => {
+    if (byName) return a.name.localeCompare(b.name) * dir;
+    const x = val(a, col), y = val(b, col);
+    if (x == null || y == null) return (x == null) - (y == null) || a.name.localeCompare(b.name);
+    return (y - x) * -dir || a.name.localeCompare(b.name);
+  });
+  // Best in each column (most snow, warmest), only when there's something to beat.
+  const best = new Map(cols.filter((c) => c.best !== false).map((c) => {
+    const vals = rows.map((r) => val(r, c)).filter((v) => v != null);
+    return [c.k, vals.length > 1 && new Set(vals).size > 1 ? Math.max(...vals) : null];
+  }));
+  const head = `<tr><th scope="col"${byName ? ` aria-sort="${dir > 0 ? 'ascending' : 'descending'}"` : ''}><button data-sort="name">${kind === 'lifts' ? 'Ski area' : 'Town'}</button></th>${cols.map((c) => `<th scope="col"${c.k === col?.k ? ` aria-sort="${dir < 0 ? 'descending' : 'ascending'}"` : ''}><button data-sort="${c.k}">${esc(c.h)}</button></th>`).join('')}</tr>`;
+  const body = rows.map((r) => {
+    const here = r.town.id === cmp.data.here;
+    const sub = kind === 'lifts' ? [r.town.name, milesText(r.town)].filter(Boolean).join(' · ') : milesText(r.town);
+    const name = here ? `<b>${esc(r.name)}</b>` : `<a href="${esc(safeUrl(r.town.url) || '#')}">${esc(r.name)}</a>`;
+    const cells = cols.map((c) => {
+      const v = val(r, c);
+      const cls = v != null && best.get(c.k) === v ? ' class="best"' : v == null ? ' class="dim"' : '';
+      return `<td${cls}>${esc(c.f(kind === 'lifts' ? r.r : r))}</td>`;
+    }).join('');
+    return `<tr${here ? ' class="here"' : ''}><td>${name}<small>${esc(sub)}</small></td>${cells}</tr>`;
+  }).join('');
+  const missing = kind === 'lifts' ? towns.filter((t) => !t.resorts.length).map((t) => t.name) : towns.filter((t) => !t.weather).map((t) => t.name);
+  const note = kind === 'lifts'
+    ? `From each ski area's own snow report. Green marks the most.${missing.length ? ` No ski area report for ${missing.join(', ')}.` : ''}`
+    : `National Weather Service forecasts for each town. Green marks the warmest.${missing.length ? ` No forecast right now for ${missing.join(', ')}.` : ''}`;
+  return `${lead}<div class="cmp-scroll"><table class="cmp">${head}${body}</table></div><p class="prefs-note">${esc(note)} Tap a column to sort, or a town to open its page.</p>`;
+}
+const panelCompareWeather = () => compareTable('weather');
+const panelCompareLifts = () => compareTable('lifts');
+
+function comparePrefsHtml() {
+  const intro = '<h3 id="prefs-compare">Compare with</h3><p class="prefs-note prefs-lead">Towns shown when you tap the compare icon on Weather or Lifts &amp; Snow.</p>';
+  if (!cmp.data) {
+    ensureCompare();
+    return `${intro}<div class="toggles"><p class="cmp-none">${cmp.error ? "Couldn't load the town list. Try again in a minute." : 'Loading towns…'}</p></div>`;
+  }
+  const saved = savedPicks();
+  const groups = new Map();
+  for (const t of cmp.data.towns) {
+    const g = t.stateName || 'Other';
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(t);
+  }
+  const showStates = groups.size > 1;
+  const row = (t) => {
+    const here = t.id === cmp.data.here;
+    const what = t.resorts.length ? t.resorts.map((r) => r.name).join(', ') : 'Weather only';
+    const sub = here ? 'This town · always shown' : [milesText(t), what].filter(Boolean).join(' · ');
+    return `<button class="toggle" role="switch" aria-checked="${isPicked(t, saved)}" data-cmp-town="${esc(t.id)}" data-q="${esc(`${t.name} ${t.state} ${t.stateName}`.toLowerCase())}"${here ? ' disabled' : ''}><span>${esc(t.name)}<small>${esc(sub)}</small></span><i class="switch" aria-hidden="true"></i></button>`;
+  };
+  const list = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([g, ts]) => `<div data-cmp-group>${showStates ? `<p class="cmp-state">${esc(g)}</p>` : ''}${ts.map(row).join('')}</div>`).join('');
+  const search = cmp.data.towns.length > 8 ? '<input class="cmp-search" type="search" id="cmp-search" placeholder="Search towns" aria-label="Search towns" autocomplete="off">' : '';
+  return `${intro}${search}<div class="toggles">${list}</div>
+    <button class="prefs-reset" data-cmp-reset>Reset to towns within ${cmp.data.nearbyMi} miles</button>`;
+}
+
 // ---------- preferences ----------
 const THEME_INFO = [
   ['lake', 'Blue Lake', 'Alpine blue with gold'],
@@ -525,6 +678,7 @@ function panelPrefs() {
     <p class="prefs-note">Road and alert colors stay the same in every theme. Dark mode follows your phone's setting.</p>
     <h3>Show on the home screen</h3>
     <div class="toggles">${SHOW_OPTS.map(toggleHtml).join('')}</div>
+    ${comparePrefsHtml()}
     <h3>Topics in the live feed</h3>
     <div class="toggles">${FEED_OPTS.map(toggleHtml).join('')}</div>
     <p class="prefs-note">Emergency and weather warnings in the red banner always show. Everything here is saved on this device only.</p>
@@ -547,7 +701,7 @@ function toggleHtml([key, label]) {
 }
 
 const panelSky = (s) => (s?.ok ? skyPanel(s, state.data?.town?.name) : unavailable(s?.error));
-const PANELS = { weather: panelWeather, roads: panelRoads, lifts: panelLifts, events: panelEvents, sky: panelSky, prefs: panelPrefs };
+const PANELS = { weather: panelWeather, roads: panelRoads, lifts: panelLifts, events: panelEvents, sky: panelSky, prefs: panelPrefs, 'compare-weather': panelCompareWeather, 'compare-lifts': panelCompareLifts };
 let openTile = null;
 let closing = false;
 
@@ -599,7 +753,7 @@ function closePanel(fromHistory = false) {
     panel.style.transform = '';
     panel.close();
     document.documentElement.classList.remove('panel-open');
-    (openTile === 'prefs' ? $('#prefs-btn') : $(`.tile[data-tile="${openTile}"]`))?.focus();
+    (openTile === 'prefs' ? $('#prefs-btn') : openTile.startsWith('compare-') ? $(`[data-compare="${openTile.slice(8)}"]`) : $(`.tile[data-tile="${openTile}"]`))?.focus();
     openTile = null;
   };
   if (!fromHistory && history.state?.panel) history.back();
@@ -609,6 +763,7 @@ function closePanel(fromHistory = false) {
 }
 
 document.querySelectorAll('.tile-expand').forEach((b) => b.addEventListener('click', () => openPanel(b.dataset.open)));
+document.querySelectorAll('.tile-compare').forEach((b) => b.addEventListener('click', () => openPanel(`compare-${b.dataset.compare}`)));
 $('#panel-close').addEventListener('click', () => closePanel());
 $('#prefs-btn').addEventListener('click', () => openPanel('prefs'));
 $('#prefs-link').addEventListener('click', (e) => { e.preventDefault(); openPanel('prefs'); });
@@ -625,6 +780,34 @@ panel.addEventListener('click', (e) => {
     if (key.startsWith('feed-') && !state.filter) renderFeed(state.data?.feed || []);
     return renderPanel();
   }
+  const so = e.target.closest('[data-sort]');
+  if (so && openTile?.startsWith('compare-')) {
+    const kind = openTile.slice(8);
+    const [k, d] = cmp.sort[kind];
+    // Numbers sort high to low first; town names A to Z.
+    cmp.sort[kind] = [so.dataset.sort, so.dataset.sort === k ? -d : so.dataset.sort === 'name' ? 1 : -1];
+    return renderPanel();
+  }
+  if (e.target.closest('[data-cmp-edit]')) {
+    openTile = 'prefs';
+    $('#panel-title').textContent = CATEGORY_LABEL.prefs;
+    history.replaceState({ panel: 'prefs' }, '');
+    renderPanel();
+    const h = document.getElementById('prefs-compare');
+    const body = $('#panel-body');
+    if (h) body.scrollTop = h.offsetTop - body.offsetTop - 8;
+    return;
+  }
+  const ct = e.target.closest('[data-cmp-town]');
+  if (ct && !ct.disabled) {
+    setPicked(ct.dataset.cmpTown, ct.getAttribute('aria-checked') !== 'true');
+    const q = $('#cmp-search', panel)?.value || '';
+    renderPanel();
+    const box = $('#cmp-search', panel);
+    if (box && q) { box.value = q; box.dispatchEvent(new Event('input', { bubbles: true })); }
+    return;
+  }
+  if (e.target.closest('[data-cmp-reset]')) { resetPicks(); return renderPanel(); }
   const th = e.target.closest('[data-theme]');
   if (th) { setTheme(th.dataset.theme); return renderPanel(); }
   const nav = e.target.closest('[data-cal]');
@@ -635,6 +818,12 @@ panel.addEventListener('click', (e) => {
     const body = $('#panel-body');
     if (head) body.scrollTo({ top: head.offsetTop - body.offsetTop - 8, behavior: 'smooth' });
   }
+});
+panel.addEventListener('input', (e) => {
+  if (e.target.id !== 'cmp-search') return;
+  const q = e.target.value.trim().toLowerCase();
+  panel.querySelectorAll('[data-cmp-town]').forEach((b) => { b.hidden = !!q && !b.dataset.q.includes(q); });
+  panel.querySelectorAll('[data-cmp-group]').forEach((g) => { g.hidden = !g.querySelector('[data-cmp-town]:not([hidden])'); });
 });
 window.addEventListener('popstate', () => { if (panel.open) closePanel(true); });
 
