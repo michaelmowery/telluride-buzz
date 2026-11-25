@@ -14,6 +14,7 @@ import { adapterCatalog, itemSourcesOf, nearbyRoutes, testSource } from './adapt
 import { exportTown, loadTowns, normalizeSource, normalizeTown, starterSources } from './towns.js';
 import { sourceHealth, townColor, FEED_NAMES } from './health.js';
 import { geocodeTown } from './geocode.js';
+import { resourceFromUrl } from './page-info.js';
 import { planClaudeSources } from './claude-town.js';
 import { suggestCdotSource } from './cdot-routes.js';
 import { suggestNmroadsSource } from './sources/nmroads.js';
@@ -189,6 +190,17 @@ export function createAdmin({ db, password = process.env.ADMIN_PASSWORD, onChang
         } catch (e) {
           log.warn?.(`admin: geocode failed: ${e.message}`);
           return bad(`The map lookup didn't answer (${e.message}). Try again, or use Edit the other fields and fill the point in by hand.`, 502);
+        }
+      }
+      case 'GET /resource-from-url': {
+        // Resources tab: paste a web address, the server reads the page's business
+        // details (schema.org, OpenGraph, page text) to fill a resource for preview.
+        const raw = (url.searchParams.get('url') || '').slice(0, 500);
+        try {
+          return ok(await (deps.resourceFromUrl || resourceFromUrl)(raw, deps.pageFetch || {}));
+        } catch (e) {
+          log.warn?.(`admin: resource lookup failed: ${e.message}`);
+          return { status: e.blocked || (e.status >= 400 && e.status < 600) ? 502 : 400, body: { ok: false, error: e.message, blocked: !!e.blocked } };
         }
       }
       case 'GET /notice': {
