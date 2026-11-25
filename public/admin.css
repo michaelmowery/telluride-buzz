@@ -201,3 +201,26 @@ span.err { color: var(--red); }
 .ai-status { margin: .4rem 0 0; } .ai-status:empty { display: none; }
 .ai-peek { margin-top: .4rem; } .ai-peek > summary { cursor: pointer; color: var(--muted); font-size: .85rem; }
 .ai-out:not(:empty) { margin-top: .75rem; }
+
+/* Resources tab: Add from a web address */
+.url-row { flex-wrap: nowrap; }
+.url-row input { flex: 1; min-width: 0; }
+.url-out:empty { display: none; }
+.url-out { margin-top: .75rem; }
+.url-result { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 1rem; align-items: start; }
+@media (max-width: 760px) { .url-result { grid-template-columns: 1fr; } }
+.url-form textarea { width: 100%; }
+.url-form label > span:first-child { display: inline-flex; gap: .3rem; align-items: center; }
+.found { font-size: .75rem; color: var(--green); font-weight: 700; }
+.found.none { color: var(--muted); font-weight: 400; }
+.warn-msg { color: var(--amber); }
+.url-preview { position: sticky; top: .5rem; }
+.res-card { border: 1px solid var(--line); border-radius: 10px; padding: .75rem .85rem; background: var(--bg); }
+.res-card p { margin: 0 0 .3rem; }
+.res-name { font-weight: 700; font-size: 1.05rem; }
+.res-tags { font-size: .85rem; color: var(--muted); }
+.res-line, .res-note { font-size: .9rem; }
+.res-btns { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; }
+.res-btn { border: 1px solid var(--line); border-radius: 999px; padding: .2rem .65rem; font-size: .85rem; }
+.res-btn.call { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+.url-fail .row { margin-top: .5rem; }

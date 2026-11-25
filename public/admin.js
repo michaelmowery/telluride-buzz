@@ -25,7 +25,7 @@ async function api(path, body) {
   });
   const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
   if (res.status === 401 && path !== '/login') { showLogin(); throw new Error('Sign in first'); }
-  if (!res.ok || data.ok === false) throw new Error(data.error || `HTTP ${res.status}`);
+  if (!res.ok || data.ok === false) throw Object.assign(new Error(data.error || `HTTP ${res.status}`), { data });
   return data;
 }
 
@@ -1061,8 +1061,8 @@ function aiCard({ title, blurb = '', controls = null, prompt, notReady = 'Fill i
  * the prompt; apply(json, url) fills the form and returns a summary line (or throws).
  * Nothing is saved until the form's own button is pressed.
  */
-function aiFillCard({ what, placeholder, prompt, apply }) {
-  const url = h('input', { type: 'url', placeholder, 'aria-label': `Web address of the ${what}` });
+function aiFillCard({ what, placeholder, prompt, apply, start = '' }) {
+  const url = h('input', { type: 'url', placeholder, value: start, 'aria-label': `Web address of the ${what}` });
   const clean = () => {
     let v = url.value.trim();
     if (v && !/^[a-z]+:\/\//i.test(v)) v = `https://${v}`;
@@ -1083,6 +1083,7 @@ function aiFillCard({ what, placeholder, prompt, apply }) {
     },
   });
   url.addEventListener('input', card.refresh);
+  if (start) card.open = true;
   return card;
 }
 
@@ -1330,7 +1331,11 @@ async function resourcePage(townId, id, category = '') {
   const t = d.town;
   const r = id ? d.resources.find((x) => String(x.id) === String(id)) : null;
   if (id && !r) throw new Error('That resource no longer exists.');
-  const v = r || { category: category || 'emergency' };
+  // From "Add from a web address" on the Resources tab: its fields, or just the address for Fill with AI.
+  let pre = null;
+  if (!r) { try { pre = JSON.parse(sessionStorage.getItem(PREFILL_KEY) || 'null'); sessionStorage.removeItem(PREFILL_KEY); } catch { /* none */ } }
+  if (pre && pre.town !== townId) pre = null;
+  const v = r || { category: category || 'emergency', ...(pre?.resource || {}) };
   const err = h('p', { class: 'error', role: 'alert' });
   const input = (name, attrs = {}) => h('input', { name, value: v[name] || '', ...attrs });
   // Sponsorship: business categories only. Shows first in its category with a
@@ -1393,7 +1398,7 @@ async function resourcePage(townId, id, category = '') {
     h('p', {}, h('a', { href: `#resources/${t.id}` }, `← ${t.name} resources`)),
     h('h1', {}, r ? r.name : `Add a resource to ${t.name}`),
     r ? h('p', { class: 'muted' }, r.checkedAt ? `Last checked ${ago(r.checkedAt)}.` : 'Never checked.') : null,
-    r ? null : aiFillCard({ what: 'place', placeholder: 'https://www.example.com',
+    r ? null : aiFillCard({ what: 'place', placeholder: 'https://www.example.com', start: pre?.ai ? pre.url : '',
       prompt: (u) => resourcePrompt(u, t, d.categories, catSelect.value), apply: (j, u) => applyResource(j, u, f, d.categories) }),
     h('div', { class: 'card' }, f),
   ].filter(Boolean));
@@ -1528,6 +1533,120 @@ function saveResFilters() {
   history.replaceState(null, '', `#all-resources${qs ? `?${qs}` : ''}`);
 }
 
+// Resources tab, "Add from a web address": paste a business's or office's web address,
+// the server reads the page (its schema.org details, page tags and text; no AI), and the
+// fields come back for a preview you can edit before pressing Add. Sites that block our
+// server, or pages that say too little, hand over to Fill with AI on the Add page.
+const PREFILL_KEY = 'resource-prefill';
+function urlAddCard(d, townId, { cat = '', onAdded = () => {} } = {}) {
+  const t = d.towns.find((x) => x.id === townId) || { id: townId, name: townId };
+  const url = h('input', { type: 'url', placeholder: 'https://www.example.com', autocomplete: 'off', 'aria-label': 'Web address of the place' });
+  const go = h('button', { type: 'submit' }, 'Look up');
+  const out = h('div', { class: 'url-out' });
+  const handOff = (resource, ai) => {
+    try { sessionStorage.setItem(PREFILL_KEY, JSON.stringify({ town: townId, url: url.value.trim(), resource, ai })); } catch { /* private mode */ }
+    location.hash = `new-resource/${townId}/${resource?.category || cat || 'services'}`;
+  };
+  const aiButton = (label = 'Fill with AI instead') => h('button', { type: 'button', class: 'secondary', onclick: () => handOff(null, true) }, label);
+
+  async function lookUp(e) {
+    e.preventDefault();
+    const typed = url.value.trim();
+    if (!typed) { out.replaceChildren(h('p', { class: 'error' }, 'Type or paste a web address first.')); url.focus(); return; }
+    go.disabled = true; go.textContent = 'Reading the page…';
+    out.replaceChildren(h('p', { class: 'muted small', role: 'status' }, 'Reading the page and its contact page. This takes a few seconds.'));
+    try {
+      const res = await api(`/resource-from-url?url=${encodeURIComponent(typed)}`);
+      showPreview(res);
+    } catch (x) {
+      out.replaceChildren(h('div', { class: 'url-fail', role: 'alert' },
+        h('p', { class: 'error' }, x.message),
+        h('div', { class: 'row' }, aiButton(), h('button', { type: 'button', class: 'secondary', onclick: () => handOff({ website: /^https?:/i.test(typed) ? typed : `https://${typed}` }, false) }, 'Type it in by hand'))));
+    } finally { go.disabled = false; go.textContent = 'Look up'; }
+  }
+
+  function showPreview(res) {
+    const r = { category: cat || 'services', ...res.resource };
+    const filled = ['name', 'phone', 'address', 'hours'].filter((k) => r[k]).length;
+    const input = (name, attrs = {}) => h('input', { name, value: r[name] || '', ...attrs });
+    const tag = (k) => (res.found[k] ? h('span', { class: 'found', title: `From ${res.found[k]}` }, '✓') : h('span', { class: 'found none', title: 'Not on the page' }, '–'));
+    const lab = (label, k, el) => h('label', {}, h('span', {}, label, ' ', tag(k)), el);
+    const form = h('form', { class: 'url-form' },
+      h('div', { class: 'grid2' },
+        lab('Name', 'name', input('name', { required: true, maxlength: 120 })),
+        lab('Category', 'category', h('select', { name: 'category' }, ...d.categories.map((c) => h('option', { value: c.id, selected: r.category === c.id }, c.label)))),
+        lab('Phone', 'phone', input('phone', { type: 'tel', maxlength: 40 })),
+        lab('Website', 'website', input('website', { maxlength: 300 })),
+        lab('Address', 'address', input('address', { maxlength: 200 })),
+        lab('Hours', 'hours', input('hours', { maxlength: 200 })),
+        lab('Tags', 'tags', input('tags', { maxlength: 80, placeholder: 'Mexican · $$' }))),
+      lab('Note', 'note', h('textarea', { name: 'note', rows: 2, maxlength: 400 }, r.note || '')),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', name: 'checked' }), ' I checked this is right today'));
+    const preview = h('div', { class: 'url-preview', 'aria-live': 'polite' });
+    const val = (k) => (form.elements[k].value || '').trim();
+    const host = (u) => u.replace(/^https?:\/\/(www\.)?/, '').replace(/\/.*$/, '');
+    // Roughly how the listing looks on the town's page.
+    const draw = () => {
+      const catLabel = d.categories.find((c) => c.id === val('category'))?.label || '';
+      const btns = [val('phone') && h('span', { class: 'res-btn call' }, `📞 ${val('phone')}`), val('website') && h('span', { class: 'res-btn' }, host(val('website'))), val('address') && h('span', { class: 'res-btn' }, 'Map')].filter(Boolean);
+      preview.replaceChildren(
+        h('p', { class: 'muted small' }, `Preview on ${t.name}'s ${catLabel || 'page'}`),
+        h('div', { class: 'res-card' },
+          h('p', { class: 'res-name' }, val('name') || 'No name yet'),
+          val('tags') ? h('p', { class: 'res-tags' }, val('tags')) : null,
+          val('address') ? h('p', { class: 'res-line' }, val('address')) : null,
+          val('hours') ? h('p', { class: 'res-line' }, `🕒 ${val('hours')}`) : null,
+          val('note') ? h('p', { class: 'res-note' }, val('note')) : null,
+          btns.length ? h('div', { class: 'res-btns' }, ...btns) : null));
+    };
+    form.addEventListener('input', draw);
+    form.addEventListener('change', draw);
+    draw();
+
+    const dupOf = () => {
+      const digits = val('phone').replace(/\D/g, '');
+      const site = host(val('website'));
+      return d.resources.find((x) => x.townId === townId && ((digits.length >= 10 && x.phone.replace(/\D/g, '') === digits) || (site && x.website && host(x.website) === site && x.name.toLowerCase() === val('name').toLowerCase())));
+    };
+    const dup = dupOf();
+    const msg = h('p', { class: 'error', role: 'alert' });
+    const add = h('button', { type: 'button', onclick: async () => {
+      msg.textContent = '';
+      if (!val('name')) { msg.textContent = 'Give it a name first.'; form.elements.name.focus(); return; }
+      const resource = { emergency: !!r.emergency, hidden: false };
+      for (const k of ['name', 'category', 'phone', 'website', 'address', 'hours', 'tags', 'note']) resource[k] = val(k);
+      add.disabled = true;
+      try {
+        await api('/resource', { town: townId, resource, checked: form.elements.checked.checked });
+        url.value = '';
+        out.replaceChildren(h('p', { class: 'ok-msg' }, `Added ${resource.name} under ${d.categories.find((c) => c.id === resource.category)?.label}. `,
+          h('span', { class: 'muted small' }, 'Paste another address to keep going.')));
+        await onAdded();
+      } catch (x) { msg.textContent = x.message; add.disabled = false; }
+    } }, 'Add resource');
+    const more = h('button', { type: 'button', class: 'secondary', onclick: () => {
+      const resource = {};
+      for (const k of ['name', 'category', 'phone', 'website', 'address', 'hours', 'tags', 'note']) resource[k] = val(k);
+      handOff(resource, false);
+    } }, 'Open the full form');
+    out.replaceChildren(
+      h('p', { class: filled >= 2 ? 'ok-msg small' : 'small' },
+        filled >= 2 ? `Found ${filled} of name, phone, address and hours on the page.` : 'The page didn\'t say much. Fill in the rest, or let an AI assistant look it up.',
+        res.missing.length ? h('span', { class: 'muted' }, ` Not found: ${res.missing.join(', ')}.`) : null),
+      dup ? h('p', { class: 'warn-msg small' }, `Already listed? ${t.name} has `, h('a', { href: `#resource/${townId}/${dup.id}` }, dup.name), ' with the same phone or website.') : null,
+      h('div', { class: 'url-result' }, form, preview),
+      h('div', { class: 'row form-actions' }, add, more, filled >= 2 ? null : aiButton('Fill with AI'),
+        h('button', { type: 'button', class: 'link', onclick: () => out.replaceChildren() }, 'Cancel')),
+      msg);
+  }
+
+  return h('div', { class: 'card url-card' },
+    h('h2', {}, 'Add from a web address'),
+    h('p', { class: 'muted small' }, 'Paste a business or office web address. The page is read for its name, phone, address, hours and category, then you check the preview and add it.'),
+    h('form', { class: 'row url-row', novalidate: true, onsubmit: lookUp }, url, go),
+    out);
+}
+
 async function allResourcesPage() {
   const d = await api('/all-resources');
   const townName = new Map(d.towns.map((t) => [t.id, `${t.name}${t.state ? `, ${t.state}` : ''}`]));
@@ -1627,6 +1746,7 @@ async function allResourcesPage() {
         h('a', { class: 'button secondary', href: `/api/admin/resources/export?town=${encodeURIComponent(f.town)}` }, 'Export CSV'))),
     h('p', { class: 'muted' }, `What shows on ${townName.get(f.town)}'s Essentials, Food & drink, Shops and Lodging tabs. Entries not checked in ${d.staleDays} days show in red. `,
       h('a', { href: '/api/admin/resources/export', class: 'small' }, 'Export every town as one CSV')),
+    urlAddCard(d, f.town, { cat: f.cat, onAdded: reload }),
     bar, err, aiResourcesCard(d, f.town, { cat: f.cat, onImported: reload }), results,
     h('div', { class: 'card' }, h('h2', {}, 'Import from a spreadsheet'),
       h('p', { class: 'muted small' }, `Export a CSV, edit it in Excel, Numbers or Google Sheets, then import it here. Rows with an id update that resource; rows without one are added. Rows go to ${townName.get(f.town)} (rows for another town are skipped).`, ' Category can be the id (medical) or the name (Medical). Nothing changes until you press Import; rows with problems are skipped.'),
