@@ -119,6 +119,9 @@ export function normalizeTown(input, others = []) {
   t.hostnames = [...new Set(hosts.length ? hosts : [`${t.id}.thetown.buzz`, `${t.id}.localhost`])];
   for (const h of t.hostnames) {
     if (!HOST_RE.test(h)) return { error: `"${h}" is not a valid web address.` };
+    // admin.thetown.buzz, www.thetown.buzz and the bare domain belong to the platform, not a town.
+    const sub = h.match(/^(?:([a-z0-9-]+)\.)?thetown\.(?:buzz|localhost)$/);
+    if (sub && (!sub[1] || RESERVED_IDS.has(sub[1]))) return { error: `${h} is reserved. Pick another address.` };
     const clash = others.find((o) => o.id !== t.id && (o.hostnames || []).includes(h));
     if (clash) return { error: `${h} already belongs to ${clash.name}.` };
   }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { renderHub, snapshot, townForPath } from '../src/hub.js';
+import { ADMIN_HOSTS, adminHostRedirect, renderHub, snapshot, townForPath } from '../src/hub.js';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const towns = fs.readdirSync(path.join(root, 'config')).filter((f) => f.endsWith('.json'))
@@ -30,4 +30,14 @@ test('/durango maps to the Durango town; unknown paths do not', () => {
   assert.equal(townForPath('/Telluride/', towns)?.id, 'telluride');
   assert.equal(townForPath('/nowhere', towns), null);
   assert.equal(townForPath('/', towns), null);
+});
+
+test('admin.thetown.buzz serves only the admin; every other page goes to /admin', () => {
+  assert.ok(ADMIN_HOSTS.has('admin.thetown.buzz'));
+  for (const p of ['/admin', '/admin/', '/admin.js', '/admin.css', '/admin/analytics', '/api/admin/towns', '/api/admin/login', '/api/tls-ask', '/healthz', '/icons/favicon.svg', '/robots.txt']) {
+    assert.equal(adminHostRedirect(p), null, p);
+  }
+  for (const p of ['/', '/index.html', '/about', '/food-drink', '/api/home', '/api/feed', '/sitemap.xml', '/telluride', '/app.js']) {
+    assert.equal(adminHostRedirect(p), '/admin', p);
+  }
 });

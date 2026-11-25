@@ -10,6 +10,19 @@ import { groupByState, logoSvg, townSearchText, townTheme, townUrl } from './bra
 import { formLinks } from './forms.js';
 
 export const HUB_HOSTS = new Set(['thetown.buzz', 'www.thetown.buzz', 'thetown.localhost']);
+/** admin.thetown.buzz: a short address for the admin. Serves only the admin and what it needs. */
+export const ADMIN_HOSTS = new Set(['admin.thetown.buzz', 'admin.localhost']);
+
+/**
+ * Where a request on the admin address goes: null to serve it as usual (the admin
+ * page, its API, its files, health checks), or a path to redirect to (/admin).
+ */
+export function adminHostRedirect(pathname) {
+  if (/^\/admin(\.html|\.js|\.css|\/.*)?$/.test(pathname)) return null;
+  if (pathname.startsWith('/api/admin/') || pathname === '/api/tls-ask' || pathname === '/api/version' || pathname === '/healthz' || pathname === '/robots.txt') return null;
+  if (/^\/(icons|fonts)\//.test(pathname)) return null;
+  return '/admin';
+}
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 

@@ -65,6 +65,10 @@ test('a new town needs only a name, address name and map point', () => {
   assert.ok(town.bbox.minLat < 38.0228 && town.bbox.maxLon > -107.6714);
   assert.match(normalizeTown({ id: 'x', name: 'X', location: { lat: 1, lon: 1 } }).error, /Address name/);
   assert.match(normalizeTown({ id: 'admin', name: 'X', location: { lat: 1, lon: 1 } }).error, /reserved/);
+  // A town can't take the admin address (or www / the bare domain) as a custom hostname either.
+  for (const h of ['admin.thetown.buzz', 'www.thetown.buzz', 'thetown.buzz', 'admin.thetown.localhost']) {
+    assert.match(normalizeTown({ id: 'sneaky', name: 'S', location: { lat: 1, lon: 1 }, hostnames: [h] }).error, /reserved/, h);
+  }
   assert.match(normalizeTown({ id: 'tel2', name: 'T', location: { lat: 1, lon: 1 }, hostnames: ['telluride.buzz'] }, configs).error, /already belongs to Telluride/);
   assert.match(normalizeTown({ id: 'ouray', name: 'Ouray', location: { lat: 1, lon: 1 }, timezone: 'Mars/Base' }).error, /time zone/);
 });
