@@ -989,3 +989,4 @@ a.prefs-btn { text-decoration: none; }
 @media (prefers-color-scheme: dark) { .sky-ev time { color: var(--amber); } }
 .sky-ev b { font-weight: 600; }
 .sky-ev p { margin: 2px 0 0; font-size: 13.5px; color: var(--ink-2); }
+.p-resort-note { margin-top: 8px; }

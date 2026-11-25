@@ -77,7 +77,7 @@ function tileAge(name, tile) {
   if (srcEl) {
     if (tile?.shortName) { SRC_SHORT[name] = tile.shortName; SRC_LONG[name] = tile.shortName; } // e.g. NMDOT for New Mexico roads
     srcEl.innerHTML = source && SRC_SHORT[name] ? `${esc(SRC_SHORT[name])} updated<b>${esc(clock(source))}</b>` : '';
-    srcEl.title = source ? `Last updated by ${SRC_LONG[name]}: ${new Date(source).toLocaleString('en-US', { timeZone: TZ })}` : '';
+    srcEl.title = source ? `Last updated by ${SRC_LONG[name]}: ${new Date(source).toLocaleString('en-US', { timeZone: TZ })}${name === 'lifts' ? '. Numbers shown as the resort reports them.' : ''}` : '';
   }
   if (!at) { el.textContent = ''; el.classList.remove('stale'); return; }
   const stale = Date.now() - at > STALE_MS[name];
@@ -343,6 +343,12 @@ function panelRoads(r) {
     ${r.disclaimer ? `<p class="p-fine"><strong>Road data source:</strong> ${esc(r.disclaimer)}</p>` : ''}`;
 }
 
+/** When the resort's own numbers disagree (more overnight than in 24 hours), say they're the resort's, not ours. */
+function resortNote(r) {
+  if (r.overnight == null || r.new24 == null || r.overnight <= r.new24) return '';
+  return `<p class="p-fine p-resort-note">Shown as the resort reports them. Their overnight and 24-hour totals don't always line up.</p>`;
+}
+
 function panelLifts(l) {
   const list = resortsIn(l);
   if (!list.length) return unavailable(l?.error);
@@ -354,7 +360,7 @@ function panelLifts(l) {
     if (!r.ok) return `<h3 class="p-mountain">${name}</h3>${unavailable(r.error)}<div class="p-actions">${srcLink(r.link, 'Snow report')}</div>`;
     const updated = r.sourceAt ? `<span class="muted"> · updated ${esc(clock(r.sourceAt))}</span>` : '';
     return `<h3 class="p-mountain">${name}${updated}</h3>
-    <h4>Snow</h4><div class="p-stats">${stat(r.overnight, 'Overnight')}${stat(r.new24, 'Last 24 hours')}${stat(r.new48, 'Last 48 hours')}${stat(r.new72, 'Last 72 hours')}${stat(r.new7d, 'Last 7 days')}</div>
+    <h4>Snow</h4><div class="p-stats">${stat(r.overnight, 'Overnight')}${stat(r.new24, 'Last 24 hours')}${stat(r.new48, 'Last 48 hours')}${stat(r.new72, 'Last 72 hours')}${stat(r.new7d, 'Last 7 days')}</div>${resortNote(r)}
     <h4>On the ground</h4><div class="p-stats">${stat(r.base, 'Base depth')}${stat(r.season, 'Season total')}${r.condition ? `<div class="p-card"><b class="p-word">${esc(r.condition)}</b><span>Snow condition</span></div>` : ''}</div>
     <h4>On the mountain</h4><div class="p-stats">${ratio(r.liftsOpen, r.liftsTotal, 'Lifts open')}${ratio(r.trailsOpen, r.trailsTotal, 'Runs open')}</div>
     <div class="p-actions">${srcLink(r.link, `Full report at ${r.sourceLabel || 'the resort'}`)}</div>`;
