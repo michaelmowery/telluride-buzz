@@ -160,7 +160,24 @@ export function parseSnowReport(html, tz = 'America/Denver', { valueFirst = fals
   const c = v.condition || t.condition || '';
   const condition = /^[A-Za-z][A-Za-z /&-]{1,40}$/.test(c) && !/^(?:details|n\/?a|none|see)\b/i.test(c) ? c : null;
   const sourceAt = (v.updatedText && reportUpdatedAt(v.updatedText, tz)) || reportUpdatedAt(text, tz);
-  return { ...r, condition, found, sourceAt };
+  return normalizeSnow({ ...r, condition, found, sourceAt });
+}
+
+/**
+ * Every resort fills the same fields, whatever its page offers, so the Lifts & Snow
+ * tile can use one layout. The headline new-snow number is the last 24 hours when
+ * the resort gives it, otherwise overnight; `newSnowWindow` says which, so the label
+ * is never ambiguous. Missing values stay null (the tile hides them).
+ */
+export const SNOW_FIELDS = ['overnight', 'new24', 'new48', 'new72', 'new7d', 'season', 'base',
+  'liftsOpen', 'liftsTotal', 'trailsOpen', 'trailsTotal', 'condition', 'sourceAt'];
+export function normalizeSnow(r) {
+  const out = { ...r };
+  for (const k of SNOW_FIELDS) out[k] ??= null;
+  if (out.new24 != null) { out.newSnow = out.new24; out.newSnowWindow = '24h'; }
+  else if (out.overnight != null) { out.newSnow = out.overnight; out.newSnowWindow = 'overnight'; }
+  else { out.newSnow = null; out.newSnowWindow = null; }
+  return out;
 }
 
 /** A town's ski resorts: config `lifts` may be one resort or a list. */
