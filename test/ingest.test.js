@@ -323,3 +323,23 @@ test('CDOT work zones: the same work zone listed twice (e.g. each direction) sho
   const items = workZonesToItems({ ...data, features: [data.features[0], twin] }, town);
   assert.equal(items.length, 1);
 });
+
+test('every resort fills the same snow fields, with a labelled headline number', async () => {
+  const { normalizeSnow, SNOW_FIELDS } = await import('../src/sources/lifts.js');
+  const tsr = parseSnowReport(fx('snow-report-tsr-live.html'));
+  const purg = parseSnowReport(fx('snow-report-purgatory-72.html'), 'America/Denver', { valueFirst: true });
+  const vail = parseSnowReport(fx('snow-report-vail.html'));
+  for (const r of [tsr, purg, vail]) {
+    for (const k of [...SNOW_FIELDS, 'newSnow', 'newSnowWindow']) assert.ok(k in r, `missing ${k}`);
+  }
+  // 24 hours wins when the resort gives it, even if overnight is bigger.
+  assert.deepEqual([tsr.newSnow, tsr.newSnowWindow], [8, '24h']);
+  assert.deepEqual([purg.newSnow, purg.newSnowWindow], [8, '24h']);
+  assert.equal(purg.condition, null);
+  const conflict = normalizeSnow({ overnight: 3, new24: 0 });
+  assert.deepEqual([conflict.newSnow, conflict.newSnowWindow], [0, '24h']);
+  // No 24-hour number: fall back to overnight and say so.
+  const onlyOvernight = normalizeSnow({ overnight: 4 });
+  assert.deepEqual([onlyOvernight.newSnow, onlyOvernight.newSnowWindow], [4, 'overnight']);
+  assert.deepEqual([normalizeSnow({}).newSnow, normalizeSnow({}).newSnowWindow], [null, null]);
+});

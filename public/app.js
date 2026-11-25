@@ -76,7 +76,9 @@ function tileAge(name, tile) {
   tileMeta[name] = { checked: at, source, stale: false };
   if (srcEl) {
     if (tile?.shortName) { SRC_SHORT[name] = tile.shortName; SRC_LONG[name] = tile.shortName; } // e.g. NMDOT for New Mexico roads
-    srcEl.innerHTML = source && SRC_SHORT[name] ? `${esc(SRC_SHORT[name])} updated<b>${esc(clock(source))}</b>` : '';
+    srcEl.innerHTML = source && SRC_SHORT[name] ? `${esc(SRC_SHORT[name])} updated<b>${esc(clock(source))}</b>`
+      // Some resorts don't post a time; say when we last read their report instead.
+      : name === 'lifts' && tile?.ok && (tile.dataAt ?? tile.updatedAt) ? `Checked<b>${esc(clock(tile.dataAt ?? tile.updatedAt))}</b>` : '';
     srcEl.title = source ? `Last updated by ${SRC_LONG[name]}: ${new Date(source).toLocaleString('en-US', { timeZone: TZ })}${name === 'lifts' ? '. Numbers shown as the resort reports them.' : ''}` : '';
   }
   if (!at) { el.textContent = ''; el.classList.remove('stale'); return; }
@@ -118,13 +120,28 @@ function renderRoads(r) {
   setTile('roads', `${rows}${r.error ? `<div class="tile-error">${esc(r.error)}</div>` : ''}`);
 }
 
-/** The other snow totals under the tile's big numbers: 'Overnight 3" · 48h 8" · 7 days 8" · Season 24"'. */
-function snowLine(r, shown) {
+/**
+ * Headline new snow, the same way for every resort: last 24 hours, or overnight when
+ * the resort gives no 24-hour number. (The server fills newSnow; older data doesn't.)
+ */
+function newSnow(r) {
+  if (r.newSnowWindow !== undefined) return [r.newSnow, r.newSnowWindow];
+  if (r.new24 != null) return [r.new24, '24h'];
+  return r.overnight != null ? [r.overnight, 'overnight'] : [null, null];
+}
+
+/**
+ * The secondary snow totals under the tile's big numbers, always in this order and
+ * with missing ones left out: 'Overnight 3" · 48h 8" · 7 days 8" · Season 24"'.
+ * Overnight only shows when it adds something to the headline; 72h only stands in
+ * when there's no 7-day number.
+ */
+function snowLine(r) {
+  const [, win] = newSnow(r);
   const bits = [
-    shown !== 'overnight' && r.overnight != null ? `Overnight ${r.overnight}"` : null,
-    shown === 'overnight' && r.new24 != null ? `24h ${r.new24}"` : null,
+    win === '24h' && r.overnight != null && r.overnight !== r.new24 ? `Overnight ${r.overnight}"` : null,
     r.new48 != null ? `48h ${r.new48}"` : null,
-    r.new72 != null ? `72h ${r.new72}"` : null,
+    r.new7d == null && r.new72 != null ? `72h ${r.new72}"` : null,
     r.new7d != null ? `7 days ${r.new7d}"` : null,
     r.season != null ? `Season ${r.season}"` : null,
   ].filter(Boolean);
@@ -138,24 +155,25 @@ const resortsIn = (l) => (l?.resorts?.length ? l.resorts : l ? [l] : []);
 function renderLifts(l) {
   const list = resortsIn(l);
   if (!list.some((r) => r.ok)) return setTile('lifts', unavailable(l?.error));
-  const stat = (v, label, suffix = '') => (v == null ? '' : `<div class="stat"><b>${v}${suffix}</b><span>${label}</span></div>`);
-  const ratio = (a, b, label) => (a == null ? '' : `<div class="stat"><b>${a}${b != null ? `<small class="muted">/${b}</small>` : ''}</b><span>${label}</span></div>`);
-  const fresh = (r) => ((r.overnight || 0) > (r.new24 || 0) ? [r.overnight, 'overnight'] : [r.new24, 'new']);
+  // Fixed four boxes for every resort; a number the resort doesn't give shows as a dash.
+  const dash = '<span class="muted">–</span>';
+  const stat = (v, label, suffix = '') => `<div class="stat"><b>${v == null ? dash : `${v}${suffix}`}</b><span>${label}</span></div>`;
+  const ratio = (a, b, label) => `<div class="stat"><b>${a == null ? dash : `${a}${b != null ? `<small class="muted">/${b}</small>` : ''}`}</b><span>${label}</span></div>`;
   if (list.length === 1) {
     const r = list[0];
-    const [snow, word] = fresh(r);
+    const [snow, win] = newSnow(r);
     return setTile('lifts', `<div class="mountain">${esc(r.name || r.sourceLabel || '')}</div><div class="stats">
-    ${stat(snow, word === 'overnight' ? 'Overnight' : 'New (24h)', '"')}
+    ${stat(snow, win === 'overnight' ? 'New (overnight)' : 'New (24h)', '"')}
     ${stat(r.base, 'Base', '"')}
     ${ratio(r.liftsOpen, r.liftsTotal, 'Lifts open')}
     ${ratio(r.trailsOpen, r.trailsTotal, 'Runs open')}
-  </div>${snowLine(r, word)}`);
+  </div>${snowLine(r)}`);
   }
   // Several mountains: one compact row each.
   setTile('lifts', list.map((r) => {
     if (!r.ok) return `<div class="mtn-row"><b>${esc(r.name)}</b><span>No report</span></div>`;
-    const [snow, word] = fresh(r);
-    const bits = [snow != null ? `${snow}" ${word}` : null, r.new7d != null ? `${r.new7d}" 7 days` : null, r.season != null ? `${r.season}" season` : null, r.liftsOpen != null ? `${r.liftsOpen}${r.liftsTotal != null ? `/${r.liftsTotal}` : ''} lifts` : null].filter(Boolean);
+    const [snow, win] = newSnow(r);
+    const bits = [snow != null ? `${snow}" ${win === 'overnight' ? 'overnight' : '24h'}` : null, r.base != null ? `${r.base}" base` : null, r.liftsOpen != null ? `${r.liftsOpen}${r.liftsTotal != null ? `/${r.liftsTotal}` : ''} lifts` : null, r.trailsOpen != null ? `${r.trailsOpen}${r.trailsTotal != null ? `/${r.trailsTotal}` : ''} runs` : null].filter(Boolean);
     return `<div class="mtn-row"><b>${esc(r.name)}</b><span>${esc(bits.join(' · ') || 'Report posted')}</span></div>`;
   }).join(''));
 }
