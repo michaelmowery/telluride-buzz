@@ -11,7 +11,7 @@ import { startScheduler } from './scheduler.js';
 import { seedDemo } from './demo.js';
 import { loadVapid, validSubscription, pushNewAlerts } from './push.js';
 import { aliasRedirect, renderTemplate, TEMPLATED, townUrl } from './brand.js';
-import { HUB_HOSTS, renderHub, snapshot, townForPath } from './hub.js';
+import { ADMIN_HOSTS, HUB_HOSTS, adminHostRedirect, renderHub, snapshot, townForPath } from './hub.js';
 import { importConfigs, loadTowns } from './towns.js';
 import { createAdmin } from './admin.js';
 import { sourceHealth } from './health.js';
@@ -356,14 +356,21 @@ async function handlePost(req, res, url, town) {
 const server = http.createServer((req, res) => {
   try {
     const url = new URL(req.url, 'http://x');
-    const town = townFor(req);
+    const onAdminHost = ADMIN_HOSTS.has(hostOf(req));
+    const town = onAdminHost ? defaultTown : townFor(req);
+    if (onAdminHost) {
+      // admin.thetown.buzz: everything that isn't the admin goes to the admin sign-in.
+      const to = adminHostRedirect(url.pathname);
+      if (to) return send(res, 302, 'Moved', undefined, { Location: to, 'Cache-Control': 'no-store' });
+      if (url.pathname === '/robots.txt') return send(res, 200, 'User-agent: *\nDisallow: /\n', TYPES['.txt'], { 'Cache-Control': 'public, max-age=3600' });
+    }
     if (url.pathname.startsWith('/api/admin/')) {
       return admin.handle(req, url, () => readJson(req, 512 * 1024).catch(() => ({})))
         .then((r) => sendAdmin(res, r))
         .catch((e) => { log.warn(`admin failed: ${e.stack || e.message}`); sendAdmin(res, { status: 500, body: { ok: false, error: 'Server error' } }); });
     }
     // Other addresses of a town forward to its main one (pages only; /api/ stays put).
-    const moved = (req.method === 'GET' || req.method === 'HEAD') && aliasRedirect(town, hostOf(req), url.pathname, url.search);
+    const moved = !onAdminHost && (req.method === 'GET' || req.method === 'HEAD') && aliasRedirect(town, hostOf(req), url.pathname, url.search);
     if (moved) return send(res, 301, `Moved to ${moved}`, undefined, { Location: moved, 'Cache-Control': 'public, max-age=3600' });
     if (/^\/admin(\.html|\.js|\.css|\/.*)?$/.test(url.pathname)) {
       if (!admin.enabled) return send(res, 404, 'Not found');
@@ -423,7 +430,7 @@ const server = http.createServer((req, res) => {
         // Caddy's on_demand_tls asks here before issuing a certificate, so only
         // addresses that belong to a town (or thetown.buzz) ever get one.
         const d = String(url.searchParams.get('domain') || '').toLowerCase();
-        return byHost.has(d) || HUB_HOSTS.has(d) ? send(res, 200, 'ok') : send(res, 404, 'unknown domain');
+        return byHost.has(d) || HUB_HOSTS.has(d) || ADMIN_HOSTS.has(d) ? send(res, 200, 'ok') : send(res, 404, 'unknown domain');
       }
       case '/api/version':
         return json(res, buildInfo, 0);
