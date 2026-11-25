@@ -21,6 +21,7 @@ import { baseUrl, feedSnapshot, guideDescription, guideEntries, guideFor, guideJ
 import crypto from 'node:crypto';
 import { createAnalytics } from './analytics.js';
 import { skyFor } from './sky.js';
+import { compareData } from './compare.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -57,6 +58,7 @@ let publicTowns = [];  // live towns: the town picker and thetown.buzz list thes
 let byHost = new Map();
 let defaultTown = null;
 const homeCache = new Map(); // townId -> { at, body }
+const compareCache = new Map(); // townId -> { at, body }
 const templateCache = new Map(); // `${town.id}:${file}` -> { mtime, body, etag }
 let hubCache = null; // { at, mtime, body, etag }
 
@@ -70,6 +72,7 @@ function refreshTowns() {
   defaultTown = towns.find((t) => t.default) || publicTowns[0] || towns[0];
   for (const t of towns) db.pruneStatus(t.id, t.sources.map((s) => s.key));
   homeCache.clear();
+  compareCache.clear();
   templateCache.clear();
   hubCache = null;
 }
@@ -158,6 +161,15 @@ function home(town) {
     feed: db.feed(town.id, { limit: 40 }),
   });
   homeCache.set(town.id, { at: Date.now(), body });
+  return body;
+}
+
+// Every live town's weather and ski numbers, for the compare tables on the tiles.
+function compare(town) {
+  const c = compareCache.get(town.id);
+  if (c && Date.now() - c.at < 30e3) return c.body;
+  const body = JSON.stringify(compareData(town, publicTowns.some((t) => t.id === town.id) ? publicTowns : [town, ...publicTowns], (t) => db.getTiles(t.id)));
+  compareCache.set(town.id, { at: Date.now(), body });
   return body;
 }
 
@@ -420,6 +432,8 @@ const server = http.createServer((req, res) => {
         return json(res, db.latestPush(town.id) || db.alerts(town.id)[0] || null, 0);
       case '/api/home':
         return json(res, home(town));
+      case '/api/compare':
+        return json(res, compare(town), 30);
       case '/api/feed': {
         const cat = url.searchParams.get('category');
         const offset = Number(url.searchParams.get('offset')) || 0;
