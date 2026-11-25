@@ -51,7 +51,7 @@ export function planClaudeSources(suggested, town, existing = []) {
     const input = type === 'ical'
       ? { adapter: 'ical', label, about: why || null, enabled, settings: { url } }
       : { adapter: 'rss', label, enabled, settings: { url, category: categoryGuess(x), ...(x.hasEvents === true && categoryGuess(x) !== 'events' ? { findEvents: true } : {}) },
-        about: feed ? why || null : `From Claude, needs a feed address: ${why || url}`.slice(0, 240) };
+        about: feed ? why || null : `Suggested by AI, needs a feed address: ${why || url}`.slice(0, 240) };
     const all = [...existing, ...sources];
     const { source, error } = normalizeSource(input, town, all);
     if (error) { skip(error); continue; }
