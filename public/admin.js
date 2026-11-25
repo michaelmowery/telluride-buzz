@@ -653,6 +653,7 @@ async function townPage(id) {
   if (hd) feedNamesCache = hd.feeds || {};
   const health = hd ? hd.towns.find((x) => x.id === id) : null;
   const b = t?.brand || {};
+  let lookupRun = null; // Add a town only: the map lookup, rerun on Create town when the point is empty
   const f = h('form', { id: 'town-form' },
     h('div', { class: 'grid2' },
       field('Town name', h('input', { name: 'name', required: true, value: t?.name || '', placeholder: 'Town name' })),
@@ -694,6 +695,25 @@ async function townPage(id) {
   );
   f.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const errBox = $('#town-error');
+    errBox.textContent = '';
+    if (!t && (!f.elements.lat.value.trim() || !f.elements.lon.value.trim())) {
+      // No map point yet: look it up now. If it needs a pick, say so plainly and stop.
+      if (!f.elements.name.value.trim() || !f.elements.state.value.trim()) {
+        errBox.textContent = 'Type the town name and the 2-letter state (like CO), then press Create town.';
+        return;
+      }
+      const m = await lookupRun({ onPick: () => { errBox.textContent = 'Got it. Press Create town again.'; } });
+      if (!m) {
+        const n = f.elements.name.value.trim();
+        errBox.textContent = f.querySelector('.pick-box')
+          ? `Pick which ${n} you mean in the box above (under Color theme), then press Create town again.`
+          : `Couldn't find ${n} on the map. Check the name and state, or press "Edit the other fields" and type the latitude and longitude.`;
+        return;
+      }
+    }
+    if (!t && !f.elements.id.value.trim()) f.elements.id.value = f.elements.id.placeholder === 'townname' ? '' : f.elements.id.placeholder;
+    if (!t && !f.elements.siteName.value.trim() && f.elements.name.value.trim()) f.elements.siteName.value = `${f.elements.name.value.trim()} Buzz`;
     const v = Object.fromEntries(new FormData(f));
     const town = {
       id: v.id, name: v.name, state: v.state, timezone: v.timezone, status: v.status,
@@ -730,10 +750,16 @@ async function townPage(id) {
     f.querySelector('.grid2').before(h('div', { class: 'row lock-note' },
       h('span', { class: 'muted small' }, 'Type the town name and state. Everything else is filled in for you by Look up on the map.'), editBtn));
     lock(true);
-    // Placeholders follow the typed town name, so nothing looks like another town's data.
-    const hint = () => {
+    // While the other fields are locked they hold real values that follow the typed town
+    // name (not just grey hints), so Create town always has an address name and site name.
+    const slugOf = (n) => n.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '').slice(0, 40);
+    const hint = (e) => {
       const n = f.elements.name.value.trim();
-      const slug = n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '').slice(0, 40);
+      const slug = slugOf(n);
+      if (f.elements.id.classList.contains('locked') && e?.type !== 'lookup-filled') {
+        f.elements.id.value = slug;
+        f.elements.siteName.value = n ? `${n} Buzz` : '';
+      }
       f.elements.id.placeholder = slug || 'townname';
       f.elements.siteName.placeholder = n ? `${n} Buzz` : '[Town] Buzz';
       // Web addresses shows exactly what a blank box becomes: the address name, as filled or as hinted.
@@ -744,9 +770,18 @@ async function townPage(id) {
     // Disabled selects aren't sent with the form, so turn them back on just before saving.
     f.addEventListener('submit', () => { for (const el of others) if (el.tagName === 'SELECT') el.disabled = false; }, true);
     // The Look up button sits right under the Town name box; its result shows under the fields.
-    const { button, out } = townLookup(f);
+    const { button, out, run } = townLookup(f);
+    lookupRun = run;
     f.elements.name.after(button);
     f.querySelector('.grid2').after(out);
+    // A new name or state means the old map point is someone else's: clear it (while locked)
+    // and look the town up again once both boxes are filled in.
+    const changed = () => {
+      if (f.elements.lat.classList.contains('locked')) { f.elements.lat.value = ''; f.elements.lon.value = ''; }
+      if (f.elements.name.value.trim() && f.elements.state.value.trim().length === 2) run({ quiet: true });
+    };
+    f.elements.name.addEventListener('change', changed);
+    f.elements.state.addEventListener('change', changed);
   }
 
   if (!t) kids.push(h('p', { class: 'muted' }, 'A new town starts as a draft with National Weather Service alerts and forecast (and roads in Colorado and New Mexico). After Create town, an AI prompt finds its local feeds and resources.'));
@@ -1249,43 +1284,71 @@ function applyResource(j, url, f, categories) {
   return `Filled in${cat ? ` under ${cat.label}` : ''}. Check each field, tick "I checked this is right today" if it is, then press Add resource.`;
 }
 
-// Add a town: type the name, press Look up, and the map point, state, address name,
-// site name and time zone fill in (OpenStreetMap search, via our server). Several
-// matches show as choices. Fields already typed by hand are kept, except the map point.
+// Add a town: type the name and state, and the map point, address name, site name and
+// time zone fill in (OpenStreetMap search, via our server). Look up runs on its own when
+// Town name or State changes, and again on Create town if the point is still empty.
+// When the state matches exactly one result it is picked; otherwise the choices show in a
+// box that says to pick one. While the other fields are locked (the default), a lookup
+// overwrites them; once unlocked, fields typed by hand are kept, except the map point.
 function townLookup(form) {
-  const out = h('div', { class: 'lookup-out', role: 'status' });
+  const out = h('div', { class: 'lookup-out', role: 'status', 'aria-live': 'polite' });
   const el = (n) => form.elements[n];
-  const fill = (m) => {
-    const keep = (n, v) => { if (v && !el(n).value.trim()) el(n).value = v; };
+  const auto = () => el('id').classList.contains('locked');
+  let seq = 0;
+  const fill = (m, note = '') => {
+    const put = (n, v) => { if (v && (auto() || !el(n).value.trim())) el(n).value = v; };
     el('name').value = m.name;
-    keep('state', m.state);
-    keep('id', m.id);
-    keep('siteName', `${m.name} Buzz`);
+    if (m.state) el('state').value = m.state; // picking a match is explicit, so its state wins
+    put('id', m.id);
+    put('siteName', `${m.name} Buzz`);
     el('lat').value = m.lat;
     el('lon').value = m.lon;
+    if (m.timezone && (auto() || !el('timezone').value.trim() || el('timezone').value === 'America/Denver')) el('timezone').value = m.timezone;
     form.dispatchEvent(new Event('lookup-filled'));
-    if (m.timezone && (!el('timezone').value.trim() || el('timezone').value === 'America/Denver')) el('timezone').value = m.timezone;
-    out.replaceChildren(h('p', { class: 'ok-msg small' }, `Filled from ${m.label}. `,
+    out.replaceChildren(h('p', { class: 'ok-msg small' }, `${note}Filled from ${m.label}. `,
       h('a', { href: m.maps, target: '_blank', rel: 'noopener' }, 'Check the point on Google Maps ↗')));
+    return m;
   };
-  const btn = h('button', { type: 'button', class: 'secondary', onclick: async () => {
+  const label = (m) => `${m.name}${m.state ? `, ${m.state}` : ''}${m.county ? ` (${m.county})` : ''}`;
+  const choices = (title, list, onPick) => {
+    const box = h('div', { class: 'pick-box', role: 'group', 'aria-label': title },
+      h('p', {}, h('strong', {}, title)),
+      h('div', { class: 'row' }, ...list.map((m) => h('button', { type: 'button', class: 'small', title: m.label,
+        onclick: () => { fill(m); onPick?.(m); } }, label(m)))));
+    out.replaceChildren(box);
+    box.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  };
+  /** Look the typed town up. Resolves to the match it filled in, or null when the admin has to pick (or none was found). */
+  const run = async ({ quiet = false, onPick } = {}) => {
     const name = el('name').value.trim();
-    if (!name) { out.replaceChildren(h('p', { class: 'error' }, 'Type the town name first.')); el('name').focus(); return; }
+    const state = el('state').value.trim().toUpperCase();
+    if (!name) { if (!quiet) { out.replaceChildren(h('p', { class: 'error' }, 'Type the town name first.')); el('name').focus(); } return null; }
+    const mine = ++seq;
     btn.disabled = true; btn.textContent = 'Looking up…';
     try {
-      const { matches } = await api(`/geocode?q=${encodeURIComponent(name)}&state=${encodeURIComponent(el('state').value.trim())}`);
-      if (!matches.length) out.replaceChildren(h('p', { class: 'error' }, `No town called "${name}" found. Add the state, or fill the point in by hand from `,
-        h('a', { href: `https://www.google.com/maps/search/${encodeURIComponent(name)}`, target: '_blank', rel: 'noopener' }, 'Google Maps ↗'), '.'));
-      else if (matches.length === 1 || matches[0].place && !matches[1].place) fill(matches[0]);
-      else out.replaceChildren(h('p', { class: 'small' }, 'Which one?'),
-        h('div', { class: 'row' }, ...matches.map((m) => h('button', { type: 'button', class: 'small secondary', title: m.label, onclick: () => fill(m) },
-          `${m.name}${m.state ? `, ${m.state}` : ''}${m.county ? ` (${m.county})` : ''}`))));
-    } catch (e) { out.replaceChildren(h('p', { class: 'error' }, e.message)); }
-    btn.disabled = false; btn.textContent = 'Look up on the map';
-  } }, 'Look up on the map');
+      const { matches } = await api(`/geocode?q=${encodeURIComponent(name)}&state=${encodeURIComponent(state)}`);
+      if (mine !== seq) return null; // a newer lookup started while this one was out
+      const inState = state ? matches.filter((m) => m.state === state) : matches;
+      const places = inState.filter((m) => m.place);
+      if (!matches.length) {
+        out.replaceChildren(h('p', { class: 'error' }, `No town called "${name}" found${state ? ` in ${state}` : ''}. Check the spelling, or fill the point in by hand from `,
+          h('a', { href: `https://www.google.com/maps/search/${encodeURIComponent(name)}`, target: '_blank', rel: 'noopener' }, 'Google Maps ↗'), '.'));
+      } else if (inState.length === 1) return fill(inState[0]);
+      else if (places.length === 1) return fill(places[0]);
+      else if (!state && matches.length === 1) return fill(matches[0]);
+      else if (state && !inState.length) {
+        choices(`No "${name}" found in ${state}. Did you mean one of these?`, matches, onPick);
+      } else {
+        choices(`There's more than one ${name}${state ? ` in ${state}` : ''}. Click the one you mean:`, inState, onPick);
+      }
+    } catch (e) { if (mine === seq) out.replaceChildren(h('p', { class: 'error' }, `Look up failed: ${e.message}`)); }
+    finally { if (mine === seq) { btn.disabled = false; btn.textContent = 'Look up on the map'; } }
+    return null;
+  };
+  const btn = h('button', { type: 'button', class: 'secondary', onclick: () => run() }, 'Look up on the map');
   const maps = h('a', { class: 'small', href: 'https://www.google.com/maps', target: '_blank', rel: 'noopener',
     onclick: (e) => { const n = el('name').value.trim(); if (n) e.currentTarget.href = `https://www.google.com/maps/search/${encodeURIComponent(n)}`; } }, 'Open Google Maps ↗');
-  return { button: h('span', { class: 'lookup' }, btn, maps), out };
+  return { button: h('span', { class: 'lookup' }, btn, maps), out, run };
 }
 
 // After Create town: what was added on its own, then the two AI prompts (feeds and

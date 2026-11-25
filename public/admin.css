@@ -241,3 +241,9 @@ span.err { color: var(--red); }
 .res-btn { border: 1px solid var(--line); border-radius: 999px; padding: .2rem .65rem; font-size: .85rem; }
 .res-btn.call { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
 .url-fail .row { margin-top: .5rem; }
+/* Add a town: the "which one?" choices, made hard to miss */
+.pick-box { margin: .5rem 0 1rem; padding: .75rem .9rem; border: 2px solid var(--amber, #c98a1b); border-radius: 8px; background: color-mix(in srgb, var(--amber, #c98a1b) 10%, var(--card)); }
+.pick-box p { margin: 0 0 .5rem; }
+.pick-box .row { gap: .5rem; flex-wrap: wrap; }
+/* Locked fields that hold a value show it in normal ink, so filled-in values don't look like grey hints. */
+input.locked:not(:placeholder-shown) { color: var(--ink) !important; opacity: 1; }

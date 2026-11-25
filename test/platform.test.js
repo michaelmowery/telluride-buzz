@@ -318,6 +318,9 @@ test('town lookup: Nominatim results become town suggestions with state, slug an
   got = await geocodeTown('Ouray', 'CO', { fetchJsonImpl: async (url) => { asked.push(url); if (/open-meteo/.test(url)) throw new Error('HTTP 503'); return sample; } });
   assert.match(asked[1], /nominatim\.openstreetmap\.org\/search.*countrycodes=us.*q=Ouray%2C%20CO/);
   assert.equal(got[0].name, 'Ouray');
+  assert.ok(got.every((x) => x.state === 'CO'), 'Nominatim matches outside the typed state are dropped');
+  got = await geocodeTown('Ouray', '', { fetchJsonImpl: async (url) => { if (/open-meteo/.test(url)) throw new Error('HTTP 503'); return sample; } });
+  assert.ok(got.some((x) => x.state === 'ID'), 'no state typed: every match is kept');
   // Both down: one error naming both.
   await assert.rejects(geocodeTown('Ouray', 'CO', { fetchJsonImpl: async () => { throw new Error('nope'); } }), /nope/);
 });

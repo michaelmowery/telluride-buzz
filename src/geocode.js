@@ -108,7 +108,12 @@ export async function geocodeTown(name, state = '', { fetchJsonImpl = fetchJson,
   try {
     const q = [n, st].filter(Boolean).join(', ');
     const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=8&countrycodes=us&q=${encodeURIComponent(q)}`;
-    return townsFromNominatim(await fetchJsonImpl(url, { timeoutMs: 8000 }));
+    const found = townsFromNominatim(await fetchJsonImpl(url, { timeoutMs: 8000 }));
+    // Nominatim treats the state as a hint, so a search for Breckenridge, CO still brings back
+    // Texas and Minnesota. Keep only the typed state's matches when there are any.
+    const want = st.toUpperCase();
+    const inState = want ? found.filter((x) => x.state === want) : [];
+    return inState.length ? inState : found;
   } catch (e) { errors.push(`OpenStreetMap: ${e.message}`); log?.warn?.(`geocode: Nominatim failed: ${e.message}`); }
   if (errors.length === 2) throw new Error(errors.join('; '));
   return [];
