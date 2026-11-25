@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-town="{{townId}}" data-town-theme="{{townTheme}}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{{site}}: {{town}} News, Weather, Roads &amp; Snow Right Now</title>
   <meta name="description" content="The real-time pulse of {{town}}: what's happening in our town, right now, from sources you can trust.">
-  <meta name="theme-color" content="#1f4e6e">
+  <meta name="theme-color" content="{{themeColor}}">
   {{seo}}
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml">
@@ -15,11 +15,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@500;700&family=Inter:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="/styles.css?v=38">
-  <script src="/theme.js?v=38"></script>
-  <script src="/towns.js?v=38" defer></script>
+  <link rel="stylesheet" href="/styles.css?v=39">
+  <script src="/theme.js?v=39"></script>
+  <script src="/towns.js?v=39" defer></script>
 </head>
-<body class="{{bodyClass}}" data-feedback-url="{{feedbackUrl}}" data-support-url="{{supportUrl}}">
+<body class="{{bodyClass}}" data-town-name="{{town}}" data-feedback-url="{{feedbackUrl}}" data-support-url="{{supportUrl}}">
   <header class="top">
     <div class="brand-wrap">
       <a class="brand" href="/" id="brand" aria-label="{{site}}: choose a town" aria-haspopup="true" aria-expanded="false" aria-controls="town-menu">
@@ -147,6 +147,6 @@
     <p class="fine build">{{buildLabel}}</p>
   </footer>
 
-  <script src="/app.js?v=38" type="module"></script>
+  <script src="/app.js?v=39" type="module"></script>
 </body>
 </html>

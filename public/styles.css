@@ -394,36 +394,41 @@ html.panel-open { overflow: hidden; }
 .sw-aspen i:nth-child(1) { background: #8a3f12; } .sw-aspen i:nth-child(2) { background: #f0b232; } .sw-aspen i:nth-child(3) { background: #faf0e4; }
 .sw-columbine i:nth-child(1) { background: #4a3570; } .sw-columbine i:nth-child(2) { background: #e6b23e; } .sw-columbine i:nth-child(3) { background: #f4f0f8; }
 .prefs-note { font-size: 13px; color: var(--ink-2); margin-top: 14px; }
+.prefs-note.prefs-lead { margin: -4px 0 10px; }
 
 /* ---------- color themes ----------
    Each theme changes the brand colors and backgrounds. Status colors (--ok,
    --caution, --closed, --rust) stay the same in every theme so road and alert
    colors always mean the same thing. */
-html[data-palette="lake"] {
+/* trailhead is the :root default; listed so a town logo in the picker can use it too */
+[data-palette="trailhead"] {
+  --forest: #2f4a3a; --forest-2: #3e5f4b; --forest-deep: #2a4433;
+}
+[data-palette="lake"] {
   --forest: #1f4e6e; --forest-2: #2e6a8e; --forest-deep: #1a4360;
   --amber: #e3a33a; --amber-soft: #f6e3b4;
   --cream: #eef3f6; --paper: #fbfdfe; --line: #d3dfe7;
 }
-html[data-palette="aspen"] {
+[data-palette="aspen"] {
   --forest: #8a3f12; --forest-2: #9c4a17; --forest-deep: #763510;
   --amber: #f0b232; --amber-soft: #f9e1b5;
   --cream: #faf0e4; --paper: #fffaf3; --line: #ecd8c0;
 }
-html[data-palette="columbine"] {
+[data-palette="columbine"] {
   --forest: #4a3570; --forest-2: #5e4689; --forest-deep: #3e2c60;
   --amber: #e6b23e; --amber-soft: #eadff5;
   --cream: #f4f0f8; --paper: #fdfbff; --line: #dfd5ea;
 }
 @media (prefers-color-scheme: dark) {
-  html[data-palette="lake"] {
+  [data-palette="lake"] {
     --cream: #161c21; --paper: #1e262d; --line: #2f3a44; --ink: #e6edf2; --ink-2: #a5b2bd;
     --amber-soft: #3a2f1c; --forest-2: #6fa6cc;
   }
-  html[data-palette="aspen"] {
+  [data-palette="aspen"] {
     --cream: #1f1915; --paper: #29211b; --line: #3d3128; --ink: #f3e9de; --ink-2: #bba997;
     --amber-soft: #3d2c16; --forest-2: #e0925a;
   }
-  html[data-palette="columbine"] {
+  [data-palette="columbine"] {
     --cream: #1a1720; --paper: #231f2b; --line: #373042; --ink: #ece6f3; --ink-2: #b1a7bf;
     --amber-soft: #2f2640; --forest-2: #b29ad9;
   }

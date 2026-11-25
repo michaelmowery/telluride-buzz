@@ -24,6 +24,12 @@ const WAVES = `
 
 // Optional town accents on the thetown-style logo (brand.logo). Each keeps
 // "thetown .buzz" in the circle, so none implies we own [town].buzz.
+// Color themes a town can use (public/styles.css [data-palette]). The town's theme is
+// what visitors see by default, so each town can look different; a visitor can still
+// pick another in Preferences, saved for that town only. Values are the header color.
+export const TOWN_THEMES = { lake: '#1f4e6e', trailhead: '#2f4a3a', aspen: '#8a3f12', columbine: '#4a3570' };
+export const townTheme = (town) => (TOWN_THEMES[town?.brand?.theme] ? town.brand.theme : 'lake');
+
 export const LOGO_STYLES = {
   own: 'Own domain style (we own [town].buzz)',
   thetown: 'thetown.buzz style (town name + "thetown" circle)',
@@ -137,7 +143,7 @@ export function townMenu(town, towns) {
     const here = t.id === town.id;
     const host = townUrl(t).replace(/^https?:\/\//, '').replace(/\/$/, '');
     return `<li data-q="${esc(townSearchText(t))}"><a class="town-opt" href="${here ? '/' : esc(townUrl(t))}"${here ? ' aria-current="page"' : ''}>
-          <span class="town-logo">${logoSvg(t, { cls: 'logo logo-sm', width: 92, height: 40 })}</span>
+          <span class="town-logo" data-palette="${townTheme(t)}">${logoSvg(t, { cls: 'logo logo-sm', width: 92, height: 40 })}</span>
           <span class="town-txt"><strong>${esc(t.name)}${t.state ? `, ${esc(t.state)}` : ''}</strong><small>${here ? 'You are here' : esc(host)}</small></span>
         </a></li>`;
   };
@@ -201,6 +207,9 @@ export function brandValues(town, towns = [town]) {
     town: town.name,
     buildLabel: buildInfo.label, // footer: which deploy this is (src/version.js)
     logo: logoSvg(town),
+    townId: town.id,
+    townTheme: townTheme(town), // <html data-town-theme>: theme.js uses it unless this visitor picked another
+    themeColor: TOWN_THEMES[townTheme(town)],
     townMenu: townMenu(town, towns),
     aboutSources: rows,
     notAffiliated: b.notAffiliated || 'the agencies and businesses whose information it shows',

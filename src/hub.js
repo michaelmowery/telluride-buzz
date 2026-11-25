@@ -6,7 +6,7 @@
 // addresses (telluride.buzz, durango.thetown.buzz); thetown.buzz/<town> redirects
 // there, per the subdomain-per-town decision (2026-11-21).
 import { buildInfo } from './version.js';
-import { groupByState, logoSvg, townSearchText, townUrl } from './brand.js';
+import { groupByState, logoSvg, townSearchText, townTheme, townUrl } from './brand.js';
 import { formLinks } from './forms.js';
 
 export const HUB_HOSTS = new Set(['thetown.buzz', 'www.thetown.buzz', 'thetown.localhost']);
@@ -42,7 +42,7 @@ function townCard(t, snap) {
     : '<p class="hub-live-none">Live data loading</p>';
   return `<li data-q="${esc(townSearchText(t))}">
         <a class="hub-town" href="${esc(townUrl(t))}">
-          <span class="hub-town-logo">${logoSvg(t, { cls: 'logo', width: 150, height: 66 })}</span>
+          <span class="hub-town-logo" data-palette="${townTheme(t)}">${logoSvg(t, { cls: 'logo', width: 150, height: 66 })}</span>
           <span class="hub-town-body">
             <strong>${esc(t.name)}${t.state ? `, ${esc(t.state)}` : ''}</strong>
             ${live}

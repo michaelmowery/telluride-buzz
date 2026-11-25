@@ -653,6 +653,11 @@ async function townPage(id) {
           ['rail', 'thetown.buzz style, railroad under the town name'],
           ['own', 'Own domain style (we own [town].buzz)']]
           .map(([v, label]) => h('option', { value: v, selected: (b.logo || 'thetown') === v }, label)))),
+      field('Color theme', h('select', { name: 'theme' },
+        ...[['lake', 'Blue Lake (alpine blue with gold)'], ['trailhead', 'Trailhead (forest green and amber)'],
+          ['aspen', 'Aspen (burnt orange and gold)'], ['columbine', 'Columbine (purple with gold)']]
+          .map(([v, label]) => h('option', { value: v, selected: (b.theme || 'lake') === v }, label))),
+        'What visitors see first, and the logo color in the town picker. Visitors can still pick another in Preferences.'),
     ),
     h('datalist', { id: 'zones' }, ...['America/Denver', 'America/Phoenix', 'America/Boise', 'America/Los_Angeles', 'America/Chicago', 'America/New_York', 'America/Anchorage', 'Pacific/Honolulu'].map((z) => h('option', { value: z }))),
     field('Web addresses', h('textarea', { name: 'hostnames', rows: 2, placeholder: '[address name].thetown.buzz' }, (t?.hostnames || []).join('\n')),
@@ -677,7 +682,7 @@ async function townPage(id) {
       id: v.id, name: v.name, state: v.state, timezone: v.timezone, status: v.status,
       location: { lat: v.lat, lon: v.lon },
       hostnames: v.hostnames.split(/\s+/).filter(Boolean),
-      brand: { siteName: v.siteName, logo: v.logo, feedbackEmail: v.feedbackEmail, notAffiliated: v.notAffiliated,
+      brand: { siteName: v.siteName, logo: v.logo, theme: v.theme, feedbackEmail: v.feedbackEmail, notAffiliated: v.notAffiliated,
         ...(t ? { notice: { text: v.noticeText, level: v.noticeLevel, until: v.noticeUntil }, preview: v.preview === 'on' } : {}) },
     };
     if (t && t.hostnames?.join('\n') !== v.hostnames.trim()) town.url = '';
