@@ -78,3 +78,21 @@ test('other addresses of a town forward to its main one; /api/ and local address
   assert.equal(aliasRedirect(before, 'telluride.buzz', '/', ''), null);
   assert.equal(aliasRedirect(before, 'www.telluride.buzz', '/x', ''), 'https://telluride.buzz/x');
 });
+
+test('each town has its own color theme: page, header color, manifest and picker logo', async () => {
+  const { normalizeTown } = await import('../src/towns.js');
+  const tel = cfg('telluride');
+  const dur = { ...cfg('durango'), brand: { ...cfg('durango').brand, theme: 'aspen' } };
+  const telOut = renderTemplate(page('index.html'), '.html', tel, [tel, dur]);
+  assert.match(telOut, /<html lang="en" data-town="telluride" data-town-theme="lake">/);
+  assert.match(telOut, /<meta name="theme-color" content="#1f4e6e">/);
+  assert.match(telOut, /class="town-logo" data-palette="aspen"/, 'Durango logo in the picker uses its color');
+  const durOut = renderTemplate(page('index.html'), '.html', dur, [tel, dur]);
+  assert.match(durOut, /data-town="durango" data-town-theme="aspen"/);
+  assert.match(durOut, /<meta name="theme-color" content="#8a3f12">/);
+  assert.equal(JSON.parse(renderTemplate(page('manifest.webmanifest'), '.webmanifest', dur)).theme_color, '#8a3f12');
+  const base = { id: 'ouray', name: 'Ouray', state: 'CO', location: { lat: 38.02, lon: -107.67 } };
+  assert.equal(normalizeTown({ ...base, brand: { theme: 'columbine' } }).town.brand.theme, 'columbine');
+  assert.equal(normalizeTown({ ...base, brand: { theme: 'neon' } }).town.brand.theme, undefined, 'unknown theme falls back to lake');
+  assert.equal(normalizeTown({ ...base, brand: { theme: 'lake' } }).town.brand.theme, undefined, 'lake is the default, not stored');
+});

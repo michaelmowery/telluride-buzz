@@ -1,6 +1,6 @@
 // Telluride.Buzz home screen. Polls /api/home every 60 s while visible.
-import { wxIcon, hourlyChart, dayRows, snowBars } from './wx.js?v=38';
-import { skyTile, skyPanel } from './sky.js?v=38';
+import { wxIcon, hourlyChart, dayRows, snowBars } from './wx.js?v=39';
+import { skyTile, skyPanel } from './sky.js?v=39';
 
 const POLL_MS = 60e3;
 const STALE_MS = { weather: 45 * 60e3, roads: 20 * 60e3, lifts: 90 * 60e3, events: 6 * 3600e3 };
@@ -470,25 +470,34 @@ async function drawRoadsMap(r) {
 
 // ---------- preferences ----------
 const THEME_INFO = [
-  ['lake', 'Blue Lake', 'Alpine blue with gold (default)'],
+  ['lake', 'Blue Lake', 'Alpine blue with gold'],
   ['trailhead', 'Trailhead', 'Forest green and amber'],
   ['aspen', 'Aspen', 'Burnt orange and gold'],
   ['columbine', 'Columbine', 'Purple with gold'],
 ];
 const currentTheme = () => document.documentElement.dataset.palette || 'lake';
+const themeInfo = () => window.BUZZ_THEME || { key: 'buzz-theme', townDefault: 'lake' };
 function setTheme(t) {
   document.documentElement.dataset.palette = t;
-  try { localStorage.setItem('buzz-theme', t); } catch { /* storage blocked: applies for this visit only */ }
+  // Saved for this town only. Picking the town's own colors clears the pick, so the
+  // town keeps following its default if that changes later.
+  const { key, townDefault } = themeInfo();
+  try {
+    if (t === townDefault) localStorage.removeItem(key); else localStorage.setItem(key, t);
+  } catch { /* storage blocked: applies for this visit only */ }
   const m = document.querySelector('meta[name="theme-color"]');
   if (m && window.BUZZ_THEMES?.[t]) m.content = window.BUZZ_THEMES[t];
 }
 function panelPrefs() {
   const cur = currentTheme();
+  const { townDefault } = themeInfo();
+  const town = document.body.dataset.townName || 'this town';
   return `${pushPrefsHtml()}
     <h3>Color theme</h3>
+    <p class="prefs-note prefs-lead">Each town has its own colors so you can tell them apart. Your pick here is for ${esc(town)} only.</p>
     <div class="themes" role="radiogroup" aria-label="Color theme">${THEME_INFO.map(([id, name, desc]) => `
       <button class="theme-opt" role="radio" aria-checked="${id === cur}" data-theme="${id}">
-        <span class="swatch sw-${id}"><i></i><i></i><i></i></span><b>${esc(name)}</b><small>${esc(desc)}</small></button>`).join('')}</div>
+        <span class="swatch sw-${id}"><i></i><i></i><i></i></span><b>${esc(name)}</b><small>${esc(id === townDefault ? `${town}'s colors` : desc)}</small></button>`).join('')}</div>
     <p class="prefs-note">Road and alert colors stay the same in every theme. Dark mode follows your phone's setting.</p>
     <h3>Show on the home screen</h3>
     <div class="toggles">${SHOW_OPTS.map(toggleHtml).join('')}</div>
