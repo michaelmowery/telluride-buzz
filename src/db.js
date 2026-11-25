@@ -483,6 +483,33 @@ function wrap(db) {
         .run(Date.now() - days * 86400e3, Date.now() - days * 86400e3);
     },
 
+    /** How much is in the database, in total and per town (Admin settings > Site size). */
+    sizeStats() {
+      const perTown = new Map(db.prepare('SELECT id, name, status FROM towns ORDER BY name').all()
+        .map((t) => [t.id, { id: t.id, name: t.name, status: t.status, sources: 0, sourcesOn: 0, resources: 0, items: 0, itemsActive: 0 }]));
+      const add = (rows, fn) => { for (const r of rows) { const t = perTown.get(r.town_id); if (t) fn(t, r); } };
+      add(db.prepare('SELECT town_id, COUNT(*) AS n, SUM(enabled) AS on_ FROM sources GROUP BY town_id').all(), (t, r) => { t.sources = r.n; t.sourcesOn = r.on_ || 0; });
+      add(db.prepare('SELECT town_id, COUNT(*) AS n FROM resources GROUP BY town_id').all(), (t, r) => { t.resources = r.n; });
+      add(db.prepare('SELECT town_id, COUNT(*) AS n, SUM(active) AS act FROM items GROUP BY town_id').all(), (t, r) => { t.items = r.n; t.itemsActive = r.act || 0; });
+      const one = (sql) => db.prepare(sql).get().n;
+      const pageSize = db.prepare('PRAGMA page_size').get().page_size;
+      const towns = [...perTown.values()];
+      const sum = (k) => towns.reduce((s, t) => s + t[k], 0);
+      return {
+        towns,
+        totals: {
+          towns: towns.length, townsLive: towns.filter((t) => t.status === 'live').length,
+          // Totals count every row, including any left behind by a town that no longer exists.
+          sources: one('SELECT COUNT(*) AS n FROM sources'), sourcesOn: sum('sourcesOn'),
+          resources: one('SELECT COUNT(*) AS n FROM resources'),
+          items: one('SELECT COUNT(*) AS n FROM items'), itemsActive: sum('itemsActive'),
+          pushSubscribers: one('SELECT COUNT(*) AS n FROM push_subs'),
+        },
+        // Space inside the file that is empty (deleted rows) and could be given back by VACUUM.
+        freeBytes: db.prepare('PRAGMA freelist_count').get().freelist_count * pageSize,
+      };
+    },
+
     /** Consistent online copy of the database (safe while the app is running). */
     backupTo(file) {
       fs.mkdirSync(path.dirname(file), { recursive: true });

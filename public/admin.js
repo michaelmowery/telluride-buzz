@@ -520,7 +520,7 @@ async function townsPage() {
 // Settings for the whole admin and server, not one town: the admin password, signing
 // out other devices, and a read-only look at the server's .env settings.
 async function adminSettingsPage() {
-  const { password: pw, groups } = await api('/server-settings');
+  const { password: pw, groups, size } = await api('/server-settings');
   const day = (t) => new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   const status = () => (pw.source === 'admin'
     ? `Set here on ${day(pw.changedAt)}. It replaces ADMIN_PASSWORD in the server's .env.`
@@ -593,11 +593,54 @@ async function adminSettingsPage() {
     h('p', { class: 'muted' }, 'For the whole admin and server. Each town has its own Settings tab for its name, logo and header message.'),
     h('div', { class: 'card' }, h('h2', {}, 'Admin password'), statusLine, f, useEnv),
     others,
+    size ? siteSizeCard(size) : null,
     h('h2', { class: 'section-title' }, 'Server settings'),
     h('p', { class: 'muted small' }, "These come from the .env file on the server, so they only change there. Secret values are never shown. After you edit .env, run: ",
       h('code', {}, 'cd /opt/telluride-buzz && docker compose up -d --force-recreate')),
     ...groups.map(groupCard),
   );
+}
+
+// Site size: how big the database, files and code are, and how full the server disk is.
+const bytes = (n) => {
+  if (n == null) return '';
+  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`;
+  return `${(n / 1024 ** 3).toFixed(1)} GB`;
+};
+const num = (n) => Number(n || 0).toLocaleString();
+function siteSizeCard(z) {
+  const t = z.totals;
+  const row = (label, value, note) => [h('dt', {}, label), h('dd', {}, value, note ? h('span', { class: 'help' }, note) : null)];
+  const disk = z.disk;
+  const usedPct = disk ? Math.round((disk.usedBytes / (disk.usedBytes + disk.freeBytes)) * 100) : 0; // same as df's Use%
+  const fill = h('span');
+  fill.style.width = `${Math.min(100, usedPct)}%`; // set through the DOM: the CSP blocks style attributes
+  const diskValue = disk ? h('span', {},
+    `${bytes(disk.freeBytes)} free of ${bytes(disk.totalBytes)} (${usedPct}% used)`,
+    h('span', { class: `disk-meter${usedPct >= 90 ? ' full' : usedPct >= 80 ? ' high' : ''}`, role: 'img', 'aria-label': `${usedPct}% used` },
+      fill)) : h('span', { class: 'muted' }, 'Not available');
+  const filesNote0 = [z.files.backups.count ? `${z.files.backups.count} nightly backup${z.files.backups.count === 1 ? '' : 's'}` : 'no backups yet',
+    z.files.samples.count ? `${bytes(z.files.samples.bytes)} of road-feed samples` : ''].filter(Boolean).join(', ');
+  const filesNote = filesNote0.charAt(0).toUpperCase() + filesNote0.slice(1);
+  const list = h('dl', { class: 'settings-list' },
+    ...row('Database', z.demo ? 'In memory (demo)' : bytes(z.database.bytes + (z.database.walBytes || 0)),
+      z.demo ? '' : `buzz.db ${bytes(z.database.bytes)}${z.database.walBytes ? ` + write log ${bytes(z.database.walBytes)}` : ''}.${z.database.freeBytes > 1024 * 1024 ? ` ${bytes(z.database.freeBytes)} of it is empty space from deleted rows.` : ''}`),
+    ...row('In the database', `${num(t.towns)} towns (${num(t.townsLive)} live), ${num(t.sources)} sources (${num(t.sourcesOn)} on), ${num(t.resources)} resources, ${num(t.items)} feed items`,
+      `${num(t.itemsActive)} feed items are showing now; older ones are cleared after 30 days. ${num(t.pushSubscribers)} push sign-ups.`),
+    ...row('Backups and other files', z.demo ? 'None (demo)' : bytes(z.files.backups.bytes + z.files.samples.bytes + z.files.otherBytes), z.demo ? '' : `${filesNote}. Nobody uploads files, so nothing else grows here.`),
+    ...(z.demo ? [] : row('Data folder in all', bytes(z.files.dataFolderBytes), '/opt/telluride-buzz/data on the server: the database, backups and keys.')),
+    ...row('Site code and pages', bytes(z.app.bytes), `${num(z.app.files)} files, ${bytes(z.app.publicBytes)} of them pages, scripts and icons sent to browsers. Changes only on a deploy.`),
+    ...row('Server disk', diskValue, 'The whole Hetzner disk, shared with the other sites on it.'));
+  const towns = z.towns.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'size-table' },
+    h('thead', {}, h('tr', {}, ...['Town', 'Sources', 'Resources', 'Feed items'].map((x) => h('th', {}, x)))),
+    h('tbody', {}, ...z.towns.map((x) => h('tr', {},
+      h('td', {}, x.name, x.status === 'live' ? null : h('span', { class: 'muted small' }, ' (draft)')),
+      h('td', {}, `${num(x.sources)}`, x.sourcesOn < x.sources ? h('span', { class: 'muted small' }, ` (${num(x.sourcesOn)} on)`) : null),
+      h('td', {}, num(x.resources)),
+      h('td', {}, num(x.items), h('span', { class: 'muted small' }, ` (${num(x.itemsActive)} showing)`))))))) : null;
+  return h('div', { class: 'card', id: 'site-size' }, h('h2', {}, 'Site size'), list,
+    towns ? h('h3', { class: 'size-sub' }, 'By town') : null, towns);
 }
 
 const field = (label, input, help) => h('label', {}, label, help ? h('span', { class: 'help' }, help) : null, input);

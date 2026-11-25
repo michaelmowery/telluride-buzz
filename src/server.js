@@ -14,6 +14,7 @@ import { aliasRedirect, renderTemplate, TEMPLATED, townUrl } from './brand.js';
 import { ADMIN_HOSTS, HUB_HOSTS, adminHostRedirect, renderHub, snapshot, townForPath } from './hub.js';
 import { importConfigs, loadTowns } from './towns.js';
 import { createAdmin } from './admin.js';
+import { appCodeSize, siteSize } from './site-size.js';
 import { sourceHealth } from './health.js';
 import { importResources, renderResources } from './resources.js';
 import { baseUrl, feedSnapshot, guideDescription, guideEntries, guideFor, guideJsonLd, guideNav, homeJsonLd, robotsTxt, seoHead, sitemapXml, townSitemap } from './seo.js';
@@ -97,23 +98,23 @@ if (DEMO) {
 }
 
 // ---------- admin ----------
+let appCode = null; // the code only changes on a deploy, so it is measured once
 const admin = createAdmin({
   db,
   log,
   serverInfo: () => {
-    const size = (f) => { try { return fs.statSync(f).size; } catch { return null; } };
     let lastBackup = '';
     try {
       const last = fs.readdirSync(path.join(DATA_DIR, 'backups')).filter((f) => /^buzz-\d{4}-\d{2}-\d{2}\.db$/.test(f)).sort().pop();
       if (last) lastBackup = last.slice(5, 15);
     } catch { /* none yet */ }
-    const dbFile = path.join(DATA_DIR, 'buzz.db');
     return {
       demo: DEMO, analytics: analytics.enabled, push: !!vapid, pushSubscribers: db.countSubscriptions(),
-      dbBytes: DEMO ? null : (size(dbFile) ?? 0) + (size(`${dbFile}-wal`) ?? 0), lastBackup,
+      lastBackup,
       uptimeSec: Math.round(process.uptime()), rssMb: Math.round(process.memoryUsage().rss / 1048576), node: process.version, build: buildInfo,
     };
   },
+  siteSize: () => siteSize({ db, dataDir: DATA_DIR, demo: DEMO, appCode: appCode ??= appCodeSize(ROOT) }),
   runNow: (townId, key) => scheduler.runNow(townId, key),
   onResources() { templateCache.clear(); },
   onChange() {
