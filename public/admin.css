@@ -98,7 +98,6 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: .85em; background
 @media (max-width: 640px) { .filters .filter { flex: 1 1 45%; min-width: 0; } }
 span.err { color: var(--red); }
 .pill { margin-left: .4rem; }
-.claude-pick { align-items: flex-end; } .claude-pick .filter { margin: 0; font-size: .8rem; }
 .pill.sponsor { color: var(--amber); border-color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, transparent); }
 .sponsor-box { border: 1px solid var(--line); border-radius: var(--radius); padding: .5rem .9rem .8rem; margin: .8rem 0; }
 .sponsor-box legend { font-weight: 600; padding: 0 .3rem; }
@@ -159,12 +158,12 @@ span.err { color: var(--red); }
 .route-status { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .5rem; }
 .roads-preview ul ul { margin: .2rem 0 0 1.2rem; padding-left: 1rem; }
 
-/* Feeds tab: Find feeds with Claude */
-.claude-feeds { list-style: none; padding: 0; margin: .75rem 0; }
-.claude-feeds > li { padding: .5rem 0; border-top: 1px solid var(--line); }
-.claude-feeds label.check { gap: .5rem; align-items: flex-start; font-weight: 400; }
-.claude-feeds label.check input { margin-top: .25rem; }
-.claude-feeds .muted.small { margin-left: 1.6rem; overflow-wrap: anywhere; }
+/* Feeds: the preview list from Find feeds with AI */
+.ai-feeds { list-style: none; padding: 0; margin: .75rem 0; }
+.ai-feeds > li { padding: .5rem 0; border-top: 1px solid var(--line); }
+.ai-feeds label.check { gap: .5rem; align-items: flex-start; font-weight: 400; }
+.ai-feeds label.check input { margin-top: .25rem; }
+.ai-feeds .muted.small { margin-left: 1.6rem; overflow-wrap: anywhere; }
 .pill.on { color: var(--green); border-color: var(--green); }
 .pill.off { color: var(--amber); border-color: var(--amber); }
 /* Feed kind on the Feeds table: sets where a source's posts sort in the live feed. */
@@ -186,9 +185,19 @@ span.err { color: var(--red); }
   .settings-list dd { border-top: 0; padding-top: 0; }
 }
 
-/* Fill with Claude (Add a source / Add a resource) */
-.claude-fill > summary { cursor: pointer; }
-.claude-fill[open] > summary { margin-bottom: .5rem; }
-.claude-fill textarea { width: 100%; margin: .5rem 0; }
-.claude-fill-url { align-items: center; flex-wrap: wrap; }
-.claude-fill-url input { flex: 1 1 18rem; min-width: 0; }
+/* Ask an AI assistant: the one card for every copy-prompt, paste-answer job (aiCard in admin.js) */
+.ai-card > summary { cursor: pointer; }
+.ai-card[open] > summary { margin-bottom: .5rem; }
+.ai-card textarea { width: 100%; margin: .4rem 0 0; }
+.ai-pick { align-items: flex-end; margin: .25rem 0 .5rem; } .ai-pick .filter { margin: 0; font-size: .8rem; }
+.ai-url { display: block; font-size: .8rem; font-weight: 600; margin: .25rem 0 .5rem; }
+.ai-url input { display: block; width: 100%; margin-top: .25rem; font-weight: 400; }
+.ai-steps { counter-reset: ai; list-style: none; padding: 0; margin: .75rem 0 0; }
+.ai-steps > li { counter-increment: ai; position: relative; padding: 0 0 1rem 2.4rem; }
+.ai-steps > li:last-child { padding-bottom: 0; }
+.ai-steps > li::before { content: counter(ai); position: absolute; left: 0; top: -.1rem; width: 1.7rem; height: 1.7rem; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: .85rem; color: var(--brand); border: 2px solid var(--brand); }
+.ai-steps > li:not(:last-child)::after { content: ''; position: absolute; left: calc(.85rem - 1px); top: 1.8rem; bottom: .2rem; border-left: 2px solid var(--line); }
+.ai-copy { align-items: center; flex-wrap: wrap; gap: .5rem; margin-top: .4rem; }
+.ai-status { margin: .4rem 0 0; } .ai-status:empty { display: none; }
+.ai-peek { margin-top: .4rem; } .ai-peek > summary { cursor: pointer; color: var(--muted); font-size: .85rem; }
+.ai-out:not(:empty) { margin-top: .75rem; }
