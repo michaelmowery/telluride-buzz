@@ -1020,6 +1020,9 @@ a.prefs-btn { text-decoration: none; }
 .cmp tr.here td { background: color-mix(in srgb, var(--amber-soft) 60%, var(--paper)); }
 .cmp td.best { color: var(--ok); font-weight: 700; }
 @media (prefers-color-scheme: dark) { .cmp td.best { color: #7cc493; } }
+.cmp td.hot { color: #c0392b; font-weight: 700; }
+.cmp td.cold { color: #1f6fb2; font-weight: 700; }
+@media (prefers-color-scheme: dark) { .cmp td.hot { color: #ff7a6b; } .cmp td.cold { color: #6cb4f0; } }
 .cmp td.dim { color: var(--ink-2); }
 .cmp-none { margin: 0; padding: 14px; color: var(--ink-2); font-size: 14px; }
 .cmp-search { width: 100%; box-sizing: border-box; padding: 9px 12px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--ink); font: inherit; font-size: 14px; }

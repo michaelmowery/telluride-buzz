@@ -592,10 +592,11 @@ function compareTable(kind) {
     if (x == null || y == null) return (x == null) - (y == null) || a.name.localeCompare(b.name);
     return (y - x) * -dir || a.name.localeCompare(b.name);
   });
-  // Best in each column (most snow, warmest), only when there's something to beat.
-  const best = new Map(cols.filter((c) => c.best !== false).map((c) => {
+  // Per column, only when the values differ: ski areas mark the most (green);
+  // weather marks the warmest red and the coldest blue.
+  const range = new Map(cols.filter((c) => c.best !== false).map((c) => {
     const vals = rows.map((r) => val(r, c)).filter((v) => v != null);
-    return [c.k, vals.length > 1 && new Set(vals).size > 1 ? Math.max(...vals) : null];
+    return [c.k, vals.length > 1 && new Set(vals).size > 1 ? { max: Math.max(...vals), min: Math.min(...vals) } : null];
   }));
   const head = `<tr><th scope="col"${byName ? ` aria-sort="${dir > 0 ? 'ascending' : 'descending'}"` : ''}><button data-sort="name">${kind === 'lifts' ? 'Ski area' : 'Town'}</button></th>${cols.map((c) => `<th scope="col"${c.k === col?.k ? ` aria-sort="${dir < 0 ? 'descending' : 'ascending'}"` : ''}><button data-sort="${c.k}">${esc(c.h)}</button></th>`).join('')}</tr>`;
   const body = rows.map((r) => {
@@ -604,7 +605,10 @@ function compareTable(kind) {
     const name = here ? `<b>${esc(r.name)}</b>` : `<a href="${esc(safeUrl(r.town.url) || '#')}">${esc(r.name)}</a>`;
     const cells = cols.map((c) => {
       const v = val(r, c);
-      const cls = v != null && best.get(c.k) === v ? ' class="best"' : v == null ? ' class="dim"' : '';
+      const rg = range.get(c.k);
+      const cls = v == null ? ' class="dim"'
+        : rg && v === rg.max ? (kind === 'lifts' ? ' class="best"' : ' class="hot"')
+          : rg && v === rg.min && kind !== 'lifts' ? ' class="cold"' : '';
       return `<td${cls}>${esc(c.f(kind === 'lifts' ? r.r : r))}</td>`;
     }).join('');
     return `<tr${here ? ' class="here"' : ''}><td>${name}<small>${esc(sub)}</small></td>${cells}</tr>`;
@@ -612,7 +616,7 @@ function compareTable(kind) {
   const missing = kind === 'lifts' ? towns.filter((t) => !t.resorts.length).map((t) => t.name) : towns.filter((t) => !t.weather).map((t) => t.name);
   const note = kind === 'lifts'
     ? `From each ski area's own snow report. Green marks the most.${missing.length ? ` No ski area report for ${missing.join(', ')}.` : ''}`
-    : `National Weather Service forecasts for each town. Green marks the warmest.${missing.length ? ` No forecast right now for ${missing.join(', ')}.` : ''}`;
+    : `National Weather Service forecasts for each town. In each column, red marks the warmest and blue the coldest.${missing.length ? ` No forecast right now for ${missing.join(', ')}.` : ''}`;
   return `${lead}<div class="cmp-scroll"><table class="cmp">${head}${body}</table></div><p class="prefs-note">${esc(note)} Tap a column to sort, or a town to open its page.</p>`;
 }
 const panelCompareWeather = () => compareTable('weather');
